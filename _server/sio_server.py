@@ -579,8 +579,8 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
-    parser.add_argument('--port', default='3000', help='')
+    parser.add_argument('--port', default=42069, help='')
     args = parser.parse_args()
 
-    web.run_app(app=app, host=args.host, port=args.port)
+    web.run_app(app=app, host=args.host, port=str(args.port))
 
