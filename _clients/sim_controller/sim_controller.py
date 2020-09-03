@@ -476,10 +476,10 @@ class NSSimulation(socketio.AsyncClientNamespace):
         await self.controller.market_turn_end()
         await self.controller.update_turn_status(message)
 
-    async def on_market_online(self):
+    async def on_market_online(self, message):
         self.controller.status['market_online'] = True
 
-    async def on_market_ready(self):
+    async def on_market_ready(self, message):
         self.controller.status['market_ready'] = True
 
     # async def on_end_simulation(self, message):
