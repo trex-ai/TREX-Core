@@ -100,7 +100,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
                                            data={self.participant.participant_id: True},
                                            namespace='/simulation')
 
-    async def on_end_simulation(self):
+    async def on_end_simulation(self, message):
         """Event tells the participant that it can terminate itself when ready.
         """
         self.participant.run = False
