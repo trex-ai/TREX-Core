@@ -40,5 +40,5 @@ class NSSimulation(socketio.AsyncClientNamespace):
     async def on_end_generation(self, message):
         await self.market.end_sim_generation()
 
-    async def on_end_simulation(self):
+    async def on_end_simulation(self, message):
         self.market.run = False
