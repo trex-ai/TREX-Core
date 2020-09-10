@@ -460,7 +460,7 @@ class NSMarket(socketio.AsyncClientNamespace):
     # async def on_disconnect(self):
     #     pass
 
-    async def on_re_register_participant(self):
+    async def on_re_register_participant(self, message):
         await self.participant.join_market()
 
     async def on_update_market_info(self, market_id):
