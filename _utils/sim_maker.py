@@ -26,7 +26,7 @@ class Maker:
             r.call(self.__make_sim_path)
 
     def __get_config(self, config_name:str, resume, **kwargs):
-        config_file = '_simulations/_configs/' + config_name + '.json'
+        config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
 
@@ -67,7 +67,7 @@ class Maker:
         return config
 
     def __make_sim_path(self):
-        output_path = self.configs['study']['sim_root'] + '_simulations/' + self.configs['study']['name'] + '/'
+        output_path = self.configs['study']['sim_root'] + 'simulations/' + self.configs['study']['name'] + '/'
         print(output_path)
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
@@ -115,7 +115,7 @@ class Maker:
         if not config:
             config = self.configs
         # make sim directories and shared settings files
-        sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
+        sim_path = self.configs['study']['sim_root'] + 'simulations/' + config['study']['name'] + '/'
         if not os.path.exists(sim_path):
             os.mkdir(sim_path)
 
