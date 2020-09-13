@@ -1,15 +1,16 @@
 {
   "version": "3.6.1",
   "study": {
-    "name": "Peter_first_test",
+    "name": "first_test",
     "description": "",
     "start_datetime": "2020-11-03 0:0:0",
     "start_datetime_sequence": "sequential",
     "timezone": "America/Vancouver",
-    "days": 0.1,
+    "days": 3,
     "generations": 10,
-    "profiles_db_location": "postgresql://postgres:postgres@stargate/profiles-edmonton",
-    "output_db_location": "postgresql://postgres:postgres@stargate/gym_dev",
+    "profiles_db_location": "",
+
+    "output_db_location": "",
     "sim_root": ""
   },
 
@@ -46,7 +47,7 @@
     }
   },
   "participants": {
-    "egauge13830": {
+    "eGauge13830": {
         "type": "Residential",
         "trader": {
           "track_metrics": true,
@@ -61,7 +62,7 @@
           "scale": 1
         }
       },
-    "egauge13836": {
+    "eGauge13836": {
         "type": "Residential",
         "trader": {
           "track_metrics": true,

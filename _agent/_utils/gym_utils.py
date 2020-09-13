@@ -147,6 +147,7 @@ class TREXenv(gym.Env):
 
     def reset(self):
         # this resets the TREX env -- prolly will have to have this be where the main file is called
+        #
         return obs
 
     def render(self, mode='human', close=False):
