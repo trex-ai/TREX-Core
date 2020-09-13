@@ -18,6 +18,8 @@ class Trader:
         There will need to be some initialization of
 
         You should initialize both a baselines model and the gym env.
+
+        Gym agent will have to tell the gym_client if is
         '''
         self.Genv = DummyVecEnv([lambda: gym.make('GymEnv-v0')])
 
@@ -58,6 +60,7 @@ class Trader:
         #     }
         # }
 
+        #TODO: pass a message
         actions = {}
 
         # Bid or ask

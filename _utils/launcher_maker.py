@@ -4,21 +4,48 @@ import shutil
 import json
 
 class Maker:
+    """
+    This is the class that sets up the paths and arguments for the subprocess to run.
+    The main idea is to make all pieces of the sim (market, server, patricipant, sim_controller) be calleable from the
+    command line, and the launcher maker sets them up as variables for running as a subprocess.
+
+    """
     def __init__(self, configs):
         self.configs=configs
 
     def get_config(self, config_json):
+        """
+        This method loads up the config file and outputs it as a dictionary object.
+        Args:
+            config_json: str path to configure file
+
+        Returns:
+            config: dictionary object based on the json config file
+        """
         import json
         with open(config_json) as data_file:
             config = json.load(data_file)
         return config
 
     def get_server_configs(self):
+        """
+        This method gets the server host and port information from the config file.
+
+        Returns:
+            host:
+            port:
+        """
         host = self.configs['server']['host']
         port = str(self.configs['server']['port'])
         return host, port
 
     def make_sim_controller(self):
+        """
+        This method
+        Returns:
+            script_path: path to sim controller sio_client
+            args: array of cli arguments
+        """
         script_path = '_clients/sim_controller/sio_client.py'
         args = []
         host, port = self.get_server_configs()
@@ -113,11 +140,30 @@ class Maker:
             args.append('--generation=' + str(configs['generation']['scale']))
         return (script_path, args)
 
-    def make_launch_list(self, make_server=True, make_market=True, make_sim_controller=True, make_participants=True):
+    def make_gym(self):
+        """
+
+        Returns:
+            script_path = str to sio client file for CLI initialization of the gym client
+            args: array of strings that are
+        """
+        script_path = '_clients/gym_client/sio_client.py'
+        args = []
+        host, port = self.get_server_configs()
+        if host:
+            args.append('--host='+host)
+
+        if port:
+            args.append('--port='+port)
+        return script_path, args
+
+    def make_launch_list(self, make_server=True, make_market=True, make_sim_controller=True, make_participants=True,
+                         make_gym=False):
         server = []
         market = []
         sim_controller = []
         participants = []
+        gym = []
 
         if make_server:
             server.append(self.make_server())
@@ -132,5 +178,8 @@ class Maker:
             for p_id in self.configs['participants']:
                 configs = self.configs['participants'][p_id]
                 participants.append(self.make_participant(p_id, configs))
+
+        if make_gym:
+            gym.append(self.make_gym())
 
         return server, market, sim_controller, participants

@@ -4,6 +4,7 @@ Main functions are client management and message relay
 """
 
 import sys
+sys.path.append("C:/source/TREX-Core")
 import os
 import asyncio
 import socket

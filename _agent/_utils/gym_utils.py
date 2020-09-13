@@ -6,6 +6,7 @@ Make this the remote client server so it is its own client
 
 import gym
 from gym import spaces
+import sys
 
 class GymPlug:
     def __init__(self):
@@ -65,22 +66,12 @@ class TREXenv(gym.Env):
             "bids" : spaces.Dict({
                 spaces.Dict({
                     'time_interval' : spaces.Dict({
-                      'quantity' : spaces.Box(
-                          low=, #TODO:
-                          high=,
-                          shape = (1,),
-                          dtype= int #This is a int, so i may want to replace it with a DIsc
-                      ),
-                      'source' : spaces.Box(#FIXME: Figure out if source is a string or a number -> GYM does not seem to have a string space, so that may be a problem
-                          low=,
-                          high=,
-                          shape=(1,),
-                          dtype= float
-                      ),
-                        ''
+                      'quantity' : spaces.Discrete(sys.maxsize), #this is a integer value of watt hours.
+                      'source' : spaces.Discrete(3) # This is a numerical representation of the sources: 0 grid, 1 solar, 2 bess
+                        ,
                       'price' : spaces.Box(
-                            low=,
-                            high=,
+                            low=0.0,
+                            high=10.0,
                             shape=(1,),
                             dtype=float,
                         )
@@ -106,8 +97,8 @@ class TREXenv(gym.Env):
                         ),
                         ''
                         'price': spaces.Box(
-                            low=,
-                            high=,
+                            low=0.0,
+                            high=10.0,
                             shape=(1,),
                             dtype=float,
                         )
