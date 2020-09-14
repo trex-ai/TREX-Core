@@ -314,7 +314,7 @@ class ETXMarket(socketio.AsyncNamespace):
                           data=message,
                           room=participant_sid,
                           namespace='/market')
-
+import random
 class Simulation(socketio.AsyncNamespace):
     # def __init__(self):
     #     super().__init__(namespace='/simulation')
@@ -324,6 +324,14 @@ class Simulation(socketio.AsyncNamespace):
     # async def on_connect(self, sid, environ):
     # #     # print('connect to sim')
     #     pass
+
+    async def on_get_actions(self, sid, observations):
+        # await server.sleep(random.randint(1, 3))
+        await server.emit(
+            event='got_remote_action',
+            data={'a': random.random()},
+            to=sid,
+            namespace='/simulation')
 
     async def on_register(self, sid, client_data):
         """Event emitted by the simulation controller to register itself on the server

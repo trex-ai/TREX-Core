@@ -27,6 +27,9 @@ class NSSimulation(socketio.AsyncClientNamespace):
     # async def on_disconnect(self):
     #     # market.server_online = False
     #     print('disconnected from simulation')
+    async def on_got_remote_action(self, message):
+        self.participant.trader.next_actions = message
+        self.participant.trader.wait_for_actions.set()
 
     async def on_re_register_participant(self, message):
         await self.participant.join_market()
