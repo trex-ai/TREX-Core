@@ -325,13 +325,42 @@ class Simulation(socketio.AsyncNamespace):
     # #     # print('connect to sim')
     #     pass
 
-    async def on_get_actions(self, sid, observations):
+    async def on_get_remote_actions(self, sid, observations):
+        """Event emitted by the thin remote agent to get next actions from a centralized learning agent
+        Args:
+            sid ([type]): [description]
+            observations ([type]): [description]
+        """
         # await server.sleep(random.randint(1, 3))
-        await server.emit(
-            event='got_remote_action',
-            data={'a': random.random()},
-            to=sid,
-            namespace='/simulation')
+        if not 'remote_agent' in clients:
+            await server.emit(
+                event='got_remote_actions',
+                data={},
+                to=sid,
+                namespace='/simulation')
+        else:
+            await server.emit(
+                event='get_remote_actions',
+                data=observations,
+                to=clients['remote_agent']['sid'],
+                namespace='/simulation')
+
+    async def on_got_remote_actions(self, sid, actions):
+        """Event emitted by the centralized learning agent to get return actions to the thin remote agent
+        Args:
+            sid ([type]): [description]
+            actions ([type]): [description]
+        """
+        participant_id = actions.pop('participant_id')
+        market_id = actions.pop('market_id')
+        participant_sid = clients[market_id]['participant'][participant_id]['sid']
+        if participant_sid not in sessions:
+            return
+
+        await server.emit(event='got_remote_actions',
+                          data=actions,
+                          room=participant_sid,
+                          namespace='/simulation')
 
     async def on_register(self, sid, client_data):
         """Event emitted by the simulation controller to register itself on the server
@@ -364,6 +393,16 @@ class Simulation(socketio.AsyncNamespace):
                 server.enter_room(sid, market_id, namespace='/market')
                 server.enter_room(sid, market_id, namespace='/simulation')
                 return True
+
+        elif client_data['type'][0] == 'remote_agent':
+            # register sim controller in session and client lists
+            # sessions[sid] = {'client_id': client_data['id'],
+            #                  'client_type': 'remote_agent'}
+
+            clients['remote_agent'] = {
+                'sid': sid
+            }
+
         return False
 
     async def on_re_register_participant(self, sid):

@@ -38,7 +38,7 @@ class Trader:
         print('get_action', self.next_actions)
 
         observations = await self.get_observations()
-        await self.__participant['emit']('get_actions',
+        await self.__participant['emit']('get_remote_actions',
                                          data=observations,
                                          namespace='/simulation')
         await self.wait_for_actions.wait()
