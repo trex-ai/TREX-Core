@@ -41,7 +41,9 @@ class Participant:
             'extra_transactions': self.__extra_transactions,
             'market_info': self.__market_info,
             'read_profile': self.__read_profile,
-            'meter': self.__meter}
+            'meter': self.__meter
+        }
+
 
         self.storage = storage
         if self.storage:
@@ -57,6 +59,8 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
+        if trader_type == 'remote_agent':
+            trader_fns['emit'] = self.__client.emit
         Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
