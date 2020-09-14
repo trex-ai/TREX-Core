@@ -9,6 +9,7 @@ dss
 numpy
 packaging
 python-dateutil
+python-engineio<=3.13.1
 python-socketio
 pytz
 python-rapidjson

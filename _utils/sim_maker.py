@@ -26,7 +26,7 @@ class Maker:
             r.call(self.__make_sim_path)
 
     def __get_config(self, config_name:str, resume, **kwargs):
-        config_file = '_simulations/_configs/' + config_name + '.json'
+        config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
 
