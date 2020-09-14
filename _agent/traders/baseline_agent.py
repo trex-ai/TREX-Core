@@ -56,5 +56,10 @@ class Trader:
             actions['bess'] = {str(next_settle): effective_charge}
         return actions
 
+    async def step(self):
+        next_actions = await self.act()
+        await self.learn()
+        return next_actions
+
     async def reset(self, **kwargs):
         return True

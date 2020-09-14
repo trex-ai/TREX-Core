@@ -203,9 +203,10 @@ class Participant:
         # print(self.__market_info)
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
-        next_actions = await self.trader.act()
+        next_actions = await self.trader.step()
+        # next_actions = await self.trader.act()
         await self.__take_actions(next_actions)
-        await self.trader.learn()
+        # await self.trader.learn()
         if self.storage is not None:
             await self.storage.step()
 
