@@ -28,15 +28,19 @@ async def process_ledger(last_deliver, ledger, market_info):
     # this is OK because the transaction details don't matter too much in reward calculations
     financial_transactions = ()
     if 'financial' in extra_transactions:
+        financial_buy_qty = 0
+        financial_sell_qty = 0
         financial_costs = 0
         financial_profit = 0
         if extra_transactions['financial']['buy']:
+            financial_buy_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['buy']])
             financial_costs = [transaction['quantity'] * transaction['settlement_price'] for transaction in
                                extra_transactions['financial']['buy']]
             financial_costs = sum(financial_costs)
         if extra_transactions['financial']['sell']:
+            financial_sell_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['sell']])
             financial_profit = [transaction['quantity'] * transaction['settlement_price'] for transaction in
                                 extra_transactions['financial']['sell']]
             financial_profit = sum(financial_profit)
-        financial_transactions = (financial_costs, financial_profit)
+        financial_transactions = (financial_costs, financial_profit, financial_buy_qty, financial_sell_qty)
     return market_transactions, grid_transactions, financial_transactions
