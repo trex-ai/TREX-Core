@@ -28,7 +28,8 @@ from _agent._utils.metrics import Metrics
 import asyncio
 from _utils import utils
 from _utils import jkson as json
-from _agent._components import rewards
+# from _agent._components import rewards
+from _agent._rewards import unit_profit_and_cost as reward
 import random
 
 import sqlalchemy
@@ -98,9 +99,9 @@ class Trader:
         # Initialize the metrics, whatever you
         # set learning and track_metrics flags
         self.learning = kwargs['learning'] if 'learning' in kwargs else False
-        self._rewards = rewards.UnitProfitAndCost(self.__participant['timing'],
-                                                  self.__participant['ledger'],
-                                                  self.__participant['market_info'])
+        self._rewards = reward.Reward(self.__participant['timing'],
+                                      self.__participant['ledger'],
+                                      self.__participant['market_info'])
 
 
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
