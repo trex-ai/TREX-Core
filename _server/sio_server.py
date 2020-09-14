@@ -371,6 +371,7 @@ class Simulation(socketio.AsyncNamespace):
         if clients[market_id]['sim_controller']['sid'] == sid:
             await server.emit(
                 event='re_register_participant',
+                data='',
                 room=market_id,
                 namespace='/market')
 
@@ -539,6 +540,7 @@ class Simulation(socketio.AsyncNamespace):
         if sim_controller_sid == sid:
             await server.emit(
                 event='end_simulation',
+                data='',
                 to=market_id,
                 namespace='/simulation')
 
@@ -552,6 +554,7 @@ class Simulation(socketio.AsyncNamespace):
         if market_id in clients:
             await server.emit(
                 event='market_online',
+                data='',
                 to=sid,
                 namespace='/simulation')
 
