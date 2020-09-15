@@ -55,7 +55,7 @@ class Maker:
         Returns:
 
         """
-        config_file = '_simulations/_configs/' + config_name + '.json'
+        config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
 
