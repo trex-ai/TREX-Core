@@ -69,3 +69,5 @@ def __main():
     loop.run_until_complete(client.run())
 
 if __name__ == "__main__":
+    import sys
+    sys.exit(__main())

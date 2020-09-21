@@ -7,39 +7,35 @@ This is the gym plug api for TREX. It needs to have the following 3 methods:
     this is simply a holder since
 '''
 import asyncio
-from _utils.gym_utils import GymPlug
+from _utils._agent.gym_utils import GymPlug
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.ppo2.ppo2 import learn
 
 # env3 = DummyVecEnv([lambda : gym.make('TestEnv-v0')])
 class Trader:
-    def __init__(self):
+    def __init__(self, **kwargs):
         '''
         There will need to be some initialization of
 
         You should initialize both a baselines model and the gym env.
 
-        Gym agent will have to tell the gym_client if is
+
         '''
-        self.Genv = DummyVecEnv([lambda: gym.make('GymEnv-v0')])
+        self.__participant = kwargs['trader_fns']
+        self.status = {
+            'weights_loading': False,
+            'weights_loaded': False,
+            'weights_saving': False,
+            'weights_saved': True
+        }
+        self.next_actions = {}
+        self.wait_for_actions = asyncio.Event()
+        self.learning = False
+        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
 
-        self.learnfunction = learn # so this is just a placeholder so that in act it can run the function
 
-    #REMOTE AGENT STUFF STOLEN FROM DQN agent
-    # def update_remote_agent(self, client):
-    #     '''
-    #     Updates the remote agent with the client that was passed to it and calls asyncio.Event().set()
-    #     '''
-    #     self.__remote_agent = {
-    #         'client': client,
-    #         'policy': {
-    #             'get': asyncio.Event(),
-    #             'buffer': {}
-    #         }
-    #     }
-    #     self.__remote_agent['policy']['get'].set()
-    #     # print('remote agent set', self.__remote_agent)
-    async def act(self):
+
+    async def _act(self):
         # actions = {
         #     'bess': {
         #         time_interval: scheduled_qty
@@ -60,13 +56,75 @@ class Trader:
         #     }
         # }
 
-        #TODO: pass a message
-        actions = {}
+        # cleaning
+        self.next_actions.clear()
+        self.wait_for_actions.clear()
 
-        # Bid or ask
-        actions['bids'] = {}
-        return actions
+        # get the observations:
+        observations = await self._get_observations()
 
-    async def learn(self):
-        # this is where you pass out the collected
-        return None
+        # send the message to the gym controller asking for actions
+        print('Getting actions', self.next_actions)
+        await self.__participant['emit']('get_remote_actions',
+                                         data=observations,
+                                         namespace='/simulations')
+        await self.wait_for_actions.wait()
+        print("got actions", self.next_actions)
+        print("------breakline------")
+
+        return self.next_actions
+
+    async def _get_observations(self):
+
+        pid = self.__participant['id']
+        mid = self.__participant['market_id']
+        # observations needs id and the observations
+        # this should probably also be some dictionary;
+        # based on DQN, these are the observations that we used for it:
+        # float: time SIN,
+        # float: time COS,
+        #
+        # float: next settle gen value,
+        # float: moving average 5 min next settle gen,
+        # float: moving average 30 min next settle gen,
+        # float: moving average 60 min next settle gen,
+        #
+        # float: next settle load value,
+        # float: moving average 5 min next settle load,
+        # float: moving average 30 min next settle load,
+        # float: moving average 60 min next settle load,
+        #
+        # float: next settle projected SOC,
+        # float: Scaled battery max charge,
+        # float: scaled battery max discharge]
+
+        next_settle = self.__participant['timing']['next_settle']
+        generation, load = await self.__participant['read_profile'](next_settle)
+        message = {
+            'id' : pid,
+            'market_id': mid,
+            'observations': {
+                #observations stuff
+                'next_settle_load_value': load,
+                'next_settle_gen_value':generation
+
+            }
+        }
+        return message
+
+    async def _learn(self):
+        # TODO:this is where we may have to do some sillyness later if we make the gymplug the gymrunner
+        return True
+
+    async def step(self):
+        """
+        This method calls the act and learn processes. Step wraps them so that it is more in line with the
+        syntax of gym.
+        Returns:
+
+        """
+        next_actions = await self.act()
+        return next_actions
+
+    async def reset(self):
+        return True

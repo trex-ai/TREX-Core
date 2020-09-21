@@ -9,8 +9,13 @@ from gym import spaces
 import sys
 
 class GymPlug:
-    def __init__(self):
-        #
+    """
+    I have a feeling that this gym plug should actually become the gym_runner and interface directly
+    with the baselines code
+    """
+    def __init__(self, agents ):
+
+
 
 
 
@@ -62,6 +67,9 @@ class TREXenv(gym.Env):
             #         }
             #     }
             # }
+        # FIXME: sept21/2020 dictionaries dont work.
+        #actions need to now be not in dictionaries, arrays will probably be the way [[ask], [bid], [bess]]
+        # the other way that I can do this is to fall back on the method we had for DQN, where 
         self.action_space = spaces.Dict({
             "bids" : spaces.Dict({
                 spaces.Dict({
@@ -142,7 +150,8 @@ class TREXenv(gym.Env):
         })
 
     def step(self, actions):
-        #this is were we will have t
+        #this is were we will have the
+
         return obs, reward, dones, info
 
     def reset(self):

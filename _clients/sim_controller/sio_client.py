@@ -1,4 +1,5 @@
 import sys
+sys.path.append("C:/source/TREX-Core")
 import os
 import asyncio
 import socket
@@ -67,4 +68,5 @@ def __main():
 
 if __name__ == '__main__':
     import sys
+
     sys.exit(__main())
