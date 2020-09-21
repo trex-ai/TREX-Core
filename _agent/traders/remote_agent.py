@@ -28,11 +28,53 @@ class Trader:
     #         return
 
     async def get_observations(self):
-        observations = (1)
-        return observations
+
+        pid = self.__participant['id']
+        mid = self.__participant['market_id']
+        # observations needs id and the observations
+        # this should probably also be some dictionary;
+        # based on DQN, these are the observations that we used for it:
+        # float: time SIN,
+        # float: time COS,
+        #
+        # float: next settle gen value,
+        # float: moving average 5 min next settle gen,
+        # float: moving average 30 min next settle gen,
+        # float: moving average 60 min next settle gen,
+        #
+        # float: next settle load value,
+        # float: moving average 5 min next settle load,
+        # float: moving average 30 min next settle load,
+        # float: moving average 60 min next settle load,
+        #
+        # float: next settle projected SOC,
+        # float: Scaled battery max charge,
+        # float: scaled battery max discharge]
+
+        next_settle = self.__participant['timing']['next_settle']
+        generation, load = await self.__participant['read_profile'](next_settle)
+        message = {
+            'id' : pid,
+            'market_id': mid,
+            'observations': {
+                #observations stuff
+                'next_settle_load_value': load,
+                'next_settle_gen_value':generation
+
+            }
+        }
+        return message
 
     async def act(self, **kwargs):
-        # query remote agent client for next actions
+        """
+        query remote agent client for next actions
+        Args:
+            **kwargs:
+
+        Returns:
+
+        """
+
         self.next_actions.clear()
         self.wait_for_actions.clear()
         print('get_action', self.next_actions)

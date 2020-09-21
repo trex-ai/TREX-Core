@@ -36,6 +36,7 @@ class Participant:
         trader_params = json.loads(trader_params)
         trader_fns = {
             'id': self.participant_id,
+            'market_id':self.market_id,
             'timing': self.__timing,
             'ledger': self.__ledger,
             'extra_transactions': self.__extra_transactions,
