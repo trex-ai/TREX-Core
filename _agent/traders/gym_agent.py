@@ -7,7 +7,7 @@ This is the gym plug api for TREX. It needs to have the following 3 methods:
     this is simply a holder since
 '''
 import asyncio
-from _utils._agent.gym_utils import GymPlug
+# from _utils._agent.gym_utils import GymPlug
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.ppo2.ppo2 import learn
 
@@ -22,6 +22,7 @@ class Trader:
 
         '''
         self.__participant = kwargs['trader_fns']
+
         self.status = {
             'weights_loading': False,
             'weights_loaded': False,
@@ -67,7 +68,8 @@ class Trader:
         print('Getting actions', self.next_actions)
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
-                                         namespace='/simulations')
+                                         namespace='/simulation')
+
         await self.wait_for_actions.wait()
         print("got actions", self.next_actions)
         print("------breakline------")
@@ -106,7 +108,7 @@ class Trader:
             'observations': {
                 #observations stuff
                 'next_settle_load_value': load,
-                'next_settle_gen_value':generation
+                'next_settle_gen_value': generation
 
             }
         }
@@ -123,7 +125,7 @@ class Trader:
         Returns:
 
         """
-        next_actions = await self.act()
+        next_actions = await self._act()
         return next_actions
 
     async def reset(self):

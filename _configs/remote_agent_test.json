@@ -1,0 +1,55 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "remote_agent_test",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 30,
+      "generations": 10,
+      "profiles_db_location": "postgresql://postgres:postgres@stargate/profiles",
+      "output_db_location": "postgresql://postgres:postgres@stargate",
+      "sim_root": ""
+    },
+    "training": {
+      "0": {
+        "warm_up": false
+      },
+      "default": {
+        "warm_up": false
+      }
+    },
+    "server": {
+      "host": "",
+      "port": "3200"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "egauge19821": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "remote_agent",
+          "bid_price": 0.08,
+          "ask_price": 0.12,
+          "learning": true
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  

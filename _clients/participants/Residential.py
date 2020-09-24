@@ -60,6 +60,7 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
+        # FIXME: 09/21/2020 Hardcoding remote_agent here is bad
         if trader_type == 'remote_agent':
             trader_fns['emit'] = self.__client.emit
         Trader = importlib.import_module('_agent.traders.' + trader_type).Trader

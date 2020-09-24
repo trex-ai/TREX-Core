@@ -158,7 +158,7 @@ class Maker:
         return script_path, args
 
     def make_launch_list(self, make_server=True, make_market=True, make_sim_controller=True, make_participants=True,
-                         make_gym=False):
+                         make_gym=True):
         server = []
         market = []
         sim_controller = []
@@ -182,4 +182,4 @@ class Maker:
         if make_gym:
             gym.append(self.make_gym())
 
-        return server, market, sim_controller, participants
+        return server, market, sim_controller, participants, gym

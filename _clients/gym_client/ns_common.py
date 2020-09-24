@@ -13,6 +13,11 @@ class NSSimulation(socketio.AsyncClientNamespace):
         super().__init__(namespace='/simulation')
         self.gym_controller = gym_controller
 
+
+    async def on_connect(self):
+        print("something")
+        await self.gym_controller.register()
+
     async def on_get_remote_actions(self, message):
         """
         This event will trigger function in the gym client to query the agent for actions

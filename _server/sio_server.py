@@ -333,18 +333,18 @@ class Simulation(socketio.AsyncNamespace):
             observations ([type]): [description]
         """
         # await server.sleep(random.randint(1, 3))
-        if not 'remote_agent' in clients:
-            await server.emit(
-                event='got_remote_actions',
-                data={},
-                to=sid,
-                namespace='/simulation')
-        else:
-            await server.emit(
-                event='get_remote_actions',
-                data=observations,
-                to=clients['remote_agent']['sid'],
-                namespace='/simulation')
+        # if not 'remote_agent' in clients:
+        #     await server.emit(
+        #         event='got_remote_actions',
+        #         data={},
+        #         to=sid,
+        #         namespace='/simulation')
+        # else:
+        await server.emit(
+            event='get_remote_actions',
+            data=observations,
+            to=clients['remote_agent']['sid'],
+            namespace='/simulation')
 
     async def on_got_remote_actions(self, sid, actions):
         """Event emitted by the centralized learning agent to get return actions to the thin remote agent
@@ -396,6 +396,7 @@ class Simulation(socketio.AsyncNamespace):
                 return True
 
         elif client_data['type'][0] == 'remote_agent':
+            print("something random, i dont give a fuck")
             # FIXME: make sure that you name this to what the gym agent needs to be
             # register sim controller in session and client lists
             # sessions[sid] = {'client_id': client_data['id'],

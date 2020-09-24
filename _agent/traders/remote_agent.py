@@ -2,11 +2,13 @@ import tenacity
 from _agent._utils.metrics import Metrics
 import asyncio
 
+
 class Trader:
     """The baseline trader that emulates behaviour under net-metering/net-billing with a focus on self-sufficiency
     """
     def __init__(self, **kwargs):
         self.__participant = kwargs['trader_fns']
+
         self.status = {
             'weights_loading': False,
             'weights_loaded': False,
@@ -54,7 +56,7 @@ class Trader:
         next_settle = self.__participant['timing']['next_settle']
         generation, load = await self.__participant['read_profile'](next_settle)
         message = {
-            'id' : pid,
+            'participant_id' : pid,
             'market_id': mid,
             'observations': {
                 #observations stuff
@@ -80,6 +82,7 @@ class Trader:
         print('get_action', self.next_actions)
 
         observations = await self.get_observations()
+        # print(observations)
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
                                          namespace='/simulation')

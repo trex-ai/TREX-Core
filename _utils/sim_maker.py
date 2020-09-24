@@ -331,8 +331,8 @@ class Maker:
 
         self.__make_sim_internal_directories()
         lmaker = launcher_maker.Maker(config)
-        server, market, sim_controller, participants = lmaker.make_launch_list()
-        launch_sequence = market + sim_controller + participants
+        server, market, sim_controller, participants, gym = lmaker.make_launch_list()
+        launch_sequence = market + sim_controller + participants + gym
         if not skip_server:
             launch_sequence = server + launch_sequence
         return launch_sequence
