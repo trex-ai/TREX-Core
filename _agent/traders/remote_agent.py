@@ -1,6 +1,7 @@
 import tenacity
 from _agent._utils.metrics import Metrics
 import asyncio
+from _agent._rewards import unit_profit_and_cost as reward
 
 
 class Trader:

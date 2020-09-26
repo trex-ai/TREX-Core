@@ -55,18 +55,6 @@ class TREXenv(gym.Env):
         })
         self.action_space = flatten_space(self._action_space)
 
-            #TODO: steven says that battery makes things 1000000000000x harder, so ignore it for now
-            # 'bess' : spaces.Dict({
-            #     spaces.Dict({
-            #         'time_interval' : spaces.Box(
-            #             shape=(1,),
-            #             dtype=float # FIXME: look into the bess function check_schedule for advice on how to get min and max values
-            #         )
-            #     })
-            #
-            # }),
-
-        # })
 
         # this should probably also be some dictionary;
         # based on DQN, these are the observations that we used for it:
@@ -93,18 +81,23 @@ class TREXenv(gym.Env):
         })
         self.observation_space = flatten_space(self._observation_space)
 
+
     def step(self, actions):
         #this is were we will have the
-        obs = flatten(self._observation_space, self.observations)
+        obs = self.observations
         reward = 0
         dones = False
         info = {}
+        print("actions in gym", actions)
         return obs, reward, dones, info
 
     def reset(self):
         # this resets the TREX env -- prolly will have to have this be where the main file is called
         #
-        obs = []
+        _obs = self._observation_space.sample()
+        print(_obs)
+        obs = flatten(self._observation_space, _obs)
+        print(obs)
         return obs
 
     def render(self, mode='human', close=False):
@@ -114,4 +107,4 @@ class TREXenv(gym.Env):
     def get_observations(self,observations):
         # this is where we set the values that need to be
         self.observations = observations
-        print('ues')
+

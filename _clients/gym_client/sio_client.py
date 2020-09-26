@@ -22,8 +22,7 @@ class Client:
         gym_client= Controller(self.sio_client)
         self.sio_client.register_namespace(NSDefault(gym_client))
         self.sio_client.register_namespace(NSSimulation(gym_client))
-        # self.gym = gym() <- this is where the gym plug gets initialized
-        # TODO: this needs some sort of loop in order to work
+
 
 
     async def start_client(self):
@@ -61,7 +60,6 @@ def __main():
     parser.add_argument('--port', default=42069, help='')
     # parser.add_argument('--config', default='', help='')
     args = parser.parse_args()
-    # print(args.config)
     # configs = json.loads(args.config)
     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]))#This configs variable is the stuff that you put into the config under gym_client
     loop = asyncio.get_event_loop()

@@ -396,7 +396,7 @@ class Simulation(socketio.AsyncNamespace):
                 return True
 
         elif client_data['type'][0] == 'remote_agent':
-            print("something random, i dont give a fuck")
+
             # FIXME: make sure that you name this to what the gym agent needs to be
             # register sim controller in session and client lists
             # sessions[sid] = {'client_id': client_data['id'],
