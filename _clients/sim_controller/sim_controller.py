@@ -479,7 +479,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
     async def on_market_online(self, message):
         self.controller.status['market_online'] = True
 
-    async def on_market_ready(self, message):
+    async def on_market_ready(self):
         self.controller.status['market_ready'] = True
 
     # async def on_end_simulation(self, message):

@@ -405,7 +405,11 @@ class Simulation(socketio.AsyncNamespace):
             clients['remote_agent'] = {
                 'sid': sid
             }
-
+            # PUT REMOTE AGENT IN ALL MARKET ROOMS
+            # TODO: LET REMOOTE AGENT KNOW WHHICH MARKETS ITS IN
+            for market_id in clients:
+                if market_id != 'remote_agent':
+                    server.enter_room(sid, market_id, namespace='/simulation')
         return False
 
     async def on_re_register_participant(self, sid):

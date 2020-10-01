@@ -15,7 +15,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
 
 
     async def on_connect(self):
-        print("something")
+
         await self.gym_controller.register()
 
     async def on_get_remote_actions(self, message):
@@ -27,3 +27,6 @@ class NSSimulation(socketio.AsyncClientNamespace):
 
         """
         await self.gym_controller.get_remote_actions(message)
+
+    async def on_end_generation(self, message):
+        print('notice me')

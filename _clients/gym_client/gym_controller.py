@@ -1,10 +1,11 @@
 import socketio
 from gym_env.envs.gym_env import TREXenv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from gym.spaces.utils import unflatten
+from gym.spaces.utils import unflatten, flatten
 from baselines.common.models import mlp, get_network_builder
 from baselines.ppo2.model import Model
 import tensorflow as tf
+import numpy as np
 # from baselines.ppo2.ppo2 import learn
 # from baselines.ppo2.runner import Runner
 
@@ -57,31 +58,71 @@ class Controller:
         # this  TREX->gym->baselines
         # message will consist of this:
 
-
         participant_id = message.pop('participant_id')
         market_id = message.pop('market_id')
         observations = message.pop('observations')
-        obs = self.big_gym_energy.envs[0].reset()
-        print(obs.shape)
-        obs = tf.reshape(obs, [1, 200])
 
+        reward = message.pop('reward')
+        # print('reward from message', reward) #FIXME: the rewards from the first observation is None, that is a problem
+        # obs = self.big_gym_energy.envs[0].reset()
 
-        #query the model for the actions
+        # need to flatten obs,
+        flat_observations = flatten(self.big_gym_energy.envs[0]._observation_space, observations)
+        #TODO: keep the flat_observations
+        self.big_gym_energy.envs[0].send_to_gym(flat_observations,reward)
+        # print('flatobs', flat_observations)
+        obs = tf.reshape(flat_observations, [1, 200])
+        # query the model for the actions
+        # the model does not like the unflattened observations;
         actions_array, vf, something, neglogp = self.model.train_model.step(obs)
-        print('Actions array', actions_array)
+        actions_array = actions_array.numpy()
 
-        unflattened_dictionary = unflatten(self.big_gym_energy.envs[0]._action_space,actions_array[0].numpy())
-        print(unflattened_dictionary)
-        unflattened_dictionary['asks']['time_interval']['price'] = unflattened_dictionary['asks']['time_interval']['price'][0]
-        unflattened_dictionary['bids']['time_interval']['price'] = unflattened_dictionary['bids']['time_interval']['price'][0]
+        # self.big_gym_energy.envs[0].
 
+        vaalss = [[0.0,100.0], [0.0,3.0], [0.0, 2.0], [0.0,100.0],[0.0,3.0],[0.0, 2.0]]
+        actions_array = await self.check_actions(actions_array, vaalss)
+
+        actions_dictionary = {
+            'bids': {'quantity': int(round(actions_array[0][0])),
+                     'source': self.unmap_source(int(round(actions_array[0][1]))),
+                     'price': float(actions_array[0][2])},
+            'asks': {'quantity': int(round(actions_array[0][3])),
+                     'source': self.unmap_source(int(round(actions_array[0][4]))),
+                     'price': float(actions_array[0][5])}
+        }
+        self.unmap_source(actions_dictionary)
         # actions needs to be of the form:
         actions = {
                       'participant_id': participant_id,
                       'market_id': market_id,
-                  'actions': unflattened_dictionary,
+                  'actions': actions_dictionary,
 
         }
         await self.__client.emit('got_remote_actions', actions, namespace='/simulation')
+
+    async def check_actions(self, action_array, aceptable_val):
+        if self.big_gym_energy.envs[0].action_space.contains(action_array):
+            return action_array
+
+        for i in range(len(action_array[0])):
+            val = action_array[0][i]
+
+            if val < aceptable_val[i][0]:
+                #less than
+                action_array[0][i] = aceptable_val[i][0]
+            if val > aceptable_val[i][1]:
+                #greater than
+                action_array[0][i] = aceptable_val[i][1]
+        return action_array
+
+    def unmap_source(self,source):
+        if source == 0:
+            return 'grid'
+        if source == 1:
+            return 'solar'
+        if source == 2:
+            return 'bess'
+
+
 
 

@@ -210,6 +210,7 @@ class Participant:
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
         next_actions = await self.trader.step()
+        print('ressi',next_actions)
         # next_actions = await self.trader.act()
         await self.__take_actions(next_actions)
         # await self.trader.learn()

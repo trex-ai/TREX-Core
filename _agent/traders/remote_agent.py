@@ -1,7 +1,7 @@
 import tenacity
 from _agent._utils.metrics import Metrics
 import asyncio
-from _agent._rewards import unit_profit_and_cost as reward
+from _agent._rewards import net_profit as reward
 
 
 class Trader:
@@ -9,6 +9,7 @@ class Trader:
     """
     def __init__(self, **kwargs):
         self.__participant = kwargs['trader_fns']
+
 
         self.status = {
             'weights_loading': False,
@@ -24,6 +25,10 @@ class Trader:
 
         self.next_actions = {}
         self.wait_for_actions = asyncio.Event()
+        self._reward = reward.Reward(self.__participant['timing'],
+                                     self.__participant['ledger'],
+                                     self.__participant['market_info'])
+
     # Core Functions, learn and act, called from outside
     # async def learn(self, **kwargs):
     #     # learn must exist even if unused because participant expects it.
@@ -80,18 +85,28 @@ class Trader:
 
         self.next_actions.clear()
         self.wait_for_actions.clear()
-        print('get_action', self.next_actions)
+        # print('get_action', self.next_actions)
 
         observations = await self.get_observations()
-        # print(observations)
+        # print('observations', observations)
+
+        rewards = await self._reward.calculate()
+        # print('Rewards', rewards)
+        observations['reward'] = rewards
+
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
                                          namespace='/simulation')
         await self.wait_for_actions.wait()
 
-        print('got_action', self.next_actions)
+        # print('got_action', self.next_actions)
         print('-----')
-        return self.next_actions
+        next_settle = self.__participant['timing']['next_settle']
+        print(type(next_settle))
+        n_dic = {}
+        for action in self.next_actions['actions']:
+            n_dic[action] = {str(next_settle) : self.next_actions['actions'][action]}
+        return n_dic
 
     async def step(self):
         next_actions = await self.act()
@@ -99,3 +114,8 @@ class Trader:
 
     async def reset(self, **kwargs):
         return True
+
+    def flatten_actions(self, action_dictionary):
+        flattened_actions = []
+
+        return flattened_actions
