@@ -88,6 +88,9 @@ class Controller:
             'output_path': ''
         }
 
+        if 'remote_agent' in self.__config:
+            self.status['remote_agent_ready'] = False
+
         self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
@@ -280,6 +283,15 @@ class Controller:
                 await self.__client.emit('is_market_online', namespace='/simulation')
                 continue
 
+            if 'remote_agent_ready' in self.status and not self.status['remote_agent_ready']:
+                message = {
+                    'market_id': self.__config['market']['id']
+                }
+                await self.__client.emit(event='remote_agent_status',
+                                         data=message,
+                                         namespace='/simulation')
+                continue
+
             if not self.status['participants_online']:
                 await self.__client.emit('re_register_participant', namespace='/simulation')
                 continue
@@ -411,6 +423,8 @@ class Controller:
                 self.__time = self.__start_time
                 self.status['sim_started'] = False
                 self.status['market_ready'] = False
+                if 'remote_agent_ready' in self.status:
+                    self.status['remote_agent_ready'] = False
 
             message = {
                 'output_path': self.status['output_path'],
@@ -482,6 +496,9 @@ class NSSimulation(socketio.AsyncClientNamespace):
     async def on_market_ready(self):
         self.controller.status['market_ready'] = True
 
+    async def on_remote_agent_ready(self):
+        if 'remote_agent_ready' in self.controller.status:
+            self.controller.status['remote_agent_ready'] = True
     # async def on_end_simulation(self, message):
     #     raise SystemExit
 

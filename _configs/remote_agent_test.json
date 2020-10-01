@@ -1,5 +1,5 @@
 {
-    "version": "3.6.1",
+    "version": "3.6.2",
     "study": {
       "name": "remote_agent_test",
       "description": "",
@@ -19,6 +19,8 @@
       "default": {
         "warm_up": false
       }
+    },
+    "remote_agent": {
     },
     "server": {
       "host": "",

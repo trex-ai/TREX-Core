@@ -326,6 +326,24 @@ class Simulation(socketio.AsyncNamespace):
     # #     # print('connect to sim')
     #     pass
 
+    async def on_remote_agent_status(self, sid, data):
+        if not clients['remote_agent']['sid']:
+            return
+        market_id = data['market_id']
+        if clients[market_id]['sim_controller']['sid'] == sid:
+            await server.emit(
+                event='remote_agent_status',
+                data=data,
+                to=clients['remote_agent']['sid'],
+                namespace='/simulation')
+
+    async def on_remote_agent_ready(self, sid, market_id):
+        if clients['remote_agent']['sid'] == sid:
+            await server.emit(
+                event='remote_agent_ready',
+                room=market_id,
+                namespace='/simulation')
+
     async def on_get_remote_actions(self, sid, observations):
         """Event emitted by the thin remote agent to get next actions from a centralized learning agent
         Args:
@@ -396,7 +414,6 @@ class Simulation(socketio.AsyncNamespace):
                 return True
 
         elif client_data['type'][0] == 'remote_agent':
-
             # FIXME: make sure that you name this to what the gym agent needs to be
             # register sim controller in session and client lists
             # sessions[sid] = {'client_id': client_data['id'],
@@ -405,12 +422,9 @@ class Simulation(socketio.AsyncNamespace):
             clients['remote_agent'] = {
                 'sid': sid
             }
-            # PUT REMOTE AGENT IN ALL MARKET ROOMS
-            # TODO: LET REMOOTE AGENT KNOW WHHICH MARKETS ITS IN
-            for market_id in clients:
-                if market_id != 'remote_agent':
-                    server.enter_room(sid, market_id, namespace='/simulation')
         return False
+
+
 
     async def on_re_register_participant(self, sid):
         """Event emitted by simulation controller to re-register all participants, in case some were missed during initialization
