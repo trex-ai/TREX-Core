@@ -17,7 +17,7 @@ class Controller:
 
     def __init__(self, sio_client, **kwargs):
         self.policy_network = mlp
-
+        self._market = None
         self.__client = sio_client
         self.id_list = []
         self.big_gym_energy = DummyVecEnv([lambda : TREXenv()])
@@ -122,6 +122,12 @@ class Controller:
             return 'solar'
         if source == 2:
             return 'bess'
+
+    async def emit_go(self,message):
+        print('emit_go', message)
+        self._market = message
+
+        await self.__client.emit('remote_agent_ready',message ,namespace='/simulation')
 
 
 

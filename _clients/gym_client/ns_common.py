@@ -23,10 +23,22 @@ class NSSimulation(socketio.AsyncClientNamespace):
         This event will trigger function in the gym client to query the agent for actions
         Args:
             message: observations from the Gym env.
-
-
         """
         await self.gym_controller.get_remote_actions(message)
 
+    async def on_remote_agent_status(self, message):
+        """
+
+        :param message: the message is the market_id that the sim controller
+        :return:
+        """
+        print('remote_agent_status')
+        await self.gym_controller.emit_go(message)
+
     async def on_end_generation(self, message):
+        """
+
+        :param message:
+        :return:
+        """
         print('notice me')

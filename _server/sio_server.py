@@ -327,6 +327,7 @@ class Simulation(socketio.AsyncNamespace):
     #     pass
 
     async def on_remote_agent_status(self, sid, data):
+        print('Server: remote agent status')
         if not clients['remote_agent']['sid']:
             return
         market_id = data['market_id']
@@ -338,10 +339,11 @@ class Simulation(socketio.AsyncNamespace):
                 namespace='/simulation')
 
     async def on_remote_agent_ready(self, sid, market_id):
+        print('server: remote agent ready ')
         if clients['remote_agent']['sid'] == sid:
             await server.emit(
                 event='remote_agent_ready',
-                room=market_id,
+                room=market_id['market_id'],
                 namespace='/simulation')
 
     async def on_get_remote_actions(self, sid, observations):
