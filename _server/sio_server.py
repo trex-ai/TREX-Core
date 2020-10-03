@@ -345,6 +345,7 @@ class Simulation(socketio.AsyncNamespace):
                 event='remote_agent_ready',
                 room=market_id['market_id'],
                 namespace='/simulation')
+            server.enter_room(sid, market_id['market_id'], namespace='/simulation')
 
     async def on_get_remote_actions(self, sid, observations):
         """Event emitted by the thin remote agent to get next actions from a centralized learning agent

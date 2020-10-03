@@ -41,4 +41,4 @@ class NSSimulation(socketio.AsyncClientNamespace):
         :param message:
         :return:
         """
-        print('notice me')
+        await self.gym_controller.learn()

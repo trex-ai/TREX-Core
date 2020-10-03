@@ -1,7 +1,7 @@
 import tenacity
 from _agent._utils.metrics import Metrics
 import asyncio
-from _agent._rewards import net_profit as reward
+from _agent._rewards import economic_advantage as reward
 
 
 class Trader:
@@ -29,6 +29,11 @@ class Trader:
                                      self.__participant['ledger'],
                                      self.__participant['market_info'])
 
+        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
+        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
+        if self.track_metrics:
+            self.__init_metrics()
+        self.bid_price = 0
     # Core Functions, learn and act, called from outside
     # async def learn(self, **kwargs):
     #     # learn must exist even if unused because participant expects it.
@@ -85,28 +90,63 @@ class Trader:
 
         self.next_actions.clear()
         self.wait_for_actions.clear()
-        # print('get_action', self.next_actions)
+        next_settle = self.__participant['timing']['next_settle']
+        if 'storage' in self.__participant:
+            storage_schedule = self.__participant['storage']['check_schedule'](next_settle)
+            # storage_schedule = self.__participant['storage']['schedule'](next_settle)
+            max_charge = storage_schedule[next_settle]['energy_potential'][1]
+            max_discharge = storage_schedule[next_settle]['energy_potential'][0]
 
         observations = await self.get_observations()
-        # print('observations', observations)
-
+        generation = observations['observations']['next_settle_gen_value']
+        load = observations['observations']['next_settle_load_value']
+        residual_load = load - generation
+        residual_gen = -residual_load
         rewards = await self._reward.calculate()
-        # print('Rewards', rewards)
         observations['reward'] = rewards
-
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
                                          namespace='/simulation')
         await self.wait_for_actions.wait()
+        # print(self.next_actions)
+        self.bid_price=self.next_actions['actions']['bids']['price']
+        actions = {}
+        # for action in self.next_actions['actions']:
+        #     actions[action] = {str(next_settle): self.next_actions['actions'][action]}
 
-        # print('got_action', self.next_actions)
-        print('-----')
-        next_settle = self.__participant['timing']['next_settle']
-        print(type(next_settle))
-        n_dic = {}
-        for action in self.next_actions['actions']:
-            n_dic[action] = {str(next_settle) : self.next_actions['actions'][action]}
-        return n_dic
+        if residual_load > 0:
+            if 'storage' in self.__participant:
+                effective_discharge = -min(residual_load, abs(max_discharge))
+                actions['bess'] = {str(next_settle): effective_discharge}
+            else:
+                effective_discharge = 0
+
+            final_residual_load = residual_load + effective_discharge
+            if final_residual_load > 0 and self.bid_price:
+                actions['bids'] = {
+                    str(next_settle): {
+                        'quantity': final_residual_load,
+                        'source': 'solar',
+                        'price': self.bid_price
+                    }
+                }
+
+
+            #TODO: need to put the actions['asks']
+
+
+        if self.track_metrics:
+            await asyncio.gather(
+                self.metrics.track('timestamp', self.__participant['timing']['current_round'][1]),
+                self.metrics.track('actions_dict', actions),
+                self.metrics.track('next_settle_load', observations['observations']['next_settle_load_value']),
+                self.metrics.track('next_settle_generation', observations['observations']['next_settle_gen_value']))
+            # if 'storage' in self.__participant:
+            #     await self.metrics.track('storage_soc', projected_soc)
+
+            await self.metrics.save(10000)
+        # print(actions)
+        return actions
 
     async def step(self):
         next_actions = await self.act()
@@ -119,3 +159,15 @@ class Trader:
         flattened_actions = []
 
         return flattened_actions
+
+    def __init_metrics(self):
+        import sqlalchemy
+        '''
+        Pretty self explanitory, this method resets the metric lists in 'agent_metrics' as well as zeroing the metrics dictionary. 
+        '''
+        self.metrics.add('timestamp', sqlalchemy.Integer)
+        self.metrics.add('actions_dict', sqlalchemy.JSON)
+        self.metrics.add('next_settle_load', sqlalchemy.Integer)
+        self.metrics.add('next_settle_generation', sqlalchemy.Integer)
+        if 'storage' in self.__participant:
+            self.metrics.add('storage_soc', sqlalchemy.Float)

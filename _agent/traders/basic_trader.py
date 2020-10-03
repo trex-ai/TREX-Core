@@ -24,6 +24,7 @@ class Trader:
 
         # Initialize the metrics, whatever you
         # set learning and track_metrics flags
+        self.learning = False
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
         self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
         if self.track_metrics:
