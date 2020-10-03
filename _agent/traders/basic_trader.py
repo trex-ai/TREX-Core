@@ -8,7 +8,7 @@ from _utils import jkson as json
 
 
 class Trader:
-    def __init__(self, bid_price, ask_price, **kwargs):
+    def __init__(self, **kwargs):
         # Some util stuffies
         self.__participant = kwargs['trader_fns']
         self.status = {
@@ -19,14 +19,11 @@ class Trader:
         }
 
         # Initialize the agent learning parameters for the agent (your choice)
-        self.agent_data = {}
-
-        self.bid_price = bid_price
-        self.ask_price = ask_price
+        self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
+        self.ask_price =  kwargs['ask_price'] if 'ask_price' in kwargs else None
 
         # Initialize the metrics, whatever you
         # set learning and track_metrics flags
-        self.learning = kwargs['learning'] if 'learning' in kwargs else False
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
         self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
         if self.track_metrics:
@@ -47,9 +44,6 @@ class Trader:
         #     self.metrics.add('state_of_charge', sqlalchemy.Float)
 
     # Core Functions, learn and act, called from outside
-    async def learn(self, **kwargs):
-        if not self.learning:
-            return
 
     async def act(self, **kwargs):
         # actions are none so far
@@ -100,7 +94,7 @@ class Trader:
                 effective_discharge = 0
 
             final_residual_load = residual_load + effective_discharge
-            if final_residual_load > 0:
+            if final_residual_load > 0 and self.bid_price:
                 actions['bids'] = {
                     str(next_settle): {
                         'quantity': final_residual_load,
@@ -120,7 +114,7 @@ class Trader:
                 effective_charge = 0
 
             final_residual_gen = residual_gen - effective_charge
-            if final_residual_gen > 0:
+            if final_residual_gen > 0 and self.ask_price:
                 actions['asks'] = {
                     str(next_settle): {
                         'quantity': final_residual_gen,
@@ -140,8 +134,9 @@ class Trader:
             await self.metrics.save(10000)
         return actions
 
-    async def load_weights(self, path, reset):
-        return True
+    async def step(self):
+        next_actions = await self.act()
+        return next_actions
 
     async def reset(self, **kwargs):
         return True
