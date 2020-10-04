@@ -638,6 +638,7 @@ class Simulation(socketio.AsyncNamespace):
         if market_sid == sid:
             await server.emit(
                 event='market_ready',
+                data='',
                 to=sim_controller_sid,
                 namespace='/simulation')
 
@@ -653,5 +654,5 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=42069, help='')
     args = parser.parse_args()
 
-    web.run_app(app=app, host=args.host, port=str(args.port))
+    web.run_app(app=app, host=args.host, port=int(args.port))
 
