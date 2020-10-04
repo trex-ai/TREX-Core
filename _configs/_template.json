@@ -1,5 +1,5 @@
 {
-  "version": "3.6.1",
+  "version": "3.6.4",
   "study": {
     "name": "sim_name", // the simulation name defines the database name as well as local storage paths.
     "description": "",  // (optional) a description the simulation
@@ -66,7 +66,7 @@
              }
     }
   },
-  "participants": { // each participant must be defined in the following format
+  "participant": { // each participant must be defined in the following format
     "R4": { // the participant name must exist in the profile DB defined above
       "type": "Residential",
       "trader": {
