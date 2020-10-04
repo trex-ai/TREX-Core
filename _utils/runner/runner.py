@@ -1,31 +1,24 @@
-import os
-import filecmp
-import shutil
 import commentjson
-import gzip
 import random
-from _utils import launcher_maker
 from _utils import db_utils
 from _utils import jkson as json
-import tenacity
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
 from packaging import version
-import time
 
-class Maker:
+class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.configs = self.__get_config(config, resume, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.0"))
 
-        if not resume:
-            r = tenacity.Retrying(
-                wait=tenacity.wait_fixed(1))
-            r.call(self.__make_sim_path)
+        # if not resume:
+        #     r = tenacity.Retrying(
+        #         wait=tenacity.wait_fixed(1))
+        #     r.call(self.__make_sim_path)
 
-    def __get_config(self, config_name:str, resume, **kwargs):
+    def __get_config(self, config_name: str, resume, **kwargs):
         config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
@@ -66,13 +59,6 @@ class Maker:
         config['study']['resume'] = resume
         return config
 
-    def __make_sim_path(self):
-        output_path = self.configs['study']['sim_root'] + '_simulations/' + self.configs['study']['name'] + '/'
-        print(output_path)
-        if os.path.exists(output_path):
-            shutil.rmtree(output_path)
-        os.makedirs(output_path)
-
     # Give starting time for simulation
     def __get_start_time(self, generation):
         import pytz
@@ -96,28 +82,28 @@ class Maker:
                 # This is the sequential startime code 
                 if 'start_datetime_sequence' in self.configs['study']:
                     if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        interval = int((start_time_e-start_time_s) / self.configs['study']['generations']/60)*60
+                        interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
                         start_time = range(start_time_s, start_time_e, interval)[generation]
                         return start_time
                 start_time = random.choice(range(start_time_s, start_time_e, 60))
                 return start_time
             else:
-                 if 'start_datetime_sequence' in self.configs['study']:
+                if 'start_datetime_sequence' in self.configs['study']:
                     if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        multiplier = math.ceil(self.configs['study']['generations']/len(start_datetime))
-                        start_time_readable = start_datetime*multiplier[generation]
+                        multiplier = math.ceil(self.configs['study']['generations'] / len(start_datetime))
+                        start_time_readable = start_datetime * multiplier[generation]
                         start_time = pytz.timezone(start_timezone).localize(timeparse(start_time_readable))
                         return start_time
-                 start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
-                 return int(start_time.timestamp())
+                start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
+                return int(start_time.timestamp())
 
-    def __make_sim_internal_directories(self, config=None):
-        if not config:
-            config = self.configs
+    def __create_sim_metadata(self, config):
+        # if not config:
+        #     config = self.configs
         # make sim directories and shared settings files
-        sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
-        if not os.path.exists(sim_path):
-            os.mkdir(sim_path)
+        # sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
+        # if not os.path.exists(sim_path):
+        #     os.mkdir(sim_path)
 
         engine = create_engine(self.configs['study']['output_database'])
         if not engine.dialect.has_table(engine, 'metadata'):
@@ -158,22 +144,26 @@ class Maker:
             Column('data', sqlalchemy.JSON)
         )
         self.__create_table(db_string, table)
-    
-    def make_one(self, type:str, mode:str='', seq=0, skip_server=False, **kwargs):
+
+    def modify_config(self, simulation_type, **kwargs):
         if not self.__config_version_valid:
             return []
+
+        seq = kwargs['seq'] if 'seq' in kwargs else 0
+
         config = json.loads(json.dumps(self.configs))
         default_port = int(self.configs['server']['port']) if self.configs['server']['port'] else 3000
         config['server']['port'] = default_port + seq
-        config['study']['type'] = type
+
+        config['study']['type'] = simulation_type
         learning_participants = [participant for participant in config['participants'] if
                                  'learning' in config['participants'][participant]['trader'] and
                                  config['participants'][participant]['trader']['learning']]
 
-        if type == 'baseline':
+        if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
-            config['market']['id'] = type
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:
                 config['participants'][participant]['trader'].update({
@@ -181,8 +171,8 @@ class Maker:
                     'type': 'baseline_agent'
                 })
 
-        if type == 'training':
-            config['market']['id'] = type
+        if simulation_type == 'training':
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
             if 'target' in kwargs:
@@ -197,40 +187,50 @@ class Maker:
                 for participant in learning_participants:
                     config['participants'][participant]['trader']['learning'] = True
 
-        if type == 'validation':
-            config['market']['id'] = type
+        if simulation_type == 'validation':
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
+        return config
 
-        self.__make_sim_internal_directories()
-        lmaker = launcher_maker.Maker(config)
-        server, market, sim_controller, participants = lmaker.make_launch_list()
-        launch_sequence = market + sim_controller + participants
-        if not skip_server:
-            launch_sequence = server + launch_sequence
-        return launch_sequence
+    def make_launch_list(self, config, skip: tuple = ()):
+        from importlib import import_module
+        import _utils.runner.make.sim_controller as sim_controller
+        import _utils.runner.make.participant as participant
 
-    def launch_subprocess(self, args: list, delay=0):
-        time.sleep(delay)
+        exclude = {'sim_controller', 'participants'}
+        exclude.update(skip)
 
-        import subprocess
-        extension = args[0].split('.')[1]
-        is_python = True if extension == 'py' else False
+        launch_list = []
+        dynamic = [k for k in config if k not in exclude]
 
-        if is_python:
+        for module_n in dynamic:
             try:
-                subprocess.run(['env/bin/python', args[0], *args[1]])
+                module = import_module('_utils.runner.make.' + module_n)
+                launch_list.append(module.cli(config))
             except:
-                subprocess.run(['venv/Scripts/python', args[0], *args[1]])
-                # subprocess.run(['venv/Scripts/python', args[0], *args[1]])
-            finally:
-                subprocess.run(['python', args[0], *args[1]])
-        else:
-            subprocess.run([args[0], *args[1]])
+                pass
 
-    def launch(self, simulations, skip_servers=False):
+        launch_list.append(sim_controller.cli(config))
+        for p_id in config['participants']:
+            launch_list.append(participant.cli(config, p_id))
+        return launch_list
+
+    def run_subprocess(self, args: list, delay=0):
+        import subprocess
+        import time
+
+        time.sleep(delay)
+        try:
+            subprocess.run(['venv/bin/python', args[0], *args[1]])
+        except:
+            subprocess.run(['venv/Scripts/python', args[0], *args[1]])
+        finally:
+            subprocess.run(['python', args[0], *args[1]])
+
+    def run(self, simulations):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
@@ -238,11 +238,13 @@ class Maker:
 
         launch_list = []
         seq = 0
-        for sim in simulations:
-            launch_list.extend(self.make_one(**sim, seq=seq))
+        for sim_param in simulations:
+            config = self.modify_config(**sim_param, seq=seq)
+            self.__create_sim_metadata(config)
+            launch_list.extend(self.make_launch_list(config))
             seq += 1
 
         pool_size = len(launch_list)
         pool = Pool(pool_size)
-        pool.map(self.launch_subprocess, launch_list)
+        pool.map(self.run_subprocess, launch_list)
         pool.close()

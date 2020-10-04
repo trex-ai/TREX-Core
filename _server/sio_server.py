@@ -4,6 +4,7 @@ Main functions are client management and message relay
 """
 
 import sys
+sys.path.append("C:/source/TREX-Core")
 import os
 import asyncio
 import socket
@@ -314,7 +315,7 @@ class ETXMarket(socketio.AsyncNamespace):
                           data=message,
                           room=participant_sid,
                           namespace='/market')
-
+import random
 class Simulation(socketio.AsyncNamespace):
     # def __init__(self):
     #     super().__init__(namespace='/simulation')
@@ -324,6 +325,43 @@ class Simulation(socketio.AsyncNamespace):
     # async def on_connect(self, sid, environ):
     # #     # print('connect to sim')
     #     pass
+
+    async def on_get_remote_actions(self, sid, observations):
+        """Event emitted by the thin remote agent to get next actions from a centralized learning agent
+        Args:
+            sid ([type]): [description]
+            observations ([type]): [description]
+        """
+        # await server.sleep(random.randint(1, 3))
+        if not 'remote_agent' in clients:
+            await server.emit(
+                event='got_remote_actions',
+                data={},
+                to=sid,
+                namespace='/simulation')
+        else:
+            await server.emit(
+                event='get_remote_actions',
+                data=observations,
+                to=clients['remote_agent']['sid'],
+                namespace='/simulation')
+
+    async def on_got_remote_actions(self, sid, actions):
+        """Event emitted by the centralized learning agent to get return actions to the thin remote agent
+        Args:
+            sid ([type]): [description]
+            actions ([type]): [description]
+        """
+        participant_id = actions.pop('participant_id')
+        market_id = actions.pop('market_id')
+        participant_sid = clients[market_id]['participant'][participant_id]['sid']
+        if participant_sid not in sessions:
+            return
+
+        await server.emit(event='got_remote_actions',
+                          data=actions,
+                          room=participant_sid,
+                          namespace='/simulation')
 
     async def on_register(self, sid, client_data):
         """Event emitted by the simulation controller to register itself on the server
@@ -356,6 +394,16 @@ class Simulation(socketio.AsyncNamespace):
                 server.enter_room(sid, market_id, namespace='/market')
                 server.enter_room(sid, market_id, namespace='/simulation')
                 return True
+
+        elif client_data['type'][0] == 'remote_agent':
+            # register sim controller in session and client lists
+            # sessions[sid] = {'client_id': client_data['id'],
+            #                  'client_type': 'remote_agent'}
+
+            clients['remote_agent'] = {
+                'sid': sid
+            }
+
         return False
 
     async def on_re_register_participant(self, sid):
@@ -371,6 +419,7 @@ class Simulation(socketio.AsyncNamespace):
         if clients[market_id]['sim_controller']['sid'] == sid:
             await server.emit(
                 event='re_register_participant',
+                data='',
                 room=market_id,
                 namespace='/market')
 
@@ -539,6 +588,7 @@ class Simulation(socketio.AsyncNamespace):
         if sim_controller_sid == sid:
             await server.emit(
                 event='end_simulation',
+                data='',
                 to=market_id,
                 namespace='/simulation')
 
@@ -552,6 +602,7 @@ class Simulation(socketio.AsyncNamespace):
         if market_id in clients:
             await server.emit(
                 event='market_online',
+                data='',
                 to=sid,
                 namespace='/simulation')
 
@@ -567,6 +618,7 @@ class Simulation(socketio.AsyncNamespace):
         if market_sid == sid:
             await server.emit(
                 event='market_ready',
+                data='',
                 to=sim_controller_sid,
                 namespace='/simulation')
 
@@ -582,5 +634,5 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=42069, help='')
     args = parser.parse_args()
 
-    web.run_app(app=app, host=args.host, port=str(args.port))
+    web.run_app(app=app, host=args.host, port=int(args.port))
 
