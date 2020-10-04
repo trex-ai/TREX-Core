@@ -71,7 +71,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
             message ([type]): [description]
         """
         self.participant.reset()
-        if self.participant.storage:
+        if hasattr(self.participant, 'storage'):
             self.participant.storage.reset(soc_pct=0)
         self.participant.trader.output_path = message['output_path']
 
