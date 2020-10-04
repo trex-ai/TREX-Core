@@ -43,13 +43,15 @@ class Participant:
             'read_profile': self.__read_profile,
             'meter': self.__meter}
 
-        self.storage = storage
-        if self.storage:
+        if storage_params:
+            storage_params = json.loads(storage_params)
+            storage_type = storage_params.pop('type', None)
+            # self.storage_fns = {
+            #     'id': self.participant_id,
+            #     'timing': self.__timing
+            # }
+            self.storage = importlib.import_module('_devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
-            self.storage_fns = {
-                'id': self.participant_id,
-                'timing': self.__timing
-            }
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
                 'check_schedule': self.storage.check_schedule,
