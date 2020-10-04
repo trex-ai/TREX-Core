@@ -1,4 +1,4 @@
-def make(configs):
+def cli(configs):
     script_path = '_server/sio_server.py'
 
     if 'server' not in configs:

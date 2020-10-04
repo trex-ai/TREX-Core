@@ -1,6 +1,6 @@
 import json
 
-def make(configs):
+def cli(configs):
     script_path = '_clients/sim_controller/sio_client.py'
 
     if 'server' not in configs:

@@ -1,6 +1,6 @@
 import json
 
-def make(configs):
+def cli(configs):
     script_path = '_clients/markets/sio_client.py'
 
     if 'server' not in configs:
@@ -21,5 +21,5 @@ def make(configs):
     if port:
         args.append('--port=' + port)
 
-    args.append('--configs=' + json.dumps(market_configs)
+    args.append('--configs=' + json.dumps(market_configs))
     return (script_path, args)
