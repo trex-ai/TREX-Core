@@ -12,7 +12,7 @@ class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage, **kwargs):
+    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -41,15 +41,18 @@ class Participant:
             'extra_transactions': self.__extra_transactions,
             'market_info': self.__market_info,
             'read_profile': self.__read_profile,
-            'meter': self.__meter}
+            'meter': self.__meter
+        }
 
-        self.storage = storage
-        if self.storage:
+        if storage_params:
+            storage_params = json.loads(storage_params)
+            storage_type = storage_params.pop('type', None)
+            # self.storage_fns = {
+            #     'id': self.participant_id,
+            #     'timing': self.__timing
+            # }
+            self.storage = importlib.import_module('_devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
-            self.storage_fns = {
-                'id': self.participant_id,
-                'timing': self.__timing
-            }
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
                 'check_schedule': self.storage.check_schedule,
@@ -57,6 +60,8 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
+        if trader_type == 'remote_agent':
+            trader_fns['emit'] = self.__client.emit
         Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
@@ -203,10 +208,11 @@ class Participant:
         # print(self.__market_info)
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
-        next_actions = await self.trader.act()
+        next_actions = await self.trader.step()
+        # next_actions = await self.trader.act()
         await self.__take_actions(next_actions)
-        await self.trader.learn()
-        if self.storage is not None:
+        # await self.trader.learn()
+        if hasattr(self, 'storage'):
             await self.storage.step()
 
         # metering energy should happen right at the end of the current round for maximum accuracy
@@ -326,7 +332,7 @@ class Participant:
         bess_charge = 0
         bess_discharge = 0
 
-        if self.storage:
+        if hasattr(self, 'storage'):
             # bess_activity = self.storage.last_activity
             bess_activity = await self.storage.check_schedule(time_interval)
             bess_activity = bess_activity[time_interval]['energy_scheduled']
@@ -412,7 +418,7 @@ class Participant:
         # }
 
         # Battery charging or discharging action
-        if 'bess' in actions:
+        if 'bess' in actions and hasattr(self, 'storage'):
             for time_interval in actions['bess']:
                 await self.storage.schedule_energy(actions['bess'][time_interval], ast.literal_eval(time_interval))
         # Bid for energy
