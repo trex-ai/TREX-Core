@@ -12,7 +12,7 @@ class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage, **kwargs):
+    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -208,7 +208,7 @@ class Participant:
         next_actions = await self.trader.act()
         await self.__take_actions(next_actions)
         await self.trader.learn()
-        if self.storage is not None:
+        if hasattr(self, 'storage'):
             await self.storage.step()
 
         # metering energy should happen right at the end of the current round for maximum accuracy
@@ -328,7 +328,7 @@ class Participant:
         bess_charge = 0
         bess_discharge = 0
 
-        if self.storage:
+        if hasattr(self, 'storage'):
             # bess_activity = self.storage.last_activity
             bess_activity = await self.storage.check_schedule(time_interval)
             bess_activity = bess_activity[time_interval]['energy_scheduled']
@@ -414,7 +414,7 @@ class Participant:
         # }
 
         # Battery charging or discharging action
-        if 'bess' in actions:
+        if 'bess' in actions and hasattr(self, 'storage'):
             for time_interval in actions['bess']:
                 await self.storage.schedule_energy(actions['bess'][time_interval], ast.literal_eval(time_interval))
         # Bid for energy
