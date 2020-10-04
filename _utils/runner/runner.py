@@ -1,3 +1,13 @@
+import commentjson
+import random
+from _utils import db_utils
+from _utils import jkson as json
+import sqlalchemy
+from sqlalchemy import create_engine, MetaData, Column
+from sqlalchemy_utils import database_exists, create_database, drop_database
+import dataset
+from packaging import version
+
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.configs = self.__get_config(config, resume, **kwargs)
@@ -7,8 +17,8 @@ class Runner:
         #     r = tenacity.Retrying(
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
-    
-    def __get_config(self, config_name:str, resume, **kwargs):
+
+    def __get_config(self, config_name: str, resume, **kwargs):
         config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
@@ -72,21 +82,45 @@ class Runner:
                 # This is the sequential startime code 
                 if 'start_datetime_sequence' in self.configs['study']:
                     if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        interval = int((start_time_e-start_time_s) / self.configs['study']['generations']/60)*60
+                        interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
                         start_time = range(start_time_s, start_time_e, interval)[generation]
                         return start_time
                 start_time = random.choice(range(start_time_s, start_time_e, 60))
                 return start_time
             else:
-                 if 'start_datetime_sequence' in self.configs['study']:
+                if 'start_datetime_sequence' in self.configs['study']:
                     if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        multiplier = math.ceil(self.configs['study']['generations']/len(start_datetime))
-                        start_time_readable = start_datetime*multiplier[generation]
+                        multiplier = math.ceil(self.configs['study']['generations'] / len(start_datetime))
+                        start_time_readable = start_datetime * multiplier[generation]
                         start_time = pytz.timezone(start_timezone).localize(timeparse(start_time_readable))
                         return start_time
-                 start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
-                 return int(start_time.timestamp())
-    
+                start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
+                return int(start_time.timestamp())
+
+    def __create_sim_metadata(self, config):
+        # if not config:
+        #     config = self.configs
+        # make sim directories and shared settings files
+        # sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
+        # if not os.path.exists(sim_path):
+        #     os.mkdir(sim_path)
+
+        engine = create_engine(self.configs['study']['output_database'])
+        if not engine.dialect.has_table(engine, 'metadata'):
+            self.__create_metadata_table(self.configs['study']['output_database'])
+        db = dataset.connect(self.configs['study']['output_database'])
+        metadata_table = db['metadata']
+        for generation in range(config['study']['generations']):
+            # check if metadata is in table
+            # if not, then add to table
+            if not metadata_table.find_one(generation=generation):
+                start_time = self.__get_start_time(generation)
+                metadata = {
+                    'start_timestamp': start_time,
+                    'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
+                }
+                metadata_table.insert(dict(generation=generation, data=metadata))
+
     def __create_table(self, db_string, table):
         engine = create_engine(db_string)
         if not database_exists(engine.url):
@@ -111,10 +145,10 @@ class Runner:
         )
         self.__create_table(db_string, table)
 
-    def modify_config(simulation_type, **kwargs):
+    def modify_config(self, simulation_type, **kwargs):
         if not self.__config_version_valid:
             return []
-        
+
         seq = kwargs['seq'] if 'seq' in kwargs else 0
 
         config = json.loads(json.dumps(self.configs))
@@ -129,7 +163,7 @@ class Runner:
         if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
-            config['market']['id'] = type
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:
                 config['participants'][participant]['trader'].update({
@@ -138,7 +172,7 @@ class Runner:
                 })
 
         if simulation_type == 'training':
-            config['market']['id'] = type
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
             if 'target' in kwargs:
@@ -153,65 +187,64 @@ class Runner:
                 for participant in learning_participants:
                     config['participants'][participant]['trader']['learning'] = True
 
-        if type == 'validation':
-            config['market']['id'] = type
+        if simulation_type == 'validation':
+            config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
         return config
 
-    def make_launch_cli(self, config):
+    def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
-        from _utils.runner.make import sim_controller, server
-        for key in config:
-            import_module('_utils.runner.make', key)
+        import _utils.runner.make.sim_controller as sim_controller
+        import _utils.runner.make.participant as participant
+
+        exclude = {'sim_controller', 'participants'}
+        exclude.update(skip)
 
         launch_list = []
-        if 'server' in config:
-            launch_list.append(server.make(config))
+        dynamic = [k for k in config if k not in exclude]
 
-        if 'market' in config:
-            launch_list.append(market.make(config))
+        for module_n in dynamic:
+            try:
+                module = import_module('_utils.runner.make.' + module_n)
+                launch_list.append(module.cli(config))
+            except:
+                pass
 
-        sim_controller.make(config)
-        make.sim_controller.make(config)
-
-        if make_participants:
-            for p_id in configs['participants']:
-                launch_list.append(make.participant.make(p_id, config))
-        
-
-
-
+        launch_list.append(sim_controller.cli(config))
+        for p_id in config['participants']:
+            launch_list.append(participant.cli(config, p_id))
+        return launch_list
 
     def run_subprocess(self, args: list, delay=0):
         import subprocess
         import time
 
         time.sleep(delay)
-
         try:
             subprocess.run(['venv/bin/python', args[0], *args[1]])
         except:
             subprocess.run(['venv/Scripts/python', args[0], *args[1]])
         finally:
             subprocess.run(['python', args[0], *args[1]])
-        
 
-    # def launch(self, simulations, skip_servers=False):
-    #     if not self.__config_version_valid:
-    #         print('CONFIG NOT COMPATIBLE')
-    #         return
-    #     from multiprocessing import Pool
+    def run(self, simulations):
+        if not self.__config_version_valid:
+            print('CONFIG NOT COMPATIBLE')
+            return
+        from multiprocessing import Pool
 
-    #     launch_list = []
-    #     seq = 0
-    #     for sim in simulations:
-    #         launch_list.extend(self.make_one(**sim, seq=seq))
-    #         seq += 1
+        launch_list = []
+        seq = 0
+        for sim_param in simulations:
+            config = self.modify_config(**sim_param, seq=seq)
+            self.__create_sim_metadata(config)
+            launch_list.extend(self.make_launch_list(config))
+            seq += 1
 
-    #     pool_size = len(launch_list)
-    #     pool = Pool(pool_size)
-    #     pool.map(self.launch_subprocess, launch_list)
-    #     pool.close()
+        pool_size = len(launch_list)
+        pool = Pool(pool_size)
+        pool.map(self.run_subprocess, launch_list)
+        pool.close()
