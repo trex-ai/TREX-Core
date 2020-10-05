@@ -13,7 +13,7 @@ if os.name == 'posix':
 class Client:
     """A socket.io client wrapper for participants
     """
-    def __init__(self, server_address, participant_type, participant_id, market_id, db_path, trader_params, storage, **kwargs):
+    def __init__(self, server_address, participant_type, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
         # Initialize client related data
         self.server_address = server_address
         self.sio_client = socketio.AsyncClient(reconnection=True,
@@ -31,7 +31,7 @@ class Client:
                                        market_id = market_id,
                                        db_path=db_path,
                                        trader_params=trader_params,
-                                       storage=storage,
+                                       storage_params=storage_params,
                                        market_ns='_clients.participants.' + participant_type,
                                        **kwargs)
 
@@ -83,21 +83,13 @@ def __main():
     parser.add_argument('--load_scale', default=1, help='')
     args = parser.parse_args()
 
-    if args.storage is not None:
-        storage_params_list = args.storage.split(',')
-        storage_type = storage_params_list[0]
-        storage_params = [float(i) for i in storage_params_list[1:]]
-        storage = importlib.import_module('_devices.' + storage_type).Storage(*storage_params)
-    else:
-        storage = None
-
     client = Client(''.join(['http://', args.host, ':', str(args.port)]),
                     participant_type=args.type,
                     participant_id=args.id,
                     market_id=args.market_id,
                     db_path=args.db_path,
                     trader_params=args.trader,
-                    storage=storage,
+                    storage_params=args.storage,
                     generation_scale=float(args.generation_scale),
                     load_scale=float(args.load_scale),
                     )
