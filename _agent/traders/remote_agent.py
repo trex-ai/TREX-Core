@@ -107,6 +107,7 @@ class Trader:
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
                                          namespace='/simulation')
+        # this is where we get actions: self.next_actions
         await self.wait_for_actions.wait()
         # print(self.next_actions)
         self.bid_price=self.next_actions['actions']['bids']['price']

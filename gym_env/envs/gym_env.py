@@ -8,7 +8,7 @@ class TREXenv(gym.Env):
         super(TREXenv,self).__init__()
         # this action space needs to be defined in the same way that we pass actions to the simulation
         # TREX action space:
-
+        self.seed(seed=42)
         self.observations = []
         self.counter = 0
         self.dones = []

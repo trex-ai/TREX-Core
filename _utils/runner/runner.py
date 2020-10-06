@@ -161,6 +161,7 @@ class Runner:
                                  config['participants'][participant]['trader']['learning']]
 
         if simulation_type == 'baseline':
+            config.pop('remote_agent', None)
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
             config['market']['id'] = simulation_type

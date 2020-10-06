@@ -154,7 +154,7 @@ class Controller:
         with concurrent.futures.ThreadPoolExecutor() as pool:
             await loop.run_in_executor(pool, functools.partial(learn, network=self.network, env=self.big_gym_energy,
                                                                total_timesteps=self.big_gym_energy.envs[0].counter,
-                                                               nsteps=256))
-            
+                                                               nsteps=512, seed=42))
+
         self.big_gym_energy.envs[0].reset()
         self.is_learning = False
