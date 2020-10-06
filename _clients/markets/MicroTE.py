@@ -1009,7 +1009,7 @@ class Market:
         await self.record_transactions(delay=False)
         await self.__ensure_transactions_complete()
         await self.reset_market()
-        await self.__client.emit('market_ready', namespace='/simulation')
+        await self.__client.emit('market_ready', data='', namespace='/simulation')
 
 import socketio
 

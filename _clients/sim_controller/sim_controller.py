@@ -493,7 +493,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
     async def on_market_online(self, message):
         self.controller.status['market_online'] = True
 
-    async def on_market_ready(self):
+    async def on_market_ready(self, message):
         self.controller.status['market_ready'] = True
 
     async def on_remote_agent_ready(self):

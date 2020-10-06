@@ -629,7 +629,7 @@ class Simulation(socketio.AsyncNamespace):
                 to=sid,
                 namespace='/simulation')
 
-    async def on_market_ready(self, sid):
+    async def on_market_ready(self, sid, message):
         """Event emitted by the Markeet to notify the sim controller that it is ready to operate
 
         Args:
