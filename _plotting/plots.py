@@ -1,4 +1,4 @@
-# import extract
+
 import dataset
 import numpy as np
 # import plotly.graph_objects as go
@@ -16,11 +16,12 @@ def plot_metric(agent_id, db_path, sim_type, metric, gens=None, compare_with_opt
     """
     if not gens:
         gens = gens_count(db_path, sim_type) # extraire tout les donnees automatiquement
-        print(gens)
+        # print(gens)
     metric_ts = []
     for gen in range(gens):
+        print()
         metrics = from_metrics(db_path, gen, sim_type, agent_id)
-        print('what',metrics)
+        # print('what',metrics)
         if gen == 0:
             gen_len = len(metrics[metric])
         if metric not in metrics:
@@ -209,7 +210,7 @@ def from_metrics(db_path, gen, table_name, agent_id, **kwargs):
 #         plt.show()
 if __name__ == "__main__":
     agent_id = 'egauge19821'
-    db_path1 = 'postgresql://postgres:postgres@stargate/remote_agent_test_np'
+    db_path1 = 'postgresql://postgres:postgres@stargate/remote_agent_test_np_'
     db_path2 = 'postgresql://postgres:postgres@stargate/EconomicAdvantage_trade'
     db_path3 = 'postgresql://postgres:postgres@stargate/EconomicAdvantage_trade_exp'
     sim_type = 'training'
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     # plot_returns(agent_id, db_path3, 'csp', compare_with_optimal=False, matplotlib=False)
     # plot_returns(agent_id, db_path3, 'validation', compare_with_optimal=False, matplotlib=False)
     # plot_metric(agent_id, db_path, 'validation', 'price_action')
-    plot_metric(agent_id, db_path1, 'training', 'reward')
+    plot_metric(agent_id, db_path1, 'training', 'bid_price')
     # Todo: dissociate actions dict into its own metrics
 
     # plot_metric(agent_id, db_path, 'validation', 'value')

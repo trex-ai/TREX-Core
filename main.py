@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # list of simulations to be performed.
     # in general, it is recommended to perform at baseline and training at minimum
     simulations = [
-        {'simulation_type': 'baseline'},
+        # {'simulation_type': 'baseline'},
         {'simulation_type': 'training'}
         # {'type': 'validation'}
     ]

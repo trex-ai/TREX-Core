@@ -11,6 +11,7 @@ import numpy as np
 from baselines.ppo2.ppo2 import learn
 # from baselines.ppo2.runner import Runner
 import functools
+import gym
 
 
 class Controller:
@@ -25,15 +26,19 @@ class Controller:
         self.__client = sio_client
         self.id_list = []
         self.big_gym_energy = DummyVecEnv([lambda : TREXenv()])
-        self.counter=0
+
+        self.MCC= DummyVecEnv([lambda : gym.make('MountainCarContinuous-v0')])
+        print(self.MCC)
+        self.counter = 0
         # get the network - TODO: this may be relegated to the config for ease
         if kwargs:
             gym_kwargs = kwargs['gym']
         else:
             gym_kwargs = {}
         policy_fn = get_network_builder('mlp')(**gym_kwargs)
-        print(policy_fn)
+
         self.network = policy_fn(self.big_gym_energy.envs[0].observation_space.shape)
+        self.networkMCC = policy_fn(self.MCC.envs[0].observation_space.shape)
 
         # Setup the model
         self.model = Model(ac_space=self.big_gym_energy.envs[0].action_space,
@@ -41,16 +46,12 @@ class Controller:
                            ent_coef=0.0, vf_coef=0.5,
                            max_grad_norm=0.5)
 
+        self.modelMMC = Model(ac_space=self.MCC.envs[0].action_space,
+                              policy_network=self.networkMCC,
+                              ent_coef=0.0, vf_coef=0.5,
+                              max_grad_norm=0.5)
 
-        # action_space = self.big_gym_energy.envs[0].action_space
-        # self.model = Model(ac_space=action_space, policy_network=self.policy_network,
-        #                    ent_coef=0, vf_coef=0.5, max_grad_norm=0.5)
-        # print(self.model, 'Ppo2 model is initialized')
-        # self.gamma = 0.99
-        # self.lam = 0.95
-        # self.runner = Runner(env=self.big_gym_energy, model=self.model, nsteps=1
-        #                      , gamma=self.gamma,lam=self.lam)
-        # Register client in server
+
 
     async def register(self):
         client_data = {
@@ -68,18 +69,23 @@ class Controller:
         observations = message.pop('observations')
 
         reward = message.pop('reward')
-        # print('reward from message', reward) #FIXME: the rewards from the first observation is None, that is a problem
+        # print('reward from message', reward)
         # obs = self.big_gym_energy.envs[0].reset()
 
         # need to flatten obs,
+        # TODO: I wonder if this flattening is a problem -- Does baselines flatten??
         flat_observations = flatten(self.big_gym_energy.envs[0]._observation_space, observations)
 
-        if reward:
+        if reward is not None:
+            # FIXME: this breaks when the value of the reward is 0.0
             self.big_gym_energy.envs[0].send_to_gym(flat_observations,reward)
 
         obs = tf.reshape(flat_observations, [1, len(flat_observations)])
+
         # query the model for the actions
         # the model does not like the unflattened observations;
+        # TODO: I wonder if I should send these to the agent for metrics
+        print(self.model.train_model)
         actions_array, vf, something, neglogp = self.model.train_model.step(obs)
 
         actions_array = actions_array.numpy()
@@ -147,14 +153,17 @@ class Controller:
 
 
     async def learn(self):
+        import os
         self.is_learning = True
-        print('learn but not learn', self.big_gym_energy.envs[0].counter)
+        print('gym_controller learn but not  baselines learn', self.big_gym_energy.envs[0].counter)
+        model_path = os.getcwd() + '\_simulations\_models '
         loop = asyncio.get_running_loop()
-
+        self.big_gym_energy.envs[0].normalize_observations()
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            await loop.run_in_executor(pool, functools.partial(learn, network=self.network, env=self.big_gym_energy,
-                                                               total_timesteps=self.big_gym_energy.envs[0].counter,
-                                                               nsteps=512, seed=42))
+            self.model = await loop.run_in_executor(pool, functools.partial(learn, network=self.networkMCC, env=self.MCC,
+                                                               total_timesteps=4000,
+                                                                nsteps=2048, seed=42))
 
         self.big_gym_energy.envs[0].reset()
         self.is_learning = False
+

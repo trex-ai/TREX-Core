@@ -1,13 +1,13 @@
 {
     "version": "3.6.2",
     "study": {
-      "name": "remote_agent_test",
+      "name": "remote_agent",
       "description": "",
       "start_datetime": "2018-07-01 0:0:0",
       "start_datetime_sequence": "sequential",
       "timezone": "America/Vancouver",
-      "days": 30,
-      "generations": 10,
+      "days": 2,
+      "generations": 100,
       "profiles_db_location": "postgresql://postgres:postgres@stargate/profiles",
       "output_db_location": "postgresql://postgres:postgres@stargate",
       "sim_root": ""
@@ -41,8 +41,6 @@
         "trader": {
           "track_metrics": true,
           "type": "remote_agent",
-          "bid_price": 0.08,
-          "ask_price": 0.12,
           "learning": true
         },
         "load": {
@@ -50,6 +48,20 @@
         },
         "generation": {
           "scale": 0
+        }
+      },
+      "egauge16616": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "basic_trader",
+          "ask_price":0.12
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 1
         }
       }
     }

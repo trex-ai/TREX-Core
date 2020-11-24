@@ -10,6 +10,8 @@ import asyncio
 # from _utils._agent.gym_utils import GymPlug
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.ppo2.ppo2 import learn
+import numpy as np
+import datetime
 
 # env3 = DummyVecEnv([lambda : gym.make('TestEnv-v0')])
 class Trader:
@@ -99,16 +101,27 @@ class Trader:
         # float: next settle projected SOC,
         # float: Scaled battery max charge,
         # float: scaled battery max discharge]
-
+        last_settle = self.__participant['timing']['last_settle']
+        hour = datetime.datetime.utcfromtimetimestamp(last_settle[0]).hour
+        min = datetime.datetime.utcfromtimetimestamp(last_settle[0]).minute
+        daytime = hour * 60 + min
+        max_daytime = 24 * 60
+        daytime_in_rad = 2 * np.pi * (daytime / max_daytime)
+        day_sin = np.sin(daytime_in_rad)
+        day_cos = np.cos(daytime_in_rad)
+        print(day_sin)
+        print(day_cos)
         next_settle = self.__participant['timing']['next_settle']
         generation, load = await self.__participant['read_profile'](next_settle)
         message = {
             'id' : pid,
             'market_id': mid,
             'observations': {
-                #observations stuff
+                # observations stuff
                 'next_settle_load_value': load,
-                'next_settle_gen_value': generation
+                'next_settle_gen_value': generation,
+                'last_settle_daytime_sin': day_sin,
+                'last_settle_daytime_cos': day_cos
 
             }
         }
