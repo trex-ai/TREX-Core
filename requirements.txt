@@ -9,8 +9,7 @@ dss
 numpy
 packaging
 python-dateutil
-python-engineio<=3.13.1
-python-socketio
+python-socketio<=4.6.1
 pytz
 python-rapidjson
 sqlalchemy-utils
