@@ -65,10 +65,13 @@ class Participant:
         Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
-        self.__scaling = {
-            'generation': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
-            'load': kwargs['load_scale'] if 'load_scale' in kwargs else 1
+        self.__profile_params = {
+            'generation_scale': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
+            'load_scale': kwargs['load_scale'] if 'load_scale' in kwargs else 1
         }
+        synthetic_profile = trader_params.pop('use_synthetic_profile', None)
+        if synthetic_profile:
+            self.__profile_params['synthetic_profile'] = synthetic_profile
 
         if 'market_ns' in kwargs:
             NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
@@ -92,7 +95,9 @@ class Participant:
         """
         self.__profile_db['path'] = db_path
         self.__profile_db['db'] = databases.Database(db_path)
-        self.__profile_db['table'] = db_utils.get_table(db_path, self.participant_id)
+        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
+            else self.participant_id
+        self.__profile_db['table'] = db_utils.get_table(db_path, profile_name)
         if 'table' in self.__profile_db or self.__profile_db['table'] is not None:
             await self.__profile_db['db'].connect()
 
@@ -252,8 +257,8 @@ class Participant:
         """
 
         if row is not None:
-            consumption = int(round(self.__scaling['load'] * (row['grid'] + row['solar+']), 0))
-            generation = int(round(self.__scaling['generation'] * row['solar+'], 0))
+            consumption = int(round(self.__profile_params['load_scale'] * (row['grid'] + row['solar+']), 0))
+            generation = int(round(self.__profile_params['generation_scale'] * row['solar+'], 0))
             return generation, consumption
         return 0, 0
 
