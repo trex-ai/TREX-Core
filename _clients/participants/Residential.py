@@ -431,14 +431,14 @@ class Participant:
             for time_interval in actions['bids']:
                 quantity = actions['bids'][time_interval]['quantity']
                 source = actions['bids'][time_interval]['source']
-                price = actions['bids'][time_interval]['price']
+                price = round(actions['bids'][time_interval]['price'], 4)
                 await self.bid(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
         # Ask to sell energy
         if 'asks' in actions:
             for time_interval in actions['asks']:
                 quantity = actions['asks'][time_interval]['quantity']
                 source = actions['asks'][time_interval]['source']
-                price = actions['asks'][time_interval]['price']
+                price = round(actions['asks'][time_interval]['price'], 4)
                 await self.ask(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
 
     def reset(self):
