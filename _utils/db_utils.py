@@ -65,6 +65,24 @@ async def create_table(db_string, table_type, table_name=None, **kwargs):
             Column('time_purchase', sqlalchemy.Integer),
             Column('time_consumption', sqlalchemy.Integer))
 
+    # temporary for transition to MicroTE3
+    elif table_type == 'market2':
+        table = sqlalchemy.Table(
+            table_name if table_name else table_type,
+            meta,
+            Column('id', sqlalchemy.Integer, primary_key=True),
+            Column('quantity', sqlalchemy.Integer),
+            Column('seller_id', sqlalchemy.String),
+            Column('buyer_id', sqlalchemy.String),
+            Column('energy_source', sqlalchemy.String),
+            Column('settlement_price_sell', sqlalchemy.Float),
+            Column('settlement_price_buy', sqlalchemy.Float),
+            Column('fee_ask', sqlalchemy.Float),
+            Column('fee_bid', sqlalchemy.Float),
+            Column('time_creation', sqlalchemy.Integer),
+            Column('time_purchase', sqlalchemy.Integer),
+            Column('time_consumption', sqlalchemy.Integer))
+
     elif table_type == 'custom' and 'custom_table' in kwargs:
         # must be a pre-defined sqlalchemy Table object
         # TODO: add type check
