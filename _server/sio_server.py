@@ -475,6 +475,24 @@ class Simulation(socketio.AsyncNamespace):
             namespace='/simulation')
 
     # event emitted by sim controller
+    async def on_update_curriculum(self, sid, message):
+        """Event emitted by the sim controller to give participant updated curriculum
+
+        Args:
+            sid ([type]): [description]
+            message ([type]): [description]
+        """
+        market_id = sessions[sid]['market_id']
+        sim_controller_sid = clients[market_id]['sim_controller']['sid']
+
+        if sim_controller_sid == sid:
+            await server.emit(
+                event='update_curriculum',
+                data=message,
+                to=market_id,
+                namespace='/simulation')
+
+    # event emitted by sim controller
     async def on_load_weights(self, sid, message):
         """Event emitted by the sim controller to allow participant traders to load weights
 
