@@ -459,7 +459,7 @@ class Simulation(socketio.AsyncNamespace):
             namespace='/simulation')
 
     # event emitted by participant
-    async def on_participant_weights_saved(self, sid, message):
+    async def on_participant_ready(self, sid, message):
         """Event emitted by participant traders to notify the simulation controller that the weights have been saved.
 
         Args:
@@ -469,7 +469,7 @@ class Simulation(socketio.AsyncNamespace):
         market_id = sessions[sid]['market_id']
         sim_controller_sid = clients[market_id]['sim_controller']['sid']
         await server.emit(
-            event='participant_weights_saved',
+            event='participant_ready',
             data=message,
             to=sim_controller_sid,
             namespace='/simulation')
