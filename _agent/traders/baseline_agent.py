@@ -6,23 +6,7 @@ class Trader:
     """
     def __init__(self, **kwargs):
         self.__participant = kwargs['trader_fns']
-        self.status = {
-            'weights_loading': False,
-            'weights_loaded': False,
-            'weights_saving': False,
-            'weights_saved': True
-        }
-
-        # Initialize the agent learning parameters for the agent (your choice)
-        self.agent_data = {}
-        self.learning = False
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-
-    # Core Functions, learn and act, called from outside
-    async def learn(self, **kwargs):
-        # learn must exist even if unused because participant expects it.
-        if not self.learning:
-            return
 
     async def act(self, **kwargs):
         actions = {}
@@ -58,8 +42,4 @@ class Trader:
 
     async def step(self):
         next_actions = await self.act()
-        await self.learn()
         return next_actions
-
-    async def reset(self, **kwargs):
-        return True
