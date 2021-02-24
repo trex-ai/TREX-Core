@@ -66,6 +66,7 @@ class Controller:
         self.timer_end = 0
 
         self.status = {
+            'monitor_timeout': 5,
             'registered_on_server': False,
             'market_id': self.__config['market']['id'],
             'sim_started': False,
@@ -235,7 +236,7 @@ class Controller:
 
     async def monitor(self):
         while True:
-            await self.delay(5)
+            await self.delay(self.status['monitor_timeout'])
             if not self.status['registered_on_server']:
                 continue
 
@@ -300,16 +301,18 @@ class Controller:
                 continue
 
             self.status['sim_started'] = True
+            self.status['monitor_timeout'] = 5
             await self.step()
 
     async def __load_weights(self, generation, market_id, participant_id):
-        # db_string = self.__config['study']['output_database']
-        # db = dataset.connect(db_string)
-        # weights_table_name = '_'.join((market_id, 'weights', participant_id))
-        # weights_table = db[weights_table_name]
-        # weights = weights_table.find_one(generation=generation)
-        # if weights is None:
-        #     return
+        db_string = self.__config['study']['output_database']
+        db = dataset.connect(db_string)
+        weights_table_name = '_'.join((market_id, 'weights', participant_id))
+        weights_table = db[weights_table_name]
+        weights = weights_table.find_one(generation=generation)
+        if weights is None:
+            self.status['monitor_timeout'] = 30
+            return
 
         message = {
             'participant_id': participant_id,

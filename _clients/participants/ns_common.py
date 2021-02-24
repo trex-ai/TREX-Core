@@ -34,6 +34,11 @@ class NSSimulation(socketio.AsyncClientNamespace):
     async def on_re_register_participant(self, message):
         await self.participant.join_market()
 
+    async def on_update_curriculum(self, message):
+        if 'learning' in message:
+            if hasattr(self.participant.trader, 'learning'):
+                self.participant.trader.learning = message['learning']
+
     async def on_load_weights(self, message):
         """Event triggers loading weights for trader
 
