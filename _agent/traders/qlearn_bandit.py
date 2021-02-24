@@ -39,12 +39,9 @@ class Trader:
         self.__participant = kwargs['trader_fns']
         self.status = {
             'weights_loading': False
-            # 'weights_loaded': False,
         }
 
         # Initialize the agent learning parameters
-        self.agent_data = {}
-
         self.bid_prices = self.__generate_price_table(bid_price, ask_price, 100)
         self.ask_prices = self.__generate_price_table(bid_price, ask_price, 100)
         self.bid_price = utils.secure_random.choice(list(self.bid_prices.keys()))
@@ -57,6 +54,10 @@ class Trader:
                 self.__participant['timing'],
                 self.__participant['ledger'],
                 self.__participant['market_info'])
+
+        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 0.1
+        self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.98
+        self.epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 0.1
 
         # Initialize metrics tracking
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
@@ -100,17 +101,17 @@ class Trader:
 
         await self.metrics.track('rewards', reward)
 
-        discount_factor = 0.98
-        learning_rate = 0.1
+        # discount_factor = 0.98
+        # learning_rate = 0.1
 
         q_bid = self.bid_prices[self.bid_price]
         q_max_bid = max(self.bid_prices.values())
-        q_bid_new = q_bid + learning_rate * (reward + discount_factor * q_max_bid - q_bid)
+        q_bid_new = q_bid + self.learning_rate * (reward + self.discount_factor * q_max_bid - q_bid)
         self.bid_prices[self.bid_price] = q_bid_new
 
         q_ask = self.ask_prices[self.ask_price]
         q_max_ask = max(self.ask_prices.values())
-        q_ask_new = q_ask + learning_rate * (reward + discount_factor * q_max_ask - q_ask)
+        q_ask_new = q_ask + self.learning_rate * (reward + self.discount_factor * q_max_ask - q_ask)
         self.ask_prices[self.ask_price] = q_ask_new
 
     async def act(self, **kwargs):
@@ -121,7 +122,7 @@ class Trader:
         next_residual_load = next_load - next_generation
         next_residual_gen = -next_residual_load
 
-        epsilon = 0.1 if self.learning else -1
+        epsilon = self.epsilon if self.learning else -1
         if utils.secure_random.random() <= epsilon:
             self.bid_price = utils.secure_random.choice(list(self.bid_prices.keys()))
             self.ask_price = utils.secure_random.choice(list(self.ask_prices.keys()))
