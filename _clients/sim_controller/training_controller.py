@@ -14,10 +14,10 @@ class TrainingController:
         if current_generation in curriculum:
             self.__last_curriculum_update = current_generation
             return curriculum[current_generation]
-        elif self.__last_curriculum_update:
-            return curriculum[self.__last_curriculum_update]
-        else:
-            return None
+        # elif self.__last_curriculum_update:
+        #     return curriculum[self.__last_curriculum_update]
+        # else:
+        return None
 
     def select_generation(self, current_generation, selection_type=None):
         if selection_type == 'last':
