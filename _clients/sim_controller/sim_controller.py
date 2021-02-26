@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import sys
 import json
 import os
 import time
@@ -271,9 +272,11 @@ class Controller:
 
             # await self.update_sim_paths()
 
-            if self.__generation > self.__generations and not self.status['sim_ended']:
-                self.status['sim_ended'] = True
+            if self.status['sim_ended']:
                 continue
+            # if self.__generation > self.__generations and not self.status['sim_ended']:
+            #     self.status['sim_ended'] = True
+            #     continue
 
             if self.__config['study']['type'] == 'training':
                 curriculum = self.training_controller.load_curriculum(str(self.__generation))
@@ -337,11 +340,11 @@ class Controller:
 
     async def step(self):
         self.status['last_step_clock'] = time.time()
-        if self.status['sim_ended']:
-            print('end_simulation', self.__generation, self.__generations)
-            await self.__client.emit('end_simulation', namespace='/simulation')
-            await self.delay(1)
-            raise SystemExit
+        # if self.status['sim_ended']:
+        #     print('end_simulation', self.__generation, self.__generations)
+        #     await self.__client.emit('end_simulation', namespace='/simulation')
+        #     await self.delay(1)
+        #     raise SystemExit
 
         if not self.status['sim_started']:
             return
@@ -410,6 +413,14 @@ class Controller:
                 'market_id': self.__config['market']['id']
             }
             await self.__client.emit('end_generation', message, namespace='/simulation')
+
+            if self.__generation > self.__generations:
+                self.status['sim_ended'] = True
+                # if self.status['sim_ended']:
+                print('end_simulation', self.__generation-1, self.__generations)
+                await self.__client.emit('end_simulation', namespace='/simulation')
+                await self.delay(1)
+                sys.exit()
 
 class NSMarket(socketio.AsyncClientNamespace):
 
