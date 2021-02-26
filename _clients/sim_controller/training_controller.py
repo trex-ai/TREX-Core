@@ -7,26 +7,17 @@ class TrainingController:
     def __init__(self, config, sim_status):
         self.__config = config
         self.__status = sim_status
+        self.__last_curriculum_update = None
 
-    def load_curriculum(self, participant_id, current_generation):
-        curriculum = {}
-        # weights will always load on start or resume (running_generations == 0)
-        # weights will only reload for non-learning agents beyond generation 0
-        if self.__status['running_generations'] == 0 or \
-                (self.__status['running_generations'] > 0 and participant_id not in self.__status['learning_agents']):
-            curriculum['load_weights'] = True
-        else:
-            curriculum['load_weights'] = False
-
-        if self.__config['study']['type'] != 'training':
-            return curriculum
-
-        gen = str(current_generation)
-        curriculum.update(self.__config['training'][gen] if gen in self.__config['training'] else self.__config['training']['default'])
-
-        if 'warm_up' in curriculum and curriculum['warm_up']:
-            curriculum['gen_len'] = self.__config['study']['days'] * 1440
-        return curriculum
+    def load_curriculum(self, current_generation:str):
+        curriculum = self.__config['curriculum']
+        if current_generation in curriculum:
+            self.__last_curriculum_update = current_generation
+            return curriculum[current_generation]
+        # elif self.__last_curriculum_update:
+        #     return curriculum[self.__last_curriculum_update]
+        # else:
+        return None
 
     def select_generation(self, current_generation, selection_type=None):
         if selection_type == 'last':
