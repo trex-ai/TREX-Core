@@ -13,22 +13,6 @@ from sqlalchemy import MetaData, Column
 import dataset
 import ast
 
-class EMA:
-    def __init__(self, window_size):
-        self.window_size = window_size
-        self.count = 0
-        self.last_average = 0
-
-    def update(self, new_value):
-        # approximate EMA
-        self.count = min(self.count + 1, self.window_size)
-        average = self.last_average + (new_value - self.last_average) / self.count
-        self.last_average = average
-
-    def reset(self):
-        self.count = 0
-        self.last_average = 0
-
 class Trader:
     """This trader uses SMA crossover to make trading decisions in the context of MicroFE
 
@@ -101,9 +85,6 @@ class Trader:
 
         await self.metrics.track('rewards', reward)
 
-        # discount_factor = 0.98
-        # learning_rate = 0.1
-
         q_bid = self.bid_prices[self.bid_price]
         q_max_bid = max(self.bid_prices.values())
         q_bid_new = q_bid + self.learning_rate * (reward + self.discount_factor * q_max_bid - q_bid)
@@ -167,14 +148,7 @@ class Trader:
         Save the price tables at the end of the episode into database
         '''
 
-        # if 'validation' in kwargs['market_id']:
-        #     return True
-
-        # 'output_db': self.__config['study']['output_database'],
-        # 'generation': self.__generation - 1,
-        # 'market_id': self.__config['market']['id']
-
-        table_name = '_'.join((kwargs['market_id'], 'weights', self.__participant['id']))
+        table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
         table = self.__create_weights_table(table_name)
         await db_utils.create_table(db_string=kwargs['db_path'],
                                     table_type='custom',
@@ -201,7 +175,7 @@ class Trader:
 
     async def load_weights(self, **kwargs):
         self.status['weights_loading'] = True
-        table_name = '_'.join((kwargs['market_id'], 'weights', self.__participant['id']))
+        table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
         db = dataset.connect(kwargs['db_path'])
         weights_table = db[table_name]
         weights = weights_table.find_one(generation=kwargs['generation'])
