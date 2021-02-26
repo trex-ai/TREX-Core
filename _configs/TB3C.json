@@ -1,0 +1,111 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "ae2021-ute3-qbandit-5s-5d",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 14,
+      "generations": 100,
+      "profiles_db_location": "postgresql://postgres:postgres@localhost/profiles",
+      "output_db_location": "postgresql://postgres:postgres@localhost",
+      "sim_root": ""
+    },
+    "curriculum": {
+      "0": {
+        "learning": false
+      },
+      "1": {
+        "learning": true
+      }
+    },
+    "server": {
+      "host": "",
+      "port": "5500"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "egauge19821": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "qlearn_bandit",
+          "bid_price": 0.07,
+          "ask_price": 0.14,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 5
+        }
+      },
+      "egauge16616": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "qlearn_bandit",
+          "bid_price": 0.07,
+          "ask_price": 0.14,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 5
+        }
+      },
+      "egauge17073": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "qlearn_bandit",
+          "bid_price": 0.07,
+          "ask_price": 0.14,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+        },
+        "load": {
+          "scale": 5
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "egauge13974": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "qlearn_bandit",
+          "bid_price": 0.07,
+          "ask_price": 0.14,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+        },
+        "load": {
+          "scale": 5
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  
