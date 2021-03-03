@@ -41,7 +41,7 @@ class Trader:
 
         self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 0.1
         self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.98
-        self.epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 0.1
+        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.1
 
         # Initialize metrics tracking
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
@@ -71,6 +71,20 @@ class Trader:
     def __generate_price_table(self, bid_price, ask_price, number):
         price_table = {price: 0 for price in np.linspace(bid_price, ask_price, number)}
         return price_table
+
+    def anneal(self, parameter:str, adjustment, mode:str='multiply'):
+        if not hasattr(self, parameter):
+            return False
+
+        if mode not in ('subtract', 'multiply'):
+            return False
+
+        param_value = getattr(self, parameter)
+        if mode == 'subtract':
+            param_value = max(0, param_value - adjustment)
+        elif mode == 'multiply':
+            param_value *= adjustment
+        setattr(self, parameter, param_value)
 
     # Core Functions, learn and act, called from outside
     async def learn(self, **kwargs):
@@ -103,7 +117,7 @@ class Trader:
         next_residual_load = next_load - next_generation
         next_residual_gen = -next_residual_load
 
-        epsilon = self.epsilon if self.learning else -1
+        epsilon = self.exploration_factor if self.learning else -1
         if utils.secure_random.random() <= epsilon:
             self.bid_price = utils.secure_random.choice(list(self.bid_prices.keys()))
             self.ask_price = utils.secure_random.choice(list(self.ask_prices.keys()))
