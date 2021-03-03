@@ -14,8 +14,10 @@ class TrainingController:
         if current_generation in curriculum:
             self.__last_curriculum_update = current_generation
             return curriculum[current_generation]
-        # elif self.__last_curriculum_update:
-        #     return curriculum[self.__last_curriculum_update]
+
+        # comment out the next 2 lines to make tc stateful
+        elif self.__last_curriculum_update:
+            return curriculum[self.__last_curriculum_update]
         # else:
         return None
 
