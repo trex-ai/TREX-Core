@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import sys
 import json
 import os
 import time
@@ -271,9 +272,11 @@ class Controller:
 
             # await self.update_sim_paths()
 
-            if self.__generation > self.__generations and not self.status['sim_ended']:
-                self.status['sim_ended'] = True
+            if self.status['sim_ended']:
                 continue
+            # if self.__generation > self.__generations and not self.status['sim_ended']:
+            #     self.status['sim_ended'] = True
+            #     continue
 
             if self.__config['study']['type'] == 'training':
                 curriculum = self.training_controller.load_curriculum(str(self.__generation))
@@ -287,8 +290,9 @@ class Controller:
             if self.__config['study']['type'] == 'validation':
                 market_id = 'training'
                 if not self.status['participants_weights_loaded']:
+                    db = dataset.connect(self.__config['study']['output_database'])
                     for participant_id in self.__participants:
-                        await self.__load_weights(self.__generation, market_id, participant_id)
+                        await self.__load_weights(db, self.__generation, market_id, participant_id)
                     continue
 
             if self.status['sim_interrupted']:
@@ -304,13 +308,13 @@ class Controller:
             self.status['monitor_timeout'] = 5
             await self.step()
 
-    async def __load_weights(self, generation, market_id, participant_id):
-        db_string = self.__config['study']['output_database']
-        db = dataset.connect(db_string)
-        weights_table_name = '_'.join((market_id, 'weights', participant_id))
-        weights_table = db[weights_table_name]
-        weights = weights_table.find_one(generation=generation)
-        if weights is None:
+    async def __load_weights(self, db, generation, market_id, participant_id):
+        # db_string = self.__config['study']['output_database']
+        # db = dataset.connect(db_string)
+        weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
+        # weights_table = db[weights_table_name]
+        # weights = weights_table.find_one(generation=generation)
+        if weights_table_name not in db.tables:
             self.status['monitor_timeout'] = 30
             return
 
@@ -336,11 +340,11 @@ class Controller:
 
     async def step(self):
         self.status['last_step_clock'] = time.time()
-        if self.status['sim_ended']:
-            print('end_simulation', self.__generation, self.__generations)
-            await self.__client.emit('end_simulation', namespace='/simulation')
-            await self.delay(1)
-            raise SystemExit
+        # if self.status['sim_ended']:
+        #     print('end_simulation', self.__generation, self.__generations)
+        #     await self.__client.emit('end_simulation', namespace='/simulation')
+        #     await self.delay(1)
+        #     raise SystemExit
 
         if not self.status['sim_started']:
             return
@@ -409,6 +413,14 @@ class Controller:
                 'market_id': self.__config['market']['id']
             }
             await self.__client.emit('end_generation', message, namespace='/simulation')
+
+            if self.__generation > self.__generations:
+                self.status['sim_ended'] = True
+                # if self.status['sim_ended']:
+                print('end_simulation', self.__generation-1, self.__generations)
+                await self.__client.emit('end_simulation', namespace='/simulation')
+                await self.delay(1)
+                sys.exit()
 
 class NSMarket(socketio.AsyncClientNamespace):
 

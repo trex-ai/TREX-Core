@@ -13,22 +13,6 @@ from sqlalchemy import MetaData, Column
 import dataset
 import ast
 
-class EMA:
-    def __init__(self, window_size):
-        self.window_size = window_size
-        self.count = 0
-        self.last_average = 0
-
-    def update(self, new_value):
-        # approximate EMA
-        self.count = min(self.count + 1, self.window_size)
-        average = self.last_average + (new_value - self.last_average) / self.count
-        self.last_average = average
-
-    def reset(self):
-        self.count = 0
-        self.last_average = 0
-
 class Trader:
     """This trader uses SMA crossover to make trading decisions in the context of MicroFE
 
@@ -57,7 +41,7 @@ class Trader:
 
         self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 0.1
         self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.98
-        self.epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 0.1
+        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.1
 
         # Initialize metrics tracking
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
@@ -88,6 +72,20 @@ class Trader:
         price_table = {price: 0 for price in np.linspace(bid_price, ask_price, number)}
         return price_table
 
+    def anneal(self, parameter:str, adjustment, mode:str='multiply'):
+        if not hasattr(self, parameter):
+            return False
+
+        if mode not in ('subtract', 'multiply'):
+            return False
+
+        param_value = getattr(self, parameter)
+        if mode == 'subtract':
+            param_value = max(0, param_value - adjustment)
+        elif mode == 'multiply':
+            param_value *= adjustment
+        setattr(self, parameter, param_value)
+
     # Core Functions, learn and act, called from outside
     async def learn(self, **kwargs):
         if not self.learning:
@@ -100,9 +98,6 @@ class Trader:
             return
 
         await self.metrics.track('rewards', reward)
-
-        # discount_factor = 0.98
-        # learning_rate = 0.1
 
         q_bid = self.bid_prices[self.bid_price]
         q_max_bid = max(self.bid_prices.values())
@@ -122,7 +117,7 @@ class Trader:
         next_residual_load = next_load - next_generation
         next_residual_gen = -next_residual_load
 
-        epsilon = self.epsilon if self.learning else -1
+        epsilon = self.exploration_factor if self.learning else -1
         if utils.secure_random.random() <= epsilon:
             self.bid_price = utils.secure_random.choice(list(self.bid_prices.keys()))
             self.ask_price = utils.secure_random.choice(list(self.ask_prices.keys()))
@@ -167,14 +162,7 @@ class Trader:
         Save the price tables at the end of the episode into database
         '''
 
-        # if 'validation' in kwargs['market_id']:
-        #     return True
-
-        # 'output_db': self.__config['study']['output_database'],
-        # 'generation': self.__generation - 1,
-        # 'market_id': self.__config['market']['id']
-
-        table_name = '_'.join((kwargs['market_id'], 'weights', self.__participant['id']))
+        table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
         table = self.__create_weights_table(table_name)
         await db_utils.create_table(db_string=kwargs['db_path'],
                                     table_type='custom',
@@ -201,7 +189,7 @@ class Trader:
 
     async def load_weights(self, **kwargs):
         self.status['weights_loading'] = True
-        table_name = '_'.join((kwargs['market_id'], 'weights', self.__participant['id']))
+        table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
         db = dataset.connect(kwargs['db_path'])
         weights_table = db[table_name]
         weights = weights_table.find_one(generation=kwargs['generation'])
