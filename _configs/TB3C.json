@@ -1,13 +1,13 @@
 {
     "version": "3.6.1",
     "study": {
-      "name": "ae2021-ute3-qbandit-5s-5d",
+      "name": "ae2021-ute3-qbandit-5s-5d-anneal-exp",
       "description": "",
       "start_datetime": "2018-07-01 0:0:0",
       "start_datetime_sequence": "sequential",
       "timezone": "America/Vancouver",
       "days": 14,
-      "generations": 100,
+      "generations": 200,
       "profiles_db_location": "postgresql://postgres:postgres@localhost/profiles",
       "output_db_location": "postgresql://postgres:postgres@localhost",
       "sim_root": ""
@@ -18,6 +18,10 @@
       },
       "1": {
         "learning": true
+      },
+      "100": {
+        "learning": true,
+        "anneal": {"exploration_factor": [0.98, "multiply"]}
       }
     },
     "server": {
@@ -43,7 +47,7 @@
           "ask_price": 0.14,
           "learning": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
         },
         "load": {
           "scale": 0
@@ -61,7 +65,7 @@
           "ask_price": 0.14,
           "learning": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
         },
         "load": {
           "scale": 0
@@ -79,7 +83,7 @@
           "ask_price": 0.14,
           "learning": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
         },
         "load": {
           "scale": 5
@@ -97,7 +101,7 @@
           "ask_price": 0.14,
           "learning": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kwh_constant_gl"
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
         },
         "load": {
           "scale": 5
