@@ -357,8 +357,8 @@ class Market:
             if bid['participant_id'] == ask['participant_id']:
                 continue
 
-            if bid['source'] != ask['source']:
-                continue
+            # if bid['source'] != ask['source']:
+            #     continue
 
             if bid['lock'] or ask['lock']:
                 continue
@@ -930,8 +930,7 @@ class Market:
         # ensure this will not interfere with settlement callbacks
         duration = self.__timing['duration']
         time_clean = (time_delivery[0] - duration, time_delivery[1] - duration)
-        self.__open['dispatch'].pop(time_clean, None)
-        self.__open['non_dispatch'].pop(time_clean, None)
+        self.__open.pop(time_clean, None)
         self.__settled.pop(time_clean, None)
         for participant in self.__participants:
             self.__participants[participant]['meter'].pop(time_delivery, None)
