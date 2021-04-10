@@ -63,10 +63,7 @@ class Market:
 
         self.__grid = Grid(**kwargs['grid_params'])
 
-        self.__open = {
-            'non_dispatch': {},
-            'dispatch': {}
-        }
+        self.__open = {}
         self.__settled = {}
         self.__transactions = []
         self.__transaction_last_record_time = 0
@@ -286,17 +283,17 @@ class Market:
 
         # create a new time slot container if the time slot doesn't exist
         time_delivery = tuple(message['time_delivery'])
-        if time_delivery not in self.__open[source_type]:
-            self.__open[source_type][time_delivery] = {
+        if time_delivery not in self.__open:
+            self.__open[time_delivery] = {
                 entry_type: []
             }
 
         # if the time slot exists but no entry exist, create the entry container
-        if entry_type not in self.__open[source_type][time_delivery]:
-            self.__open[source_type][time_delivery][entry_type] = []
+        if entry_type not in self.__open[time_delivery]:
+            self.__open[time_delivery][entry_type] = []
 
         # add open entry
-        self.__open[source_type][time_delivery][entry_type].append(entry)
+        self.__open[time_delivery][entry_type].append(entry)
 
         reply = {
             'uuid': entry['uuid'],
@@ -309,7 +306,7 @@ class Market:
 
         return message['session_id'], reply
 
-    async def __match(self, source_type, time_delivery):
+    async def __match(self, time_delivery):
         """Matches bids with asks for a single source type in a time slot
 
         THe matching and settlement process closely resemble double auctions.
@@ -332,26 +329,26 @@ class Market:
 
         """
 
-        if time_delivery not in self.__open[source_type]:
+        if time_delivery not in self.__open:
             return
 
-        if 'ask' not in self.__open[source_type][time_delivery]:
+        if 'ask' not in self.__open[time_delivery]:
             return
 
-        if 'bid' not in self.__open[source_type][time_delivery]:
+        if 'bid' not in self.__open[time_delivery]:
             return
 
         # remove zero-quantity bid and ask entries
         # sort bids by decreasing price and asks by increasing price
-        self.__open[source_type][time_delivery]['ask'][:] = \
-            sorted([ask for ask in self.__open[source_type][time_delivery]['ask'] if ask['quantity'] > 0],
+        self.__open[time_delivery]['ask'][:] = \
+            sorted([ask for ask in self.__open[time_delivery]['ask'] if ask['quantity'] > 0],
                    key=itemgetter('price'), reverse=False)
-        self.__open[source_type][time_delivery]['bid'][:] = \
-            sorted([bid for bid in self.__open[source_type][time_delivery]['bid'] if bid['quantity'] > 0],
+        self.__open[time_delivery]['bid'][:] = \
+            sorted([bid for bid in self.__open[time_delivery]['bid'] if bid['quantity'] > 0],
                    key=itemgetter('price'), reverse=True)
 
-        bids = self.__open[source_type][time_delivery]['bid']
-        asks = self.__open[source_type][time_delivery]['ask']
+        bids = self.__open[time_delivery]['bid']
+        asks = self.__open[time_delivery]['ask']
 
         for bid, ask, in itertools.product(bids, asks):
             if ask['price'] > bid['price']:
@@ -968,9 +965,7 @@ class Market:
         return True
 
     async def __match_all(self, time_delivery):
-        for source_type in {'dispatch', 'non_dispatch'}:
-            # important: dispatch must be first!!!
-            await self.__match(source_type, time_delivery)
+        await self.__match(time_delivery)
         self.__status['round_matched'] = True
 
     # should be for simulation mode only
