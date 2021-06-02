@@ -488,10 +488,8 @@ class Market:
 
         """
 
-        # if bid is 'grid', this means settling ask with grid (selling to grid)
-        # if ask is 'grid', this means setting bid with grid (buying from grid)
-        # bid and ask cannot be 'grid' at the same time
-        if bid['source'] == 'grid' and ask['source'] == 'grid':
+        # grid is not allowed to interact through market
+        if ask['source'] == 'grid':
             return
 
         # only proceed to settle if settlement quantity is positive
