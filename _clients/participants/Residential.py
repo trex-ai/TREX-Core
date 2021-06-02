@@ -145,7 +145,6 @@ class Participant:
             'participant_id': self.participant_id,
             'quantity': kwargs['quantity'],  # Wh
             'price': kwargs['price'],  # $/kWh
-            'source': kwargs['source'],
             'time_delivery': time_delivery
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
@@ -406,12 +405,10 @@ class Participant:
         #     'bess': {
         #         time_interval: scheduled_qty
         #     },
-        #     'bids' {
-        #         source: {
-        #             time_interval: {
-        #                 'quantity': qty,
-        #                 'price': dollar_per_kWh
-        #             }
+        #     'bids': {
+        #         time_interval: {
+        #             'quantity': qty,
+        #             'price': dollar_per_kWh
         #         }
         #     },
         #     'asks' {
@@ -430,14 +427,12 @@ class Participant:
                 await self.storage.schedule_energy(actions['bess'][time_interval], ast.literal_eval(time_interval))
         # Bid for energy
         if 'bids' in actions:
-            for source in actions['bids']:
-                for time_interval in actions['bids'][source]:
-                    quantity = actions['bids'][source][time_interval]['quantity']
-                    price = round(actions['bids'][source][time_interval]['price'], 4)
-                    await self.bid(quantity=quantity,
-                                   price=price,
-                                   source=source,
-                                   time_delivery=ast.literal_eval(time_interval))
+            for time_interval in actions['bids']:
+                quantity = actions['bids'][time_interval]['quantity']
+                price = round(actions['bids'][time_interval]['price'], 4)
+                await self.bid(quantity=quantity,
+                               price=price,
+                               time_delivery=ast.literal_eval(time_interval))
         # Ask to sell energy
         if 'asks' in actions:
             for source in actions['asks']:
