@@ -407,17 +407,19 @@ class Participant:
         #         time_interval: scheduled_qty
         #     },
         #     'bids' {
-        #         time_interval: {
-        #             'quantity': qty,
-        #             'source': source,
-        #             'price': dollar_per_kWh
+        #         source: {
+        #             time_interval: {
+        #                 'quantity': qty,
+        #                 'price': dollar_per_kWh
+        #             }
         #         }
         #     },
         #     'asks' {
-        #         time_interval: {
-        #             'quantity': qty,
-        #             'source': source,
-        #             'price': dollar_per_kWh?
+        #         source: {
+        #             time_interval: {
+        #                 'quantity': qty,
+        #                 'price': dollar_per_kWh?
+        #             }
         #         }
         #     }
         # }
@@ -428,18 +430,24 @@ class Participant:
                 await self.storage.schedule_energy(actions['bess'][time_interval], ast.literal_eval(time_interval))
         # Bid for energy
         if 'bids' in actions:
-            for time_interval in actions['bids']:
-                quantity = actions['bids'][time_interval]['quantity']
-                source = actions['bids'][time_interval]['source']
-                price = round(actions['bids'][time_interval]['price'], 4)
-                await self.bid(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
+            for source in actions['bids']:
+                for time_interval in actions['bids'][source]:
+                    quantity = actions['bids'][source][time_interval]['quantity']
+                    price = round(actions['bids'][source][time_interval]['price'], 4)
+                    await self.bid(quantity=quantity,
+                                   price=price,
+                                   source=source,
+                                   time_delivery=ast.literal_eval(time_interval))
         # Ask to sell energy
         if 'asks' in actions:
-            for time_interval in actions['asks']:
-                quantity = actions['asks'][time_interval]['quantity']
-                source = actions['asks'][time_interval]['source']
-                price = round(actions['asks'][time_interval]['price'], 4)
-                await self.ask(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
+            for source in actions['asks']:
+                for time_interval in actions['asks'][source]:
+                    quantity = actions['asks'][source][time_interval]['quantity']
+                    price = round(actions['asks'][source][time_interval]['price'], 4)
+                    await self.ask(quantity=quantity,
+                                   price=price,
+                                   source=source,
+                                   time_delivery=ast.literal_eval(time_interval))
 
     def reset(self):
         self.__ledger.reset()
