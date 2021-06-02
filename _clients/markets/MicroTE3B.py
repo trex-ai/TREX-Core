@@ -1127,10 +1127,10 @@ class NSMarket(socketio.AsyncClientNamespace):
         return await self.market.participant_disconnected(client_id)
 
     async def on_bid(self, bid):
-        return await self.market.submit_bid(bid, 'bid')
+        return await self.market.submit_bid(bid)
 
     async def on_ask(self, ask):
-        return await self.market.submit_ask(ask, 'ask')
+        return await self.market.submit_ask(ask)
 
     async def on_settlement_delivered(self, commit_id):
         await self.market.settlement_delivered(commit_id)
