@@ -8,8 +8,9 @@
     "timezone": "America/Vancouver",
     "days": 3,
     "generations": 10,
-    "profiles_db_location": "postgresql://postgres:postgres@stargate/profiles",
-    "output_db_location": "postgresql://postgres:postgres@stargate",
+    "profiles_db_location": "",
+
+    "output_db_location": "",
     "sim_root": ""
   },
 
