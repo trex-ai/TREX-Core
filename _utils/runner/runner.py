@@ -108,7 +108,7 @@ class Runner:
         #     os.mkdir(sim_path)
 
         engine = create_engine(self.configs['study']['output_database'])
-        if not engine.dialect.has_table(engine, 'metadata'):
+        if not sqlalchemy.inspect(engine).has_table("metadata"):
             self.__create_metadata_table(self.configs['study']['output_database'])
         db = dataset.connect(self.configs['study']['output_database'])
         metadata_table = db['metadata']

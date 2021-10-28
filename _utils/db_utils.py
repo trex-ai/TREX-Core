@@ -23,7 +23,7 @@ def get_table(db_string, table_name, engine=None):
     if not engine:
         engine = create_engine(db_string)
 
-    if not engine.dialect.has_table(engine, table_name):
+    if not sqlalchemy.inspect(engine).has_table(table_name):
         return None
 
     metadata = MetaData()
@@ -45,7 +45,7 @@ async def create_table(db_string, table_type, table_name=None, **kwargs):
     if not database_exists(engine.url):
         create_db(db_string)
 
-    if engine.dialect.has_table(engine, table_name):
+    if sqlalchemy.inspect(engine).has_table(table_name):
         return
 
     meta = MetaData()
