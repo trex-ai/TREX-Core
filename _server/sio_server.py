@@ -34,7 +34,7 @@ async def send_market_info(market_id, client_sid):
         client_sid: client session ID
     """
     if client_sid and client_sid in sessions:
-        server.enter_room(client_sid, market_id, namespace='/market')
+        server.enter_room(sid=client_sid, room=market_id, namespace='/market')
 
         market_id = sessions[client_sid]['market_id']
         await server.emit(event='update_market_info',
@@ -97,7 +97,7 @@ class ETXMarket(socketio.AsyncNamespace):
             if market_id not in clients:
                 clients[market_id] = {}
 
-            server.enter_room(sid, market_id, namespace='/market')
+            server.enter_room(sid=sid, room=market_id, namespace='/market')
 
             clients[market_id] = {}
             clients[market_id]['market'] = {
@@ -151,8 +151,8 @@ class ETXMarket(socketio.AsyncNamespace):
                 'sid': sid
             }
             # Register client in server
-            server.enter_room(sid, market_id, namespace='/simulation')
-            server.enter_room(clients[market_id]['market']['sid'], market_id, namespace='/simulation')
+            server.enter_room(sid=sid, room=market_id, namespace='/simulation')
+            server.enter_room(sid=clients[market_id]['market']['sid'], room=market_id, namespace='/simulation')
 
             await server.emit(event='participant_connected',
                               data=c_data,
@@ -410,8 +410,8 @@ class Simulation(socketio.AsyncNamespace):
                     'sid': sid
                 }
                 # register sim controller in server
-                server.enter_room(sid, market_id, namespace='/market')
-                server.enter_room(sid, market_id, namespace='/simulation')
+                server.enter_room(sid=sid, room=market_id, namespace='/market')
+                server.enter_room(sid=sid, room=market_id, namespace='/simulation')
                 return True
 
         elif client_data['type'][0] == 'remote_agent':
