@@ -24,7 +24,6 @@ class Ledger:
 
         self.bids[time_delivery][confirmation['uuid']] = {
             'time_submission': confirmation['time_submission'],
-            'source': confirmation['source'],
             'price': confirmation['price'],
             'quantity': confirmation['quantity']
         }

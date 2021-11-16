@@ -39,6 +39,10 @@ class NSSimulation(socketio.AsyncClientNamespace):
             if hasattr(self.participant.trader, 'learning'):
                 self.participant.trader.learning = message['learning']
 
+        if 'exploration_factor' in message:
+            if hasattr(self.participant.trader, 'exploration_factor'):
+                self.participant.trader.exploration_factor = message['exploration_factor']
+
         if 'anneal' in message:
             if hasattr(self.participant.trader, 'anneal'):
                 for parameter in message['anneal']:

@@ -20,7 +20,7 @@ class Trader:
 
         # Initialize the agent learning parameters for the agent (your choice)
         self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
-        self.ask_price =  kwargs['ask_price'] if 'ask_price' in kwargs else None
+        self.ask_price = kwargs['ask_price'] if 'ask_price' in kwargs else None
 
         # Initialize the metrics, whatever you
         # set learning and track_metrics flags
@@ -99,7 +99,6 @@ class Trader:
                 actions['bids'] = {
                     str(next_settle): {
                         'quantity': final_residual_load,
-                        'source': 'solar',
                         'price': self.bid_price
                     }
                 }
@@ -117,10 +116,12 @@ class Trader:
             final_residual_gen = residual_gen - effective_charge
             if final_residual_gen > 0 and self.ask_price:
                 actions['asks'] = {
-                    str(next_settle): {
-                        'quantity': final_residual_gen,
-                        'source': 'solar',
-                        'price': self.ask_price
+                    'solar': {
+                        str(next_settle): {
+                            'quantity': final_residual_gen,
+                            'source': 'solar',
+                            'price': self.ask_price
+                        }
                     }
                 }
                 # await self.metrics.track('price_action', 0.12)

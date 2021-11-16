@@ -32,14 +32,15 @@ async def process_ledger(last_deliver, ledger, market_info):
         financial_sell_qty = 0
         financial_costs = 0
         financial_profit = 0
+        # print(extra_transactions['financial'])
         if extra_transactions['financial']['buy']:
             financial_buy_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['buy']])
-            financial_costs = [transaction['quantity'] * transaction['settlement_price'] for transaction in
+            financial_costs = [transaction['quantity'] * transaction['settlement_price_buy'] for transaction in
                                extra_transactions['financial']['buy']]
             financial_costs = sum(financial_costs)
         if extra_transactions['financial']['sell']:
             financial_sell_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['sell']])
-            financial_profit = [transaction['quantity'] * transaction['settlement_price'] for transaction in
+            financial_profit = [transaction['quantity'] * transaction['settlement_price_sell'] for transaction in
                                 extra_transactions['financial']['sell']]
             financial_profit = sum(financial_profit)
         financial_transactions = (financial_costs, financial_profit, financial_buy_qty, financial_sell_qty)
