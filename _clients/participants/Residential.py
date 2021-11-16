@@ -6,7 +6,7 @@ import databases
 import sqlalchemy
 import tenacity
 from _clients.participants import ledger
-from _utils import db_utils
+from _utils import db_utils, utils
 
 class Participant:
     """
@@ -56,7 +56,7 @@ class Participant:
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
                 'check_schedule': self.storage.check_schedule,
-                'schedule_energy': self.storage.schedule_energy
+                # 'schedule_energy': self.storage.schedule_energy
             }
 
         trader_type = trader_params.pop('type', None)
@@ -240,26 +240,28 @@ class Participant:
         query = table.select().where(table.c.tstamp == time_interval[1])
         async with db.transaction():
             row = await db.fetch_one(query)
-        return self.__process_profile(row)
+        return utils.process_profile(row=row,
+                                     gen_scale=self.__profile_params['generation_scale'],
+                                     load_scale=self.__profile_params['load_scale'])
 
-    def __process_profile(self, row):
-        """Processes raw readings fetches from database into generation and consumption in integer Wh.
-
-        Also scales if scaling is defined in configuration.
-        Right now the format is for eGauge. Functionality will be expanded as more data sources are introduced.
-
-        Args:
-            row ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """
-
-        if row is not None:
-            consumption = int(round(self.__profile_params['load_scale'] * (row['grid'] + row['solar+']), 0))
-            generation = int(round(self.__profile_params['generation_scale'] * row['solar+'], 0))
-            return generation, consumption
-        return 0, 0
+    # def __process_profile(self, row):
+    #     """Processes raw readings fetches from database into generation and consumption in integer Wh.
+    #
+    #     Also scales if scaling is defined in configuration.
+    #     Right now the format is for eGauge. Functionality will be expanded as more data sources are introduced.
+    #
+    #     Args:
+    #         row ([type]): [description]
+    #
+    #     Returns:
+    #         [type]: [description]
+    #     """
+    #
+    #     if row is not None:
+    #         consumption = int(round(self.__profile_params['load_scale'] * (row['grid'] + row['solar+']), 0))
+    #         generation = int(round(self.__profile_params['generation_scale'] * row['solar+'], 0))
+    #         return generation, consumption
+    #     return 0, 0
 
     async def __meter_energy(self, time_interval):
         """Sends submetering data to the Market
