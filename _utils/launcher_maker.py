@@ -145,7 +145,7 @@ class Maker:
 
         Returns:
             script_path = str to sio client file for CLI initialization of the gym client
-            args: array of strings that are
+            args: array of strings that are passed to the 
         """
         script_path = '_clients/gym_client/sio_client.py'
         args = []

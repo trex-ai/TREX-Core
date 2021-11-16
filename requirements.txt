@@ -18,4 +18,4 @@ tensorflow>=2.0
 tensorflow-probability
 websockets
 gym 
-baselines
+
