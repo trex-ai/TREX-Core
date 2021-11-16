@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import sys
 import json
 import os
 import time
@@ -44,8 +45,9 @@ class Controller:
         self.__turn_control = {
             'total': None,
             'online': 0,
+            'ready': 0,
             'weights_loaded': 0,
-            'weights_saved': 0,
+            # 'weights_saved': 0,
             'ended': 0,
         }
 
@@ -64,8 +66,8 @@ class Controller:
         self.timer_start = datetime.datetime.now().timestamp()
         self.timer_end = 0
 
-        self.__metadata = None
         self.status = {
+            'monitor_timeout': 5,
             'registered_on_server': False,
             'market_id': self.__config['market']['id'],
             'sim_started': False,
@@ -80,14 +82,12 @@ class Controller:
             'participants': self.__participants,
             'learning_agents': self.__learning_agents,
             'participants_online': False,
+            'participants_ready': True,
             'participants_weights_loaded': False,
-            'participants_weights_saved': True,
+            # 'participants_weights_saved': True,
             'turn_control': self.__turn_control,
             'market_turn_end': False,
-            'input_path': '',
-            'output_path': ''
         }
-
         self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
@@ -99,6 +99,9 @@ class Controller:
         await self.__client.sleep(s)
 
     def __get_metadata(self, generation):
+        if generation > self.__generations:
+            return None
+
         db_string = self.__config['study']['output_database']
         db = dataset.connect(db_string)
         md_table = db['metadata']
@@ -125,34 +128,35 @@ class Controller:
             self.__participants[participant_id] = {
                 'online': False,
                 'turn_end': False,
+                'ready': False,
                 'weights_loaded': False,
-                'weights_saved': False
+                # 'weights_saved': False
             }
 
     # Set intial generation data folder
     # @tenacity.retry(wait=tenacity.wait_fixed(5)+tenacity.wait_random(0, 5))
     #TODO: update this to check all dbs
     def set_initial_generation(self):
-        if not self.__config['study']['resume']:
-            return 0
-
         db_string = self.__config['study']['output_database']
         if not database_exists(db_string):
             return 0
 
-        sim_path = self.__config['study']['sim_root'] + '/'.join(['_simulations', self.__config['study']['name']]) + '/'
-        if not os.path.exists(sim_path):
-            return 0
+        #TODO: rewrite generation detection for resume
+        if self.__config['study']['resume']:
+            pass
+            # return 0
 
-        for generation in range(self.__config['study']['generations']):
-            metadata = self.__get_metadata(generation)
-            if self.__config['market']['id'] not in metadata:
-                market_table_name = str(generation) + '_' + self.__config['market']['id']
-                metrics_table_name = market_table_name + '_metrics'
-                db_utils.drop_table(db_string, market_table_name)
-                db_utils.drop_table(db_string, metrics_table_name)
-                return generation
-        return self.__generations
+        return 0
+
+        # for generation in range(self.__config['study']['generations']):
+        #     metadata = self.__get_metadata(generation)
+        #     if self.__config['market']['id'] not in metadata:
+        #         market_table_name = str(generation) + '_' + self.__config['market']['id']
+        #         metrics_table_name = market_table_name + '_metrics'
+        #         db_utils.drop_table(db_string, market_table_name)
+        #         db_utils.drop_table(db_string, metrics_table_name)
+        #         return generation
+        # return self.__generations
 
     # Register client in server
     async def register(self):
@@ -231,30 +235,9 @@ class Controller:
         else:
             self.status['participants_online'] = True
 
-    # async def __update_metadata(self, generation, update_dict):
-    #     db = databases.Database(self.__config['study']['output_database'])
-    #     await db.connect()
-    #     md_table = db_utils.get_table(self.__config['study']['output_database'], 'metadata')
-    #     async with db.transaction():
-    #         md = await db.fetch_one(md_table.select(md_table.c.generation == generation, for_update=True))
-    #         # if md is not None:
-    #         metadata = md['data']
-    #         metadata.update(update_dict)
-    #         await db.execute(md_table.update().where(md_table.c.generation == generation).values(data=metadata))
-    #     await db.disconnect()
-
-    async def update_sim_paths(self):
-        self.status['output_path'] = self.__config['study']['sim_root'] + '/'.join(
-            ['_simulations', self.__config['study']['name'], str(self.__generation)]) + '/'
-        if self.__generation > 0:
-            self.status['input_path'] = self.__config['study']['sim_root'] + '/'.join(
-                ['_simulations', self.__config['study']['name'], str(self.__generation - 1)]) + '/'
-        if self.__config['study']['type'] == 'validation':
-            self.status['input_path'] = self.status['output_path']
-
     async def monitor(self):
         while True:
-            await self.delay(5)
+            await self.delay(self.status['monitor_timeout'])
             if not self.status['registered_on_server']:
                 continue
 
@@ -287,19 +270,30 @@ class Controller:
             if not self.status['market_ready']:
                 continue
 
-            await self.update_sim_paths()
-            if self.__generation > self.__generations and not self.status['sim_ended']:
-                self.status['sim_ended'] = True
+            # await self.update_sim_paths()
+
+            if self.status['sim_ended']:
+                continue
+            # if self.__generation > self.__generations and not self.status['sim_ended']:
+            #     self.status['sim_ended'] = True
+            #     continue
+
+            if self.__config['study']['type'] == 'training':
+                curriculum = self.training_controller.load_curriculum(str(self.__generation))
+                if curriculum:
+                    await self.__client.emit('update_curriculum', curriculum, namespace='/simulation')
+
+            if not self.status['participants_ready']:
                 continue
 
-            if not self.status['participants_weights_saved']:
-                continue
-
-            if not self.status['participants_weights_loaded']:
-                for participant_id in self.__participants:
-                    selected_generation = self.training_controller.select_generation(self.__generation)
-                    await self.__load_weights(participant_id, selected_generation)
-                continue
+            #for now, only load weights for validation
+            if self.__config['study']['type'] == 'validation':
+                market_id = 'training'
+                if not self.status['participants_weights_loaded']:
+                    db = dataset.connect(self.__config['study']['output_database'])
+                    for participant_id in self.__participants:
+                        await self.__load_weights(db, self.__generation, market_id, participant_id)
+                    continue
 
             if self.status['sim_interrupted']:
                 print('drop drop')
@@ -311,28 +305,25 @@ class Controller:
                 continue
 
             self.status['sim_started'] = True
+            self.status['monitor_timeout'] = 5
             await self.step()
 
-    async def __load_weights(self, participant_id, generation=None):
+    async def __load_weights(self, db, generation, market_id, participant_id):
+        # db_string = self.__config['study']['output_database']
+        # db = dataset.connect(db_string)
+        weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
+        # weights_table = db[weights_table_name]
+        # weights = weights_table.find_one(generation=generation)
+        if weights_table_name not in db.tables:
+            self.status['monitor_timeout'] = 30
+            return
+
         message = {
             'participant_id': participant_id,
-            'input_path': self.status['input_path'],
             'db_path': self.__config['study']['output_database'],
-            'market_id': self.__config['market']['id'],
-            'reset': True if not self.__generation else False
+            'market_id': market_id,
+            'generation': generation
         }
-        message.update(self.training_controller.load_curriculum(participant_id, self.__generation))
-        if not generation:
-            generation = self.__generation - 1
-        message['generation'] = generation
-
-        if self.__generation > 0 and generation != (self.__generation - 1):
-            message['input_path'] = self.__config['study']['sim_root'] + '/'.join(
-                ['_simulations', self.__config['study']['name'], str(generation)]) + '/'
-
-        if self.__config['study']['type'] == 'validation':
-            message['reset'] = False
-
         await self.__client.emit('load_weights', message, namespace='/simulation')
 
     async def __print_step_time(self):
@@ -349,11 +340,11 @@ class Controller:
 
     async def step(self):
         self.status['last_step_clock'] = time.time()
-        if self.status['sim_ended']:
-            print('end_simulation', self.__generation, self.__generations)
-            await self.__client.emit('end_simulation', namespace='/simulation')
-            await self.delay(1)
-            raise SystemExit
+        # if self.status['sim_ended']:
+        #     print('end_simulation', self.__generation, self.__generations)
+        #     await self.__client.emit('end_simulation', namespace='/simulation')
+        #     await self.delay(1)
+        #     raise SystemExit
 
         if not self.status['sim_started']:
             return
@@ -364,8 +355,8 @@ class Controller:
             message = {
                 'generation': self.__generation,
                 'db_string': self.__config['study']['output_database'],
-                'input_path': self.status['input_path'],
-                'output_path': self.status['output_path'],
+                # 'input_path': self.status['input_path'],
+                # 'output_path': self.status['output_path'],
                 'market_id': self.__config['market']['id'],
             }
             await self.__client.emit('start_generation', message, namespace='/simulation')
@@ -385,21 +376,24 @@ class Controller:
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
+                'ready': 0,
                 'weights_loaded': 0,
-                'weights_saved': 0
+                # 'weights_saved': 0
             })
             for participant_id in self.__participants:
                 self.__participants[participant_id].update({
-                'weights_loaded': False,
-                'weights_saved': False
+                    'ready': False,
+                    'weights_loaded': False,
+                # 'weights_saved': False
             })
-            self.status['participants_weights_saved'] = False
+            self.status['participants_ready'] = False
+            # self.status['participants_weights_saved'] = False
             self.status['participants_weights_loaded'] = False
 
             self.status['generation_ended'] = True
-            await db_utils.update_metadata(self.__config['study']['output_database'],
-                                           self.__generation,
-                                           {self.__config['market']['id']: True})
+            # await db_utils.update_metadata(self.__config['study']['output_database'],
+            #                                self.__generation,
+            #                                {self.__config['market']['id']: True})
 
             # end simulation if the final generation is done, else reset step and stuff
             if self.__generation <= self.__generations:
@@ -413,12 +407,20 @@ class Controller:
                 self.status['market_ready'] = False
 
             message = {
-                'output_path': self.status['output_path'],
-                'output_db': self.__config['study']['output_database'],
+                # 'output_path': self.status['output_path'],
+                'db_path': self.__config['study']['output_database'],
                 'generation': self.__generation - 1,
                 'market_id': self.__config['market']['id']
             }
             await self.__client.emit('end_generation', message, namespace='/simulation')
+
+            if self.__generation > self.__generations:
+                self.status['sim_ended'] = True
+                # if self.status['sim_ended']:
+                print('end_simulation', self.__generation-1, self.__generations)
+                await self.__client.emit('end_simulation', namespace='/simulation')
+                await self.delay(1)
+                sys.exit()
 
 class NSMarket(socketio.AsyncClientNamespace):
 
@@ -450,13 +452,12 @@ class NSSimulation(socketio.AsyncClientNamespace):
     # async def on_disconnect(self):
     #   print('disconnected from simulation')
 
-    async def on_participant_weights_loaded(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'weights_loaded', message[participant_id])
 
-    async def on_participant_weights_saved(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'weights_saved', message[participant_id])
+    #
+    # async def on_participant_weights_saved(self, message):
+    #     for participant_id in message:
+    #         await self.controller.participant_status(participant_id, 'weights_saved', message[participant_id])
+
 
     async def on_participant_joined(self, message):
         participant_id = message
@@ -466,6 +467,14 @@ class NSSimulation(socketio.AsyncClientNamespace):
         print(message, 'PARTICIPANT LOST')
         participant_id = message
         await self.controller.participant_online(participant_id, False)
+
+    async def on_participant_ready(self, message):
+        for participant_id in message:
+            await self.controller.participant_status(participant_id, 'ready', message[participant_id])
+
+    async def on_participant_weights_loaded(self, message):
+        for participant_id in message:
+            await self.controller.participant_status(participant_id, 'weights_loaded', message[participant_id])
 
     # send by individual participants
     async def on_end_turn(self, message):

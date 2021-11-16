@@ -34,7 +34,7 @@ async def send_market_info(market_id, client_sid):
         client_sid: client session ID
     """
     if client_sid and client_sid in sessions:
-        server.enter_room(client_sid, market_id, namespace='/market')
+        server.enter_room(sid=client_sid, room=market_id, namespace='/market')
 
         market_id = sessions[client_sid]['market_id']
         await server.emit(event='update_market_info',
@@ -97,7 +97,7 @@ class ETXMarket(socketio.AsyncNamespace):
             if market_id not in clients:
                 clients[market_id] = {}
 
-            server.enter_room(sid, market_id, namespace='/market')
+            server.enter_room(sid=sid, room=market_id, namespace='/market')
 
             clients[market_id] = {}
             clients[market_id]['market'] = {
@@ -151,8 +151,8 @@ class ETXMarket(socketio.AsyncNamespace):
                 'sid': sid
             }
             # Register client in server
-            server.enter_room(sid, market_id, namespace='/simulation')
-            server.enter_room(clients[market_id]['market']['sid'], market_id, namespace='/simulation')
+            server.enter_room(sid=sid, room=market_id, namespace='/simulation')
+            server.enter_room(sid=clients[market_id]['market']['sid'], room=market_id, namespace='/simulation')
 
             await server.emit(event='participant_connected',
                               data=c_data,
@@ -410,8 +410,8 @@ class Simulation(socketio.AsyncNamespace):
                     'sid': sid
                 }
                 # register sim controller in server
-                server.enter_room(sid, market_id, namespace='/market')
-                server.enter_room(sid, market_id, namespace='/simulation')
+                server.enter_room(sid=sid, room=market_id, namespace='/market')
+                server.enter_room(sid=sid, room=market_id, namespace='/simulation')
                 return True
 
         elif client_data['type'][0] == 'remote_agent':
@@ -459,7 +459,7 @@ class Simulation(socketio.AsyncNamespace):
             namespace='/simulation')
 
     # event emitted by participant
-    async def on_participant_weights_saved(self, sid, message):
+    async def on_participant_ready(self, sid, message):
         """Event emitted by participant traders to notify the simulation controller that the weights have been saved.
 
         Args:
@@ -469,10 +469,28 @@ class Simulation(socketio.AsyncNamespace):
         market_id = sessions[sid]['market_id']
         sim_controller_sid = clients[market_id]['sim_controller']['sid']
         await server.emit(
-            event='participant_weights_saved',
+            event='participant_ready',
             data=message,
             to=sim_controller_sid,
             namespace='/simulation')
+
+    # event emitted by sim controller
+    async def on_update_curriculum(self, sid, message):
+        """Event emitted by the sim controller to give participant updated curriculum
+
+        Args:
+            sid ([type]): [description]
+            message ([type]): [description]
+        """
+        market_id = sessions[sid]['market_id']
+        sim_controller_sid = clients[market_id]['sim_controller']['sid']
+
+        if sim_controller_sid == sid:
+            await server.emit(
+                event='update_curriculum',
+                data=message,
+                to=market_id,
+                namespace='/simulation')
 
     # event emitted by sim controller
     async def on_load_weights(self, sid, message):

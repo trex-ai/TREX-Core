@@ -42,19 +42,21 @@ class Runner:
                     configs['study']['resume'] = resume
                     return configs
 
+        # if not resume
         config['study']['name'] = study_name
         if 'output_database' not in config['study'] or not config['study']['output_database']:
             config['study']['output_database'] = db_string
 
-        if database_exists(db_string):
-            drop_database(db_string)
+        if 'purge' in kwargs and kwargs['purge']:
+            if database_exists(db_string):
+                drop_database(db_string)
+
         if not database_exists(db_string):
             db_utils.create_db(db_string)
-
-        self.__create_configs_table(db_string)
-        db = dataset.connect(db_string)
-        configs_table = db['configs']
-        configs_table.insert({'id': 0, 'data': config})
+            self.__create_configs_table(db_string)
+            db = dataset.connect(db_string)
+            configs_table = db['configs']
+            configs_table.insert({'id': 0, 'data': config})
 
         config['study']['resume'] = resume
         return config
@@ -154,8 +156,17 @@ class Runner:
         config = json.loads(json.dumps(self.configs))
         default_port = int(self.configs['server']['port']) if self.configs['server']['port'] else 3000
         config['server']['port'] = default_port + seq
-
         config['study']['type'] = simulation_type
+
+        # if resume is False, then drop all tables relevant to the study type
+        if not config['study']['resume']:
+            study_name = config['study']['name']
+            db_string = config['study']['output_db_location'] + '/' + study_name
+            db = dataset.connect(db_string)
+            tables = [table for table in db.tables if simulation_type + '_' in table]
+            for table in tables:
+                db[table].drop()
+
         learning_participants = [participant for participant in config['participants'] if
                                  'learning' in config['participants'][participant]['trader'] and
                                  config['participants'][participant]['trader']['learning']]
