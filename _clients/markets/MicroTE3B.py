@@ -199,7 +199,95 @@ class Market:
         }
         await self.__client.emit('start_round', start_msg, namespace='/market')
 
-    async def submit_entry(self, message: dict, entry_type: str):
+    async def submit_bid(self, message: dict):
+        """Processes bids sent from the participants
+
+        If action from participants are valid, then an entry will be made on the market for matching.
+        In all cases, a confirmation message will be sent back to the sender indicating success or failure.
+        The handling of the confirmation message is up to the participant.
+
+        If the message and entry_type are valid, an open record will be made in the time delivery slot for source type.
+        the record is a dictionary containing the following:
+
+        - 'uuid'
+        - 'participant_id'
+        - 'session_id'
+        - 'price'
+        - 'time_submission'
+        - 'quantity'
+        - 'lock'
+
+        Note: as of April 1, 2020, 'lock' is not being used in simulation mode.
+        Deprecation in general is under consideration
+
+        Parameters
+        ----------
+        message : dict
+            Message should be a dictionary containing the following:
+            - 'participant_id'
+            - 'quantity' (quantity in Wh)
+            - 'price' (price in $/kWh)
+            - 'time_delivery'
+
+        Returns
+        -------
+        confirmation
+            returns the participant session id and confirmation message for SIO server callback
+
+            - For all invalid entries, confirmation message is a dictionary with 'uuid' as the key and None as the value
+            - For all valid entries, confirmation message be a dictionary containing the following:
+
+                - 'uuid'
+                - 'time_submission'
+                - 'price'
+                - 'quantity'
+                - 'time_delivery'
+
+        """
+
+        # entry validity check step 1: quantity must be positive
+        if message['quantity'] <= 0:
+            # raise Exception('quantity must be a positive integer')
+            return message['session_id'], {'uuid': None}
+
+        # if entry is valid, then update entry with market specific info
+        # convert kwh price to token price
+
+        entry = {
+            'uuid': cuid(),
+            'participant_id': message['participant_id'],
+            'session_id': message['session_id'],
+            'price': message['price'],
+            'time_submission': self.__time(),
+            'quantity': message['quantity'],
+            'lock': False
+        }
+
+        # create a new time slot container if the time slot doesn't exist
+        time_delivery = tuple(message['time_delivery'])
+        if time_delivery not in self.__open:
+            self.__open[time_delivery] = {
+                'bid': []
+            }
+
+        # if the time slot exists but no entry exist, create the entry container
+        if 'bid' not in self.__open[time_delivery]:
+            self.__open[time_delivery]['bid'] = []
+
+        # add open entry
+        self.__open[time_delivery]['bid'].append(entry)
+
+        reply = {
+            'uuid': entry['uuid'],
+            'time_submission': entry['time_submission'],
+            'price': entry['price'],
+            'quantity': entry['quantity'],
+            'time_delivery': time_delivery
+        }
+
+        return message['session_id'], reply
+
+    async def submit_ask(self, message: dict):
         """Processes bids/asks sent from the participants
 
         If action from participants are valid, then an entry will be made on the market for matching.
@@ -252,9 +340,9 @@ class Market:
 
         """
 
-        if entry_type not in {'bid', 'ask'}:
-            # raise Exception('invalid action')
-            return message['session_id'], {'uuid': None}
+        # if entry_type not in {'bid', 'ask'}:
+        #     # raise Exception('invalid action')
+        #     return message['session_id'], {'uuid': None}
 
         # entry validity check step 1: quantity must be positive
         if message['quantity'] <= 0:
@@ -285,15 +373,15 @@ class Market:
         time_delivery = tuple(message['time_delivery'])
         if time_delivery not in self.__open:
             self.__open[time_delivery] = {
-                entry_type: []
+                'ask': []
             }
 
         # if the time slot exists but no entry exist, create the entry container
-        if entry_type not in self.__open[time_delivery]:
-            self.__open[time_delivery][entry_type] = []
+        if 'ask' not in self.__open[time_delivery]:
+            self.__open[time_delivery]['ask'] = []
 
         # add open entry
-        self.__open[time_delivery][entry_type].append(entry)
+        self.__open[time_delivery]['ask'].append(entry)
 
         reply = {
             'uuid': entry['uuid'],
@@ -315,11 +403,6 @@ class Market:
 
         Parameters
         ----------
-        source_type: str
-            Indicates the energy type pool to perform matching. Can be either 'dispatch' or 'non_dispatch'
-
-            Depending on specific market implementations, the sequence of matching matters. As the current iteration of the market allows dispatchable sources to compensate for inaccurate non-dispatch generation, dispatch must be matched before non-dispatch.
-
         time_delivery : tuple
             Tuple containing the start and end timestamps in UNIX timestamp format indicating the interval for energy to be delivered.
 
@@ -405,10 +488,8 @@ class Market:
 
         """
 
-        # if bid is 'grid', this means settling ask with grid (selling to grid)
-        # if ask is 'grid', this means setting bid with grid (buying from grid)
-        # bid and ask cannot be 'grid' at the same time
-        if bid['source'] == 'grid' and ask['source'] == 'grid':
+        # grid is not allowed to interact through market
+        if ask['source'] == 'grid':
             return
 
         # only proceed to settle if settlement quantity is positive
@@ -1007,8 +1088,7 @@ class Market:
     async def reset_market(self):
         self.__db.clear()
         self.transactions_count = 0
-        self.__open['non_dispatch'].clear()
-        self.__open['dispatch'].clear()
+        self.__open.clear()
         self.__settled.clear()
         for participant in self.__participants:
             self.__participants[participant]['meter'].clear()
@@ -1045,10 +1125,10 @@ class NSMarket(socketio.AsyncClientNamespace):
         return await self.market.participant_disconnected(client_id)
 
     async def on_bid(self, bid):
-        return await self.market.submit_entry(bid, 'bid')
+        return await self.market.submit_bid(bid)
 
     async def on_ask(self, ask):
-        return await self.market.submit_entry(ask, 'ask')
+        return await self.market.submit_ask(ask)
 
     async def on_settlement_delivered(self, commit_id):
         await self.market.settlement_delivered(commit_id)

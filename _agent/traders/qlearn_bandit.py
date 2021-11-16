@@ -135,17 +135,17 @@ class Trader:
             actions['bids'] = {
                 str(next_settle): {
                     'quantity': next_residual_load,
-                    'source': 'solar',
                     'price': self.bid_price
                 }
             }
 
         if next_residual_gen > 0:
             actions['asks'] = {
-                str(next_settle): {
-                    'quantity': next_residual_gen,
-                    'source': 'solar',
-                    'price': self.ask_price
+                'solar': {
+                    str(next_settle): {
+                        'quantity': next_residual_gen,
+                        'price': self.ask_price
+                    }
                 }
             }
 
