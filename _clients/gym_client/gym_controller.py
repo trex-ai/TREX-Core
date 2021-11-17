@@ -1,63 +1,34 @@
 import socketio
 import asyncio
 import concurrent.futures
-from gym_env.envs.gym_env import TREXenv
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from gym.spaces.utils import unflatten, flatten
-from baselines.common.models import mlp, get_network_builder
-from baselines.ppo2.model import Model
-import tensorflow as tf
 import numpy as np
-from baselines.ppo2.ppo2 import learn
-# from baselines.ppo2.runner import Runner
+
 import functools
-import gym
 
 
-class Controller:
+
+class EnvController:
     """
-    This is the controller for the gym
+    This is the controller for the gym environment that is linked to my epymarl
     """
 
     def __init__(self, sio_client, **kwargs):
-        self.policy_network = mlp
+        
         self._market = None
         self.is_learning = False
         self.__client = sio_client
         self.id_list = []
-        self.big_gym_energy = DummyVecEnv([lambda : TREXenv()])
+        
 
-        self.MCC= DummyVecEnv([lambda : gym.make('MountainCarContinuous-v0')])
-        print(self.MCC)
         self.counter = 0
-        # get the network - TODO: this may be relegated to the config for ease
-        if kwargs:
-            gym_kwargs = kwargs['gym']
-        else:
-            gym_kwargs = {}
-        policy_fn = get_network_builder('mlp')(**gym_kwargs)
-
-        self.network = policy_fn(self.big_gym_energy.envs[0].observation_space.shape)
-        self.networkMCC = policy_fn(self.MCC.envs[0].observation_space.shape)
-
-        # Setup the model
-        self.model = Model(ac_space=self.big_gym_energy.envs[0].action_space,
-                           policy_network=self.network,
-                           ent_coef=0.0, vf_coef=0.5,
-                           max_grad_norm=0.5)
-
-        self.modelMMC = Model(ac_space=self.MCC.envs[0].action_space,
-                              policy_network=self.networkMCC,
-                              ent_coef=0.0, vf_coef=0.5,
-                              max_grad_norm=0.5)
-
+       
 
 
     async def register(self):
         client_data = {
-            'type': ('remote_agent', '')
+            'type': ('env_controller', '')
         }
-        print('We registered the gym _client')
+        print('env_controller is online')
         await self.__client.emit('register', client_data, namespace='/simulation')
 
     async def get_remote_actions(self, message):

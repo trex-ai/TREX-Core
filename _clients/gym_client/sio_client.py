@@ -3,10 +3,11 @@ import socketio
 from _utils import jkson
 import sys
 from _clients.gym_client.ns_common import NSDefault, NSSimulation
-from _clients.gym_client.gym_controller import Controller
+from _clients.gym_client.gym_controller import EnvController
 sys.path.append("C:/source/TREX-Core")
 '''
 This is the code for the sio client that connects the gym to the simulation. 
+TODO: Nov 16, get this QAQCed by Steven 
 '''
 class Client:
     def __init__(self, server_address):
@@ -19,7 +20,7 @@ class Client:
             randomization_factor=0.5,
             json=jkson
         )
-        gym_client= Controller(self.sio_client)
+        gym_client= EnvController(self.sio_client)
         self.sio_client.register_namespace(NSDefault(gym_client))
         self.sio_client.register_namespace(NSSimulation(gym_client))
 

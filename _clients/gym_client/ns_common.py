@@ -2,21 +2,21 @@ import socketio
 
 class NSDefault(socketio.AsyncClientNamespace):
     """
-    This is the namespace for the gym_client
+    This is the namespace for the env_client
     """
-    def __init__(self, gym_client):
+    def __init__(self, env_client):
         super().__init__(namespace='')
-        self.gym_client = gym_client
+        self.env_client = env_client
 
 class NSSimulation(socketio.AsyncClientNamespace):
-    def __init__(self, gym_controller):
+    def __init__(self, env_controller):
         super().__init__(namespace='/simulation')
-        self.gym_controller = gym_controller
+        self.env_controller = env_controller
 
 
     async def on_connect(self):
 
-        await self.gym_controller.register()
+        await self.env_controller.register()
 
     async def on_get_remote_actions(self, message):
         """
@@ -24,7 +24,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
         Args:
             message: observations from the Gym env.
         """
-        await self.gym_controller.get_remote_actions(message)
+        await self.env_controller.get_remote_actions(message)
 
     async def on_remote_agent_status(self, message):
         """
@@ -33,12 +33,13 @@ class NSSimulation(socketio.AsyncClientNamespace):
         :return:
         """
         print('remote_agent_status')
-        await self.gym_controller.emit_go(message)
+        await self.env_controller.emit_go(message)
 
     async def on_end_generation(self, message):
         """
-
+        This is now no longer the learn trigger. 
+        On end generation, the gym agent will need to be reset 
         :param message:
         :return:
         """
-        await self.gym_controller.learn()
+        await self.env_controller.learn()

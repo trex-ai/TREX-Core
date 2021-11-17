@@ -138,8 +138,20 @@ class Trader:
         Returns:
 
         """
-        next_actions = await self._act()
+        next_actions = await self.get_actions()
+
         return next_actions
 
     async def reset(self):
         return True
+
+    async def get_actions(self):
+        '''
+        This method asks the envcontroller to pass the right agents action for this step. 
+        The env controller should return the values corresponding to the action for the agent to pass to the trader.step() method
+        This will have to be called in the step function 
+        '''
+        #TODO: send a message to the env_controller requesting this agents actions. 
+        #The esiest way to get this to work is to bind every agent to their ID in the namespace and use those in a dictionary
+        # in the env_controller 
+        return action
