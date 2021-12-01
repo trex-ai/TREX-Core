@@ -1,7 +1,10 @@
 import json
-
+from pathlib import Path
 def cli(configs):
-    script_path = '_clients/markets/sio_client.py'
+    # TODO: Nov 30, 2021; this fixes the path problem
+    path_to_trex = str(Path('C:/source/Trex-Core/'))
+    script_path = path_to_trex + '/_clients/markets/sio_client.py'
+    # script_path = '_clients/markets/sio_client.py'
 
     if 'server' not in configs:
         return None, None

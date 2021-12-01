@@ -7,7 +7,12 @@ from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
 from packaging import version
+import sys
+# FIXME: Nov 30 2021; this needs to be changed so that the path is not hardcoded in TREX
+# pass the trex core path through configs of epymarl
 
+
+from pathlib import Path
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.configs = self.__get_config(config, resume, **kwargs)
@@ -19,7 +24,11 @@ class Runner:
         #     r.call(self.__make_sim_path)
 
     def __get_config(self, config_name: str, resume, **kwargs):
-        config_file = '_configs/' + config_name + '.json'
+        # TODO: Nov 30, 2021; this fixes the path problem
+        # Fixme: Dec 1, 2021; this is unfortunatley
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        config_file = path_to_trex + '/_configs/' + config_name + '.json'
+
         with open(config_file) as f:
             config = commentjson.load(f)
 
@@ -233,14 +242,21 @@ class Runner:
     def run_subprocess(self, args: list, delay=0):
         import subprocess
         import time
+        print(args)
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        path_to_venv = path_to_trex + str(Path('/venv/Scripts/python'))
+        path_to_trex_main = path_to_trex + str(Path('/main.py'))
 
         time.sleep(delay)
         try:
-            subprocess.run(['venv/bin/python', args[0], *args[1]])
+            print('path to venv in runner', path_to_venv)
+            subprocess.run([path_to_venv, args[0], *args[1]])
         except:
+            print('in the except clause')
             subprocess.run(['venv/Scripts/python', args[0], *args[1]])
         finally:
-            subprocess.run(['python', args[0], *args[1]])
+            print('in the finally clause')
+            subprocess.run([path_to_venv, args[0], *args[1]])
 
     def run(self, simulations):
         if not self.__config_version_valid:
@@ -255,7 +271,7 @@ class Runner:
             self.__create_sim_metadata(config)
             launch_list.extend(self.make_launch_list(config))
             seq += 1
-
+        print('Launch list in run',launch_list)
         pool_size = len(launch_list)
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)

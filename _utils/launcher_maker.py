@@ -2,6 +2,7 @@ import os
 import filecmp
 import shutil
 import json
+from pathlib import Path
 
 class Maker:
     """
@@ -46,7 +47,10 @@ class Maker:
             script_path: path to sim controller sio_client
             args: array of cli arguments
         """
-        script_path = '_clients/sim_controller/sio_client.py'
+        # TODO: Nov 30, 2021; this fixes the path problem
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        script_path = path_to_trex + '/_clients/sim_controller/sio_client.py'
+        print('Path in make_sim_controller', script_path)
         args = []
         host, port = self.get_server_configs()
         if host:
@@ -57,8 +61,10 @@ class Maker:
         return (script_path, args)
 
     def make_server(self):
-        script_path = '_server/sio_server.py'
-
+        # TODO: Nov 30, 2021; this fixes the path problem
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        script_path = path_to_trex +'/_server/sio_server.py'
+        print('Path in make_server', script_path)
         args = []
         host, port = self.get_server_configs()
 
@@ -71,7 +77,10 @@ class Maker:
         return (script_path, args)
 
     def make_market(self):
-        script_path = '_clients/markets/sio_client.py'
+        # TODO: Nov 30, 2021; this fixes the path problem
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        script_path = path_to_trex + '/_clients/markets/sio_client.py'
+        print('Path in make_market', script_path)
         args = []
 
         market_configs = self.configs['market']
@@ -88,7 +97,10 @@ class Maker:
         return (script_path, args)
 
     def make_participant(self, participant_id, configs):
-        script_path = '_clients/participants/sio_client.py'
+        # TODO: Nov 30, 2021; this fixes the path problem
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        script_path = path_to_trex +'/_clients/participants/sio_client.py'
+        print('Path in make_participant', script_path)
         args = []
 
         participant_id = str(participant_id)
@@ -97,6 +109,7 @@ class Maker:
 
         type = configs['type']
         host, port = self.get_server_configs()
+        # FIXME: Nov 30, 2021; This is probably the best way to pass the path
         db_path = self.configs['study']['profiles_db_location']
         if 'sqlite:///' in db_path:
             db_path += participant_id + '.db'
@@ -147,7 +160,11 @@ class Maker:
             script_path = str to sio client file for CLI initialization of the gym client
             args: array of strings that are passed to the 
         """
-        script_path = '_clients/gym_client/sio_client.py'
+        # TODO: Nov 30, 2021; this fixes the path problem
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        script_path = path_to_trex + '/_clients/participants/sio_client.py'
+        # script_path = '_clients/gym_client/sio_client.py'
+        print('Path in make_gym', script_path)
         args = []
         host, port = self.get_server_configs()
         if host:
