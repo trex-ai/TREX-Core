@@ -55,6 +55,8 @@ class Maker:
         Returns:
 
         """
+        # TODO Nov 30, 2021; this may also need to be modified to have the path to the trex-core directory attached to
+        # it
         config_file = '_configs/' + config_name + '.json'
         with open(config_file) as f:
             config = commentjson.load(f)
@@ -108,6 +110,7 @@ class Maker:
         Returns:
 
         """
+        # TODO: Nov 30 2021; This may need to be also altered to have the simulation save properly
         output_path = self.configs['study']['sim_root'] + '_simulations/' + self.configs['study']['name'] + '/'
         print(output_path)
         if os.path.exists(output_path):
@@ -331,7 +334,9 @@ class Maker:
 
         self.__make_sim_internal_directories()
         lmaker = launcher_maker.Maker(config)
-        server, market, sim_controller, participants, gym = lmaker.make_launch_list()
+        # TODO: Nov 24 This is where you can modify the launch list for debugging
+        server, market, sim_controller, participants, gym = lmaker.make_launch_list(make_participants=False, make_gym=False,
+                                                                                    make_market=False)
         launch_sequence = market + sim_controller + participants + gym
         if not skip_server:
             launch_sequence = server + launch_sequence
@@ -355,6 +360,10 @@ class Maker:
 
         """
         time.sleep(delay)
+        # TODO: Nov 30 2021; added this to try to get remote launch
+        path_to_trex = str(Path('C:/source/Trex-Core/'))
+        path_to_venv = path_to_trex + str(Path('/venv/Scripts/python'))
+        path_to_trex_main = path_to_trex + str(Path('/main.py'))
 
         import subprocess
         extension = args[0].split('.')[1]
@@ -362,7 +371,10 @@ class Maker:
 
         if is_python:
             try:
-                subprocess.run(['env/bin/python', args[0], *args[1]]) # arg[0] is the server
+                # TODO: Nov 30, 2021; added this to try to get remote launch
+                print('path in sim maker', path_to_venv)
+                subprocess.run([path_to_venv, args[0], *args[1]])  # arg[0] is the server
+                # subprocess.run(['env/bin/python', args[0], *args[1]]) # arg[0] is the server
             except:
                 subprocess.run(['venv/Scripts/python', args[0], *args[1]])
                 # subprocess.run(['venv/Scripts/python', args[0], *args[1]])
