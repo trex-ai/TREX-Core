@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 def cli(configs, participant_id):
     # TODO: Nov 30, 2021; this fixes the path problem
-    path_to_trex = str(Path('C:/source/Trex-Core/'))
+    path_to_trex = str(Path(configs['study']['sim_root']))
     script_path = path_to_trex + '/_clients/participants/sio_client.py'
     # script_path = '_clients/participants/sio_client.py'
 

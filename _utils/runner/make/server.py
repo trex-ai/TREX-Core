@@ -1,8 +1,10 @@
 from pathlib import Path
 def cli(configs):
     # TODO: Nov 30, 2021; this fixes the path problem
-    path_to_trex = str(Path('C:/source/Trex-Core/'))
-    script_path = path_to_trex + '/_server/sio_client.py'
+
+    path_to_trex = str(Path(configs['study']['sim_root']))
+    path_to_trex = configs['study']['sim_root']
+    script_path = path_to_trex + '_server/sio_server.py'
     # script_path = '_server/sio_server.py'
 
     if 'server' not in configs:

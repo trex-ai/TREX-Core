@@ -25,7 +25,7 @@ class Runner:
 
     def __get_config(self, config_name: str, resume, **kwargs):
         # TODO: Nov 30, 2021; this fixes the path problem
-        # Fixme: Dec 1, 2021; this is unfortunatley
+        # Fixme: Dec 1, 2021; this is unfortunately going to have to be passed to trex somehow
         path_to_trex = str(Path('C:/source/Trex-Core/'))
         config_file = path_to_trex + '/_configs/' + config_name + '.json'
 
@@ -242,8 +242,9 @@ class Runner:
     def run_subprocess(self, args: list, delay=0):
         import subprocess
         import time
-        print(args)
-        path_to_trex = str(Path('C:/source/Trex-Core/'))
+
+        # path_to_trex = str(Path('C:/source/Trex-Core/'))
+        path_to_trex = self.configs['study']['sim_root']
         path_to_venv = path_to_trex + str(Path('/venv/Scripts/python'))
         path_to_trex_main = path_to_trex + str(Path('/main.py'))
 
