@@ -28,6 +28,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
     #     # market.server_online = False
     #     print('disconnected from simulation')
     async def on_got_remote_actions(self, message):
+        # TODO: Nov 17, this needs to be modified for env_controller
         self.participant.trader.next_actions = message
         self.participant.trader.wait_for_actions.set()
 
@@ -73,6 +74,7 @@ class NSSimulation(socketio.AsyncClientNamespace):
         Args:
             message ([type]): [description]
         """
+        
         self.participant.reset()
         if hasattr(self.participant, 'storage'):
             self.participant.storage.reset(soc_pct=0)

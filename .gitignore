@@ -6,3 +6,5 @@ venv/
 __pycache__/
 
 _configs/test_if_baselines.json
+
+_configs/

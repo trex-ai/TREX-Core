@@ -32,6 +32,9 @@ class EnvController:
         await self.__client.emit('register', client_data, namespace='/simulation')
 
     async def get_remote_actions(self, message):
+        '''
+        TODO: NOV 23, these need to be removed
+        '''
         # this  TREX->gym->baselines
         # message will consist of this:
 

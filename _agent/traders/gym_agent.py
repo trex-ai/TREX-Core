@@ -4,23 +4,19 @@ This is the gym plug api for TREX. It needs to have the following 3 methods:
 2. act
     this one needs to return an action
 3. learn
-    this is simply a holder since
+    this is simply a holder since all the learning will be done outside.
 '''
 import asyncio
 # from _utils._agent.gym_utils import GymPlug
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.ppo2.ppo2 import learn
+
 import numpy as np
 import datetime
 
-# env3 = DummyVecEnv([lambda : gym.make('TestEnv-v0')])
+
 class Trader:
     def __init__(self, **kwargs):
         '''
-        There will need to be some initialization of
-
-        You should initialize both a baselines model and the gym env.
-
+        This should initialize the gym agent. 
 
         '''
         self.__participant = kwargs['trader_fns']
@@ -37,8 +33,11 @@ class Trader:
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
 
 
-
     async def _act(self):
+        '''
+        This method will poll the envcontroller for the actions.
+        '''
+        # TODO: Decemeber 2 2021; need to make sure that this is still the action format
         # actions = {
         #     'bess': {
         #         time_interval: scheduled_qty
@@ -127,9 +126,6 @@ class Trader:
         }
         return message
 
-    async def _learn(self):
-        # TODO:this is where we may have to do some sillyness later if we make the gymplug the gymrunner
-        return True
 
     async def step(self):
         """
@@ -138,20 +134,35 @@ class Trader:
         Returns:
 
         """
-        next_actions = await self.get_actions()
+        obs = self._get_observations()
+        next_actions = await self.get_actions(obs)
 
         return next_actions
 
     async def reset(self):
         return True
 
-    async def get_actions(self):
+    async def get_actions(self, observations):
         '''
         This method asks the envcontroller to pass the right agents action for this step. 
+        The env controller should get this agents observations.  
         The env controller should return the values corresponding to the action for the agent to pass to the trader.step() method
         This will have to be called in the step function 
         '''
-        #TODO: send a message to the env_controller requesting this agents actions. 
+        participant_id = self.__participant['id']
+        #TODO: Nov 16 send a message to the env_controller requesting this agents actions. 
         #The esiest way to get this to work is to bind every agent to their ID in the namespace and use those in a dictionary
         # in the env_controller 
+        
+
+
+        # Here is an example of the way to emit a request to the env controller
+        #await self.__participant['emit']('get_remote_actions',
+        #                                 data=observations,
+        #                                 namespace='/simulation')
+        message = {}
+
+        # TODO: Nov 16: I think that the env controller should be notified that the agent has the actions 
+        # Once all agents have notified the envcontroller, it can signal to the sim_controller to move the settlement along
+        
         return action
