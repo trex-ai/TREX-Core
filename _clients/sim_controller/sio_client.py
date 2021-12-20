@@ -1,6 +1,6 @@
 import sys
-sys.path.append("C:/source/TREX-Core")
 import os
+sys.path.append(os.getcwd())
 import asyncio
 import socket
 import socketio

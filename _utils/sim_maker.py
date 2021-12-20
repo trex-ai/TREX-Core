@@ -335,9 +335,10 @@ class Maker:
         self.__make_sim_internal_directories()
         lmaker = launcher_maker.Maker(config)
         # TODO: Nov 24 This is where you can modify the launch list for debugging
-        server, market, sim_controller, participants, gym = lmaker.make_launch_list(make_participants=False, make_gym=False,
-                                                                                    make_market=False)
+        server, market, sim_controller, participants, gym = lmaker.make_launch_list(make_participants=True, make_gym=True,
+                                                                                    make_market=True)
         launch_sequence = market + sim_controller + participants + gym
+        print("Launch list", launch_sequence)
         if not skip_server:
             launch_sequence = server + launch_sequence
         return launch_sequence
