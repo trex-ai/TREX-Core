@@ -6,7 +6,7 @@ import databases
 import sqlalchemy
 import tenacity
 from _clients.participants import ledger
-from _utils import db_utils
+from _utils import db_utils, utils
 
 class Participant:
     """
@@ -56,7 +56,7 @@ class Participant:
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
                 'check_schedule': self.storage.check_schedule,
-                'schedule_energy': self.storage.schedule_energy
+                # 'schedule_energy': self.storage.schedule_energy
             }
 
         trader_type = trader_params.pop('type', None)
@@ -65,10 +65,13 @@ class Participant:
         Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
-        self.__scaling = {
-            'generation': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
-            'load': kwargs['load_scale'] if 'load_scale' in kwargs else 1
+        self.__profile_params = {
+            'generation_scale': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
+            'load_scale': kwargs['load_scale'] if 'load_scale' in kwargs else 1
         }
+        synthetic_profile = trader_params.pop('use_synthetic_profile', None)
+        if synthetic_profile:
+            self.__profile_params['synthetic_profile'] = synthetic_profile
 
         if 'market_ns' in kwargs:
             NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
@@ -92,7 +95,9 @@ class Participant:
         """
         self.__profile_db['path'] = db_path
         self.__profile_db['db'] = databases.Database(db_path)
-        self.__profile_db['table'] = db_utils.get_table(db_path, self.participant_id)
+        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
+            else self.participant_id
+        self.__profile_db['table'] = db_utils.get_table(db_path, profile_name)
         if 'table' in self.__profile_db or self.__profile_db['table'] is not None:
             await self.__profile_db['db'].connect()
 
@@ -140,7 +145,6 @@ class Participant:
             'participant_id': self.participant_id,
             'quantity': kwargs['quantity'],  # Wh
             'price': kwargs['price'],  # $/kWh
-            'source': kwargs['source'],
             'time_delivery': time_delivery
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
@@ -236,26 +240,28 @@ class Participant:
         query = table.select().where(table.c.tstamp == time_interval[1])
         async with db.transaction():
             row = await db.fetch_one(query)
-        return self.__process_profile(row)
+        return utils.process_profile(row=row,
+                                     gen_scale=self.__profile_params['generation_scale'],
+                                     load_scale=self.__profile_params['load_scale'])
 
-    def __process_profile(self, row):
-        """Processes raw readings fetches from database into generation and consumption in integer Wh.
-
-        Also scales if scaling is defined in configuration.
-        Right now the format is for eGauge. Functionality will be expanded as more data sources are introduced.
-
-        Args:
-            row ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """
-
-        if row is not None:
-            consumption = int(round(self.__scaling['load'] * (row['grid'] + row['solar+']), 0))
-            generation = int(round(self.__scaling['generation'] * row['solar+'], 0))
-            return generation, consumption
-        return 0, 0
+    # def __process_profile(self, row):
+    #     """Processes raw readings fetches from database into generation and consumption in integer Wh.
+    #
+    #     Also scales if scaling is defined in configuration.
+    #     Right now the format is for eGauge. Functionality will be expanded as more data sources are introduced.
+    #
+    #     Args:
+    #         row ([type]): [description]
+    #
+    #     Returns:
+    #         [type]: [description]
+    #     """
+    #
+    #     if row is not None:
+    #         consumption = int(round(self.__profile_params['load_scale'] * (row['grid'] + row['solar+']), 0))
+    #         generation = int(round(self.__profile_params['generation_scale'] * row['solar+'], 0))
+    #         return generation, consumption
+    #     return 0, 0
 
     async def __meter_energy(self, time_interval):
         """Sends submetering data to the Market
@@ -401,18 +407,18 @@ class Participant:
         #     'bess': {
         #         time_interval: scheduled_qty
         #     },
-        #     'bids' {
+        #     'bids': {
         #         time_interval: {
         #             'quantity': qty,
-        #             'source': source,
         #             'price': dollar_per_kWh
         #         }
         #     },
         #     'asks' {
-        #         time_interval: {
-        #             'quantity': qty,
-        #             'source': source,
-        #             'price': dollar_per_kWh?
+        #         source: {
+        #             time_interval: {
+        #                 'quantity': qty,
+        #                 'price': dollar_per_kWh?
+        #             }
         #         }
         #     }
         # }
@@ -425,16 +431,20 @@ class Participant:
         if 'bids' in actions:
             for time_interval in actions['bids']:
                 quantity = actions['bids'][time_interval]['quantity']
-                source = actions['bids'][time_interval]['source']
-                price = actions['bids'][time_interval]['price']
-                await self.bid(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
+                price = round(actions['bids'][time_interval]['price'], 4)
+                await self.bid(quantity=quantity,
+                               price=price,
+                               time_delivery=ast.literal_eval(time_interval))
         # Ask to sell energy
         if 'asks' in actions:
-            for time_interval in actions['asks']:
-                quantity = actions['asks'][time_interval]['quantity']
-                source = actions['asks'][time_interval]['source']
-                price = actions['asks'][time_interval]['price']
-                await self.ask(quantity=quantity, price=price, source=source, time_delivery=ast.literal_eval(time_interval))
+            for source in actions['asks']:
+                for time_interval in actions['asks'][source]:
+                    quantity = actions['asks'][source][time_interval]['quantity']
+                    price = round(actions['asks'][source][time_interval]['price'], 4)
+                    await self.ask(quantity=quantity,
+                                   price=price,
+                                   source=source,
+                                   time_delivery=ast.literal_eval(time_interval))
 
     def reset(self):
         self.__ledger.reset()
