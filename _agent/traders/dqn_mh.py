@@ -40,13 +40,10 @@ class Trader:
         if 'storage' in self.__participant:
             # self.storage_type = self.__participant['storage']['type'].lower()
             self.actions['storage'] = self.actions['quantity']
-        # self.action_space_names = tuple(self.actions.keys())
-        # self.action_space_values = tuple(product(*list(self.actions.values())))
-        # self.num_actions = len(self.action_space_values)
 
-        # self.gradient_tape = tf.GradientTape()
         self.model = self.__create_model()
         self.model_target = self.__create_model()
+        self.model_target.set_weights(self.model.get_weights())
 
         # Initialize learning parameters
         self.learning = kwargs['learning'] if 'learning' in kwargs else False
@@ -57,10 +54,9 @@ class Trader:
                 self.__participant['ledger'],
                 self.__participant['market_info'])
 
-        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 1e-5
+        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 1e-6
         self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.99
         self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.1
-            # 0.05
 
         self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
         self.loss_function = keras.losses.Huber()
@@ -92,8 +88,9 @@ class Trader:
 
     def __create_model(self):
         num_inputs = 4 if 'storage' not in self.actions else 6
+        num_hidden = 150 if 'storage' not in self.actions else 300
         # num_hidden = 64
-        num_hidden = 150
+        # num_hidden = 150
         # num_hidden = 300
         inputs = layers.Input(shape=(num_inputs,))
         hidden_1 = layers.Dense(num_hidden, activation="relu")(inputs)
@@ -141,11 +138,12 @@ class Trader:
         current_round = self.__participant['timing']['current_round']
         next_settle = self.__participant['timing']['next_settle']
         round_duration = self.__participant['timing']['duration']
-        # TODO: this is a temporary hack to offset reward timing
+        # align reward with action timing
         # in the current market setup the reward is for actions taken 3 steps ago
         # if self._rewards.type == 'net_profit':
         reward_time_offset = current_round[1] - next_settle[1] - round_duration
-        self.rewards_history[reward_time_offset] = reward
+        # print(reward_time_offset)
+        self.rewards_history[current_round[1] + reward_time_offset] = reward
         # self.rewards_history.append((current_round[1] - 180, reward))
         self.episode_reward += reward
         await self.metrics.track('rewards', reward)
@@ -209,19 +207,18 @@ class Trader:
             grads = tape.gradient(losses, self.model.trainable_variables)
             self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
-            # self.rewards_history.clear()
-            # self.state_history.clear()
-            # self.action_history.clear()
-
-            if self.steps >= 120:
-            # if self.steps >= 60:
+            # if self.steps >= 120:
+            if self.steps >= 60 * 3:
                 self.model_target.set_weights(self.model.get_weights())
                 self.steps = 0
+                self.rewards_history.clear()
+                self.state_history.clear()
+                self.action_history.clear()
 
-            if len(self.rewards_history) > 5000:
-                self.rewards_history = self.rewards_history[1000:]
-                self.state_history = self.state_history[1000:]
-                self.action_history = self.action_history[1000:]
+            # if len(self.rewards_history) > 5000:
+            #     self.rewards_history = self.rewards_history[1000:]
+            #     self.state_history = self.state_history[1000:]
+            #     self.action_history = self.action_history[1000:]
 
     async def act(self, **kwargs):
         # Generate state (inputs to model):
@@ -244,8 +241,11 @@ class Trader:
 
         state = [np.sin(2 * np.pi * current_round_end.hour / 24),
                  np.sin(2 * np.pi * current_round_end.minute / 60),
+                 # np.cos(2 * np.pi * current_round_end.hour / 24),
+                 # np.cos(2 * np.pi * current_round_end.minute / 60),
                  next_generation,
                  next_load]
+
         if 'storage' in self.__participant:
             storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
             # storage_schedule = self.__participant['storage']['schedule'](next_settle)
@@ -279,6 +279,10 @@ class Trader:
                 storage_key_idx = list(self.actions.keys()).index('storage')
                 storage_idx = tf.argmax(action_probs[storage_key_idx][0]).numpy()
                 action_indices['storage'] = storage_idx
+
+                # TODO; fun experiments
+                # if self.actions['storage'][storage_idx] < 0:
+                #     action_indices['quantity'] = storage_idx
 
         # with self.gradient_tape:
         actions = await self.decode_actions(action_indices, next_settle)
@@ -400,7 +404,7 @@ class Trader:
     async def reset(self, **kwargs):
         self.episode_reward = 0
         self.steps = 0
-        # self.rewards_history.clear()
-        # self.state_history.clear()
-        # self.action_history.clear()
+        self.rewards_history.clear()
+        self.state_history.clear()
+        self.action_history.clear()
         return True
