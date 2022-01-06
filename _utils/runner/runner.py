@@ -35,7 +35,7 @@ class Runner:
                 db_string = kwargs['db_string']
             # look for existing db in db. if one exists, return it
             if database_exists(db_string):
-                if engine.dialect.has_table(engine, 'configs'):
+                if sqlalchemy.inspect(engine).has_table('configs'):
                     db = dataset.connect(db_string)
                     configs_table = db['configs']
                     configs = configs_table.find_one(id=0)['data']
@@ -108,7 +108,7 @@ class Runner:
         #     os.mkdir(sim_path)
 
         engine = create_engine(self.configs['study']['output_database'])
-        if not engine.dialect.has_table(engine, 'metadata'):
+        if not sqlalchemy.inspect(engine).has_table('metadata'):
             self.__create_metadata_table(self.configs['study']['output_database'])
         db = dataset.connect(self.configs['study']['output_database'])
         metadata_table = db['metadata']

@@ -88,16 +88,19 @@ class NSSimulation(socketio.AsyncClientNamespace):
         Args:
             message ([type]): [description]
         """
+        if hasattr(self.participant.trader, 'end_of_generation_tasks'):
+            await self.participant.trader.end_of_generation_tasks()
+
         if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
             await self.participant.trader.metrics.save()
             self.participant.trader.metrics.reset()
 
+        # TODO: save model
+        if hasattr(self.participant.trader, 'save_model'):
+            await self.participant.trader.save_weights(**message)
+
         if hasattr(self.participant.trader, 'reset'):
             await self.participant.trader.reset(**message)
-
-        # TODO: save weights
-        if hasattr(self.participant.trader, 'save_weights'):
-            await self.participant.trader.save_weights(**message)
 
         await self.participant.client.emit(event='participant_ready',
                                            data={self.participant.participant_id: True},
