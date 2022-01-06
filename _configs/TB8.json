@@ -1,0 +1,80 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "ute3b-dqn-mh-test-mq-sq-2",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 1,
+      "generations": 700,
+      "profiles_db_location": "",
+      "output_db_location": "",
+      "sim_root": ""
+    },
+    "curriculum": {
+      "0": {
+        "learning": true
+      },
+      "500": {
+        "learning": true,
+        "anneal": {"exploration_factor": [0.98, "multiply"]}
+      },
+      "600": {
+        "learning": true
+      }
+    },
+    "server": {
+      "host": "",
+      "port": "3500"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "egauge19821": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "dqn_mh",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
+//          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "egauge16616": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "basic_trader",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  
