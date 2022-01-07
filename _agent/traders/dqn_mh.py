@@ -26,6 +26,7 @@ class Trader:
     def __init__(self, bid_price, ask_price, **kwargs):
         # Some utility parameters
         self.__participant = kwargs['trader_fns']
+        self.study_name = kwargs['study_name'] if 'study_name' in kwargs else None
         self.status = {
             'weights_loading': False
         }
