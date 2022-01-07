@@ -3,6 +3,7 @@
 """
 import asyncio
 import importlib
+import os
 import random
 import numpy as np
 from _agent._utils.metrics import Metrics
@@ -17,6 +18,8 @@ from itertools import product
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorboard as tb
+
 
 class Trader:
     """This trader uses SMA crossover to make trading decisions in the context of MicroFE
@@ -31,6 +34,12 @@ class Trader:
             'weights_loading': False
         }
 
+        # Initialize metrics tracking
+        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
+        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
+        if self.track_metrics:
+            self.__init_metrics()
+
         # Generate actions
         self.actions = {
             'price': sorted(list(np.round(np.linspace(bid_price, ask_price, 9), 4))),
@@ -42,7 +51,21 @@ class Trader:
             # self.storage_type = self.__participant['storage']['type'].lower()
             self.actions['storage'] = self.actions['quantity']
 
+        #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
+        cwd = os.getcwd()
+        logs_path = os.path.join(cwd, 'Logs')
+        experiment_path = os.path.join(logs_path, self.study_name) #ToDo: add subpath for the experiment
+        trader_path = os.path.join(experiment_path, self.__participant['id'])
+
+        self.summary_writer = tf.summary.create_file_writer(trader_path)
+        self.train_step = 0
+        # tb_callback = tf.keras.callbacks.TensorBoard(trader_path) #for later maybe
+        # tb_callback.set_model(self.model)
+        tf.summary.trace_on(graph=True)
         self.model = self.__create_model()
+        with self.summary_writer.as_default():
+            tf.summary.trace_export('trader_name', step=self.train_step)
+
         self.model_target = self.__create_model()
         self.model_target.set_weights(self.model.get_weights())
 
@@ -55,11 +78,11 @@ class Trader:
                 self.__participant['ledger'],
                 self.__participant['market_info'])
 
-        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 1e-6
+        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 1e-5
         self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.99
-        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.1
+        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.05 #ToDO: add a form of annealing
 
-        self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
+        self.optimizer = keras.optimizers.RMSprop(learning_rate=self.learning_rate) #Original DQN uses RMSProp
         self.loss_function = keras.losses.Huber()
         self.action_history = dict()
         self.state_history = dict()
@@ -67,12 +90,6 @@ class Trader:
         self.episode_reward = 0
         # self.episode_reward_history = []
         self.steps = 0
-
-        # Initialize metrics tracking
-        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
-        if self.track_metrics:
-            self.__init_metrics()
 
     def __init_metrics(self):
         import sqlalchemy
@@ -88,26 +105,37 @@ class Trader:
             self.metrics.add('storage_soc', sqlalchemy.Float)
 
     def __create_model(self):
-        num_inputs = 4 if 'storage' not in self.actions else 6
-        num_hidden = 150 if 'storage' not in self.actions else 300
+        num_inputs = 6 if 'storage' not in self.actions else 8
+        num_hidden = 64 if 'storage' not in self.actions else 300
+        num_hidden_layers = 1 #lets see how far we get with this first
         # num_hidden = 64
-        # num_hidden = 150
-        # num_hidden = 300
+        # num_hidden = 128
+        # num_hidden = 256
+        outputs = []
         inputs = layers.Input(shape=(num_inputs,))
-        hidden_1 = layers.Dense(num_hidden, activation="relu")(inputs)
-        hidden_2 = layers.Dense(num_hidden, activation="relu")(hidden_1)
-        hidden_3 = layers.Dense(num_hidden, activation="relu")(hidden_2)
+        internal_signal = layers.Dense(num_hidden, activation="relu")(inputs) #Input layer
 
-        if 'storage' in self.__participant:
-            hidden_4 = layers.Dense(num_hidden, activation="relu")(hidden_3)
-            price = layers.Dense(len(self.actions['price']), activation="softmax")(hidden_4)
-            quantity = layers.Dense(len(self.actions['quantity']), activation="softmax")(hidden_4)
-            storage = layers.Dense(len(self.actions['storage']), activation="softmax")(hidden_4)
-            return keras.Model(inputs=inputs, outputs=[price, quantity, storage])
+        for hidden_layer_number in range(num_hidden_layers): #hidden layers
+            internal_signal = layers.Dense(num_hidden, activation="relu")(internal_signal)
 
-        price = layers.Dense(len(self.actions['price']), activation="softmax")(hidden_3)
-        quantity = layers.Dense(len(self.actions['quantity']), activation="softmax")(hidden_3)
-        return keras.Model(inputs=inputs, outputs=[price, quantity])
+        #ToDo: this ccould be a loop over actions automaticcally assigning the right head order
+        for action in self.actions:
+            if 'price' == action:
+                price = layers.Dense(len(self.actions['price']),
+                                     # activation="softmax",
+                                     )(internal_signal)
+                outputs.append(price)
+            if 'quantity'== action:
+                quantity = layers.Dense(len(self.actions['quantity']),
+                                        # activation="softmax",
+                                        )(internal_signal)
+                outputs.append(quantity)
+            if 'storage' in self.__participant and 'storage' == action:
+                storage = layers.Dense(len(self.actions['storage']),
+                                       # activation="softmax",
+                                        )(internal_signal)
+                outputs.append(storage)
+        return keras.Model(inputs=inputs, outputs=outputs)
         # return keras.Model(inputs=inputs, outputs={'price': price, 'quantity': quantity})
 
     def anneal(self, parameter:str, adjustment, mode:str='multiply'):
@@ -148,21 +176,6 @@ class Trader:
         # self.rewards_history.append((current_round[1] - 180, reward))
         self.episode_reward += reward
         await self.metrics.track('rewards', reward)
-
-        # elif self._rewards.type == 'market_profit':
-        #     timestamp = current_round[1]-180
-        #     step_r = 0
-        #     for r in reward:
-        #         price_idx = self.actions['price'].index(r[0])
-        #         quantity_idx = self.actions['quantity'].index(r[1])
-        #         self.action_history[timestamp] = {
-        #             'price': price_idx,
-        #             'quantity': quantity_idx
-        #         }
-        #         self.rewards_history[timestamp] = r[2]
-        #         step_r += r[2]
-        #     self.episode_reward += step_r
-        #     await self.metrics.track('rewards', step_r)
 
         if self.steps and len(self.rewards_history) >= 60 and not self.steps % 5:
             # TODO: change sampling to use dictionaries so timestamps line up properly
@@ -209,13 +222,21 @@ class Trader:
             self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
             # if self.steps >= 120:
-            if self.steps >= 60 * 3:
+            #ToDO: originally at 120, we probably want much much more
+            if self.steps >= 60 * 5:
                 self.model_target.set_weights(self.model.get_weights())
                 self.steps = 0
                 self.rewards_history.clear()
                 self.state_history.clear()
                 self.action_history.clear()
 
+            # logging graphs
+            with self.summary_writer.as_default():
+                self.train_step = self.train_step + 1
+                for action in self.actions.keys():
+                    action_key_idx = list(self.actions.keys()).index(action)
+                    tf.summary.scalar('loss_'+action, losses[action_key_idx], step=self.train_step)
+                tf.summary.scalar('reward', reward, step=self.train_step)
             # if len(self.rewards_history) > 5000:
             #     self.rewards_history = self.rewards_history[1000:]
             #     self.state_history = self.state_history[1000:]
@@ -241,9 +262,9 @@ class Trader:
         #          next_load]
 
         state = [np.sin(2 * np.pi * current_round_end.hour / 24),
+                 np.cos(2 * np.pi * current_round_end.hour / 24),
                  np.sin(2 * np.pi * current_round_end.minute / 60),
-                 # np.cos(2 * np.pi * current_round_end.hour / 24),
-                 # np.cos(2 * np.pi * current_round_end.minute / 60),
+                 np.cos(2 * np.pi * current_round_end.minute / 60),
                  next_generation,
                  next_load]
 
@@ -266,24 +287,40 @@ class Trader:
             # action_probs, critic_value = self.model(state, training=False)
             state_tensor = tf.convert_to_tensor(state)
             state_tensor = tf.expand_dims(state_tensor, 0)
-            action_probs = self.model(state_tensor, training=False)
+            action_values = self.model(state_tensor, training=False)
 
             price_key_idx = list(self.actions.keys()).index('price')
+            price_idx = tf.argmax(action_values[price_key_idx][0]).numpy()
+
             quantity_key_idx = list(self.actions.keys()).index('quantity')
-            price_idx = tf.argmax(action_probs[price_key_idx][0]).numpy()
-            quantity_idx = tf.argmax(action_probs[quantity_key_idx][0]).numpy()
+            quantity_idx = tf.argmax(action_values[quantity_key_idx][0]).numpy()
 
             action_indices['price'] = price_idx
             action_indices['quantity'] = quantity_idx
 
             if 'storage' in self.actions:
                 storage_key_idx = list(self.actions.keys()).index('storage')
-                storage_idx = tf.argmax(action_probs[storage_key_idx][0]).numpy()
+                storage_idx = tf.argmax(action_values[storage_key_idx][0]).numpy()
                 action_indices['storage'] = storage_idx
 
-                # TODO; fun experiments
-                # if self.actions['storage'][storage_idx] < 0:
-                #     action_indices['quantity'] = storage_idx
+          # TODO; fun experiments
+            # if self.actions['storage'][storage_idx] < 0:
+            #     action_indices['quantity'] = storage_idx
+            with self.summary_writer.as_default():
+                # this reduces across all dimensions, we assume only one actionselection per TS
+                if 'price' in self.actions:
+                    tf.summary.scalar('Q_price',
+                                      tf.reduce_max(action_values[price_key_idx]),
+                                      step=self.train_step)
+                if 'quantity' in self.actions:
+                    tf.summary.scalar('Q_quantity',
+                                      tf.reduce_max(action_values[quantity_key_idx]),
+                                      step=self.train_step)
+                if 'storage' in self.actions:
+                    tf.summary.scalar('Q_quantity',
+                                      tf.reduce_max(action_values[storage_idx]),
+                                      step=self.train_step)
+
 
         # with self.gradient_tape:
         actions = await self.decode_actions(action_indices, next_settle)
@@ -394,13 +431,8 @@ class Trader:
         self.model_target.set_weights(self.model.get_weights())
         print(self.__participant['id'], 'episode reward:', self.episode_reward)
 
-    #     # update the the target network with new weights
-    #     # self.model_target.set_weights(self.model.get_weights())
-    #     # Limit the state and reward history
-    #     if len(self.rewards_history) > 1440:
-    #         del self.rewards_history[:1]
-    #         del self.state_history[:1]
-    #         del self.action_history[:1]
+        with self.summary_writer.as_default():
+            tf.summary.scalar('Return' , self.episode_reward, step=self.train_step)
 
     async def reset(self, **kwargs):
         self.episode_reward = 0
