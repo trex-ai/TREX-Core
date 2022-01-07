@@ -12,7 +12,6 @@ class Metrics:
         self.__db = {}
         self.__metrics = {}
         self.__metrics_meta = {}
-        self.study_name = None
 
     def add(self, metric_name:str, column_type):
         if metric_name not in self.__metrics:
@@ -39,7 +38,6 @@ class Metrics:
     def update_db_info(self, db_string, table_name):
         self.__db['path'] = db_string
         self.__db['table_name'] = table_name + '_' + self.__agent_id
-        self.study_name = db_string.split('/')[-1]
 
     def reset(self):
         self.__db.clear()

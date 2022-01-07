@@ -197,6 +197,7 @@ class Runner:
             else:
                 for participant in learning_participants:
                     config['participants'][participant]['trader']['learning'] = True
+                    config['participants'][participant]['trader']['study_name'] = config['study']['name']
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
