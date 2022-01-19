@@ -3,10 +3,14 @@
 """
 import asyncio
 import importlib
+import os
 import random
+from collections import OrderedDict
+
 import numpy as np
 from _agent._utils.metrics import Metrics
-from _utils import utils, db_utils
+from _utils import utils
+from _utils.drl_utils import robust_argmax
 
 import sqlalchemy
 from sqlalchemy import MetaData, Column
@@ -17,6 +21,8 @@ from itertools import product
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorboard as tb
+
 
 class Trader:
     """This trader uses SMA crossover to make trading decisions in the context of MicroFE
@@ -31,10 +37,16 @@ class Trader:
             'weights_loading': False
         }
 
+        # Initialize metrics tracking
+        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
+        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
+        if self.track_metrics:
+            self.__init_metrics()
+
         # Generate actions
         self.actions = {
-            'price': sorted(list(np.round(np.linspace(bid_price, ask_price, 9), 4))),
-            'quantity': [int(q) for q in list(set(np.floor(np.linspace(-17, 17, 7))))]
+            'price': sorted(list(np.round(np.linspace(bid_price, ask_price, 12), 4))),
+            'quantity': [int(q) for q in list(set(np.round(np.linspace(-26, 26, 13))))]
             # 'quantity': [-17, ]
             # 'quantity': [-17, 17]
         }
@@ -42,7 +54,21 @@ class Trader:
             # self.storage_type = self.__participant['storage']['type'].lower()
             self.actions['storage'] = self.actions['quantity']
 
+        #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
+        cwd = os.getcwd()
+        logs_path = os.path.join(cwd, 'Logs')
+        experiment_path = os.path.join(logs_path, self.study_name) #ToDo: What if we have several experiments?
+        trader_path = os.path.join(experiment_path, self.__participant['id'])
+
+        self.summary_writer = tf.summary.create_file_writer(trader_path)
+        self.train_step = 0
+        self.total_step = 0
+        # tb_callback = tf.keras.callbacks.TensorBoard(trader_path) #for later maybe
+        # tb_callback.set_model(self.model)
+        tf.summary.trace_on(graph=True)
         self.model = self.__create_model()
+        with self.summary_writer.as_default():
+            tf.summary.trace_export('trader_name', step=self.train_step)
         self.model_target = self.__create_model()
         self.model_target.set_weights(self.model.get_weights())
 
@@ -55,24 +81,31 @@ class Trader:
                 self.__participant['ledger'],
                 self.__participant['market_info'])
 
-        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 1e-6
-        self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.99
-        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.1
+        #DQN hyperparameters:
 
-        self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
-        self.loss_function = keras.losses.Huber()
-        self.action_history = dict()
-        self.state_history = dict()
-        self.rewards_history = dict()
+        self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 0.00025 # Original DQN uses RMSProp, learning rate of α = 0.00025, Rainbow’s variants used a learning rate of α/4, selected among {α/2, α/4, α/6}, and a value of 1.5 × 10−4 for Adam’s  hyper-parameter,
+        self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate) # Adam over RMSprop because apparently less sensitive to choice of α (see Rainbow)
+        self.loss_function = keras.losses.Huber()  # Classic Huber loss, this is known to be a straight improvement over square loss
+        self.batch_size = 128 #ToDo: figure out usual hyperparam, iIrc this is 16?
+        self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.99
+
+        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.6 #DQN and Rainbow both start with epsilon 1 and decrease to 0.1-0.01 relatively fast with subsequent annealing down.
+        #ToDO: figure out what best-practise for annealing in MARL are!
+
+        # Replay buffer initialization, Rainbow mentions default value of 200K replay buffer filling BEFORE learning!
+        # ToDO: Rewrite replay bufffer completely into a separate class/object
+        self.replay_buffer_length = 3*1440 #Setting this to a multiple of the batch size and then mulitply with the number of days in one gen for now
+        self.backprop_frequency = 4 #figure out if we really need this?
+        self.target_network_update_frequency = int(1440)
+            #3*128*self.backprop_frequency #set the update frequency to the length of the sim, so we update once per gen for now, more time to converge just in case!
+
+        self.action_history = OrderedDict()
+        self.state_history = OrderedDict()
+        self.rewards_history = OrderedDict()
         self.episode_reward = 0
         # self.episode_reward_history = []
         self.steps = 0
-
-        # Initialize metrics tracking
-        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
-        if self.track_metrics:
-            self.__init_metrics()
+        self.gen = 0
 
     def __init_metrics(self):
         import sqlalchemy
@@ -88,27 +121,35 @@ class Trader:
             self.metrics.add('storage_soc', sqlalchemy.Float)
 
     def __create_model(self):
-        num_inputs = 4 if 'storage' not in self.actions else 6
-        num_hidden = 150 if 'storage' not in self.actions else 300
+        num_inputs = 2 if 'storage' not in self.actions else 8
+        num_hidden = 32 if 'storage' not in self.actions else 300
+        num_hidden_layers = 1 #lets see how far we get with this first
         # num_hidden = 64
-        # num_hidden = 150
-        # num_hidden = 300
+        # num_hidden = 128
+        # num_hidden = 256
+        initializer = tf.keras.initializers.HeNormal()
+        Q = {}
         inputs = layers.Input(shape=(num_inputs,))
-        hidden_1 = layers.Dense(num_hidden, activation="relu")(inputs)
-        hidden_2 = layers.Dense(num_hidden, activation="relu")(hidden_1)
-        hidden_3 = layers.Dense(num_hidden, activation="relu")(hidden_2)
+        internal_signal = layers.Dense(num_hidden,
+                                       activation="elu",
+                                       # bias_initializer=initializer,
+                                       kernel_initializer=initializer)(inputs) #Input layer
 
-        if 'storage' in self.__participant:
-            hidden_4 = layers.Dense(num_hidden, activation="relu")(hidden_3)
-            price = layers.Dense(len(self.actions['price']), activation="softmax")(hidden_4)
-            quantity = layers.Dense(len(self.actions['quantity']), activation="softmax")(hidden_4)
-            storage = layers.Dense(len(self.actions['storage']), activation="softmax")(hidden_4)
-            return keras.Model(inputs=inputs, outputs=[price, quantity, storage])
+        for hidden_layer_number in range(num_hidden_layers): #hidden layers
+            internal_signal = layers.Dense(num_hidden,
+                                           activation="elu",
+                                           # bias_initializer=initializer,
+                                           kernel_initializer=initializer)(internal_signal)
 
-        price = layers.Dense(len(self.actions['price']), activation="softmax")(hidden_3)
-        quantity = layers.Dense(len(self.actions['quantity']), activation="softmax")(hidden_3)
-        return keras.Model(inputs=inputs, outputs=[price, quantity])
-        # return keras.Model(inputs=inputs, outputs={'price': price, 'quantity': quantity})
+        #ToDo: this is stilen from a tutorial on dueling DQN, reread paper and check other implementations!
+        value = layers.Dense(1)(internal_signal)
+        for action in self.actions:
+            advantage = layers.Dense(len(self.actions[action]))(internal_signal)
+            advantage = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
+            Q_action = value + advantage
+            Q[action] = Q_action
+
+        return keras.Model(inputs=inputs, outputs=Q)
 
     def anneal(self, parameter:str, adjustment, mode:str='multiply'):
         if not hasattr(self, parameter):
@@ -120,8 +161,12 @@ class Trader:
         param_value = getattr(self, parameter)
         if mode == 'subtract':
             param_value = max(0, param_value - adjustment)
+
         elif mode == 'multiply':
             param_value *= adjustment
+
+        param_value = max(param_value, 0.01)
+
         setattr(self, parameter, param_value)
 
     # Core Functions, learn and act, called from outside
@@ -149,22 +194,7 @@ class Trader:
         self.episode_reward += reward
         await self.metrics.track('rewards', reward)
 
-        # elif self._rewards.type == 'market_profit':
-        #     timestamp = current_round[1]-180
-        #     step_r = 0
-        #     for r in reward:
-        #         price_idx = self.actions['price'].index(r[0])
-        #         quantity_idx = self.actions['quantity'].index(r[1])
-        #         self.action_history[timestamp] = {
-        #             'price': price_idx,
-        #             'quantity': quantity_idx
-        #         }
-        #         self.rewards_history[timestamp] = r[2]
-        #         step_r += r[2]
-        #     self.episode_reward += step_r
-        #     await self.metrics.track('rewards', step_r)
-
-        if self.steps and len(self.rewards_history) >= 60 and not self.steps % 5:
+        if len(self.rewards_history) >= 0.25*self.replay_buffer_length  and not self.steps % self.backprop_frequency:
             # TODO: change sampling to use dictionaries so timestamps line up properly
             common_ts = list(set(list(self.rewards_history.keys())).intersection(list(self.state_history.keys())[:-2]))
             indices = utils.secure_random.sample(common_ts, len(common_ts))
@@ -174,24 +204,17 @@ class Trader:
             rewards_sample = [self.rewards_history[k] for k in indices]
             action_sample = [self.action_history[k] for k in indices]
 
-            # print('----------')
-            # print(state_sample)
-            # print(state_next_sample)
-            # print(action_sample)
-            # print(rewards_sample)
+            q_next_values = self.model_target.predict(state_next_sample, batch_size=min(self.batch_size, int(0.05 * len(rewards_sample))))
 
-            # Build the updated Q-values for the sampled future states
-            # Use the target model for stability
-            # future_rewards = self.model_target.predict(state_next_sample, batch_size=int(0.05 * len(rewards_sample)))
-            future_rewards = self.model_target.predict(state_next_sample, batch_size=min(30, int(0.05 * len(rewards_sample))))
-            losses = [None] * len(self.actions)
+            losses = []
             #TODO: repeat q update -> apply gradient for every head
             with tf.GradientTape() as tape:
                 # Train the model on the states and updated Q-values
                 q_values = self.model(state_sample)
                 for action in self.actions:
                     action_key_idx = list(self.actions.keys()).index(action)
-                    updated_q_values = rewards_sample + self.discount_factor * tf.reduce_max(future_rewards[action_key_idx], axis=1)
+                    #Get the bootstrapping target
+                    updated_q_values = rewards_sample + self.discount_factor * tf.reduce_max(q_next_values[action], axis=1)
                     num_actions = len(self.actions[action])
 
                     # Create a mask so we only calculate loss on the updated Q-values
@@ -199,23 +222,34 @@ class Trader:
                     masks = tf.one_hot(action_sample_a, num_actions)
 
                     # Apply the masks to the Q-values to get the Q-value for action taken
-                    q_action = tf.reduce_sum(tf.multiply(q_values[action_key_idx], masks), axis=1)
+                    q_action = tf.reduce_sum(tf.multiply(q_values[action], masks), axis=1)
                     # Calculate loss between new Q-value and old Q-value
                     loss = self.loss_function(updated_q_values, q_action)
-                    losses[action_key_idx] = loss
+                    losses.append(loss)
 
             # Backpropagation
             grads = tape.gradient(losses, self.model.trainable_variables)
             self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
-            # if self.steps >= 120:
-            if self.steps >= 60 * 3:
+            #updating target network
+            if not self.steps % self.target_network_update_frequency:
                 self.model_target.set_weights(self.model.get_weights())
-                self.steps = 0
-                self.rewards_history.clear()
-                self.state_history.clear()
-                self.action_history.clear()
 
+            #clearing replay buffer
+            # if len(self.rewards_history) > self.replay_buffer_length:
+            #     diff = len(self.rewards_history) - self.replay_buffer_length
+            #     for times in range(diff):
+            #          self.rewards_history.popitem(last=False)
+            #          self.state_history.popitem(last=False)
+            #          self.action_history.popitem(last=False)
+
+            # logging graphs
+            with self.summary_writer.as_default():
+                self.train_step = self.train_step + 1
+                for action in self.actions.keys():
+                    action_key_idx = list(self.actions.keys()).index(action)
+                    tf.summary.scalar('loss_'+action, losses[action_key_idx], step=self.train_step)
+                tf.summary.scalar('reward', reward, step=self.train_step)
             # if len(self.rewards_history) > 5000:
             #     self.rewards_history = self.rewards_history[1000:]
             #     self.state_history = self.state_history[1000:]
@@ -240,9 +274,10 @@ class Trader:
         #          next_generation,
         #          next_load]
 
-        state = [np.sin(2 * np.pi * current_round_end.hour / 24),
-                 np.sin(2 * np.pi * current_round_end.minute / 60),
+        state = [
+                 # np.sin(2 * np.pi * current_round_end.hour / 24),
                  # np.cos(2 * np.pi * current_round_end.hour / 24),
+                 # np.sin(2 * np.pi * current_round_end.minute / 60),
                  # np.cos(2 * np.pi * current_round_end.minute / 60),
                  next_generation,
                  next_load]
@@ -264,26 +299,35 @@ class Trader:
                 action_indices[action] = utils.secure_random.choice(range(len(self.actions[action])))
         else:
             # action_probs, critic_value = self.model(state, training=False)
-            state_tensor = tf.convert_to_tensor(state)
-            state_tensor = tf.expand_dims(state_tensor, 0)
-            action_probs = self.model(state_tensor, training=False)
+            state_tensor = tf.expand_dims(tf.convert_to_tensor(state), 0)
+            action_values = self.model(state_tensor, training=False)
 
-            price_key_idx = list(self.actions.keys()).index('price')
-            quantity_key_idx = list(self.actions.keys()).index('quantity')
-            price_idx = tf.argmax(action_probs[price_key_idx][0]).numpy()
-            quantity_idx = tf.argmax(action_probs[quantity_key_idx][0]).numpy()
+            price_idx = await robust_argmax(action_values['price'])
+            price_idx = price_idx.numpy()[0]
+
+            quantity_idx = await robust_argmax(action_values['quantity'])
+            quantity_idx = quantity_idx.numpy()[0]
 
             action_indices['price'] = price_idx
             action_indices['quantity'] = quantity_idx
 
             if 'storage' in self.actions:
-                storage_key_idx = list(self.actions.keys()).index('storage')
-                storage_idx = tf.argmax(action_probs[storage_key_idx][0]).numpy()
-                action_indices['storage'] = storage_idx
+                storage_idx = await robust_argmax(action_values['storage'])
+                storage_idx = storage_idx.numpy()[0]
 
-                # TODO; fun experiments
-                # if self.actions['storage'][storage_idx] < 0:
-                #     action_indices['quantity'] = storage_idx
+          # TODO; fun experiments
+            # if self.actions['storage'][storage_idx] < 0:
+            #     action_indices['quantity'] = storage_idx
+            with self.summary_writer.as_default():
+                # this reduces across all dimensions, we assume only one actionselection per TS
+                for action in self.actions:
+                    tf.summary.scalar('Q_'+str(action),
+                                      tf.reduce_max(action_values[action]),
+                                      step=self.total_step)
+                    tf.summary.scalar(str(action),
+                                      self.actions[action][action_indices[action]],
+                                      step=self.total_step)
+
 
         # with self.gradient_tape:
         actions = await self.decode_actions(action_indices, next_settle)
@@ -334,6 +378,7 @@ class Trader:
                 actions['bess'] = {
                     str(next_settle): target
                 }
+        # print(actions)
         return actions
     # async def save_model(self, **kwargs):
     #     '''
@@ -387,6 +432,7 @@ class Trader:
             await self.metrics.save(10000)
         # print(next_actions)
         self.steps += 1
+        self.total_step += 1
         return next_actions
 
     async def end_of_generation_tasks(self):
@@ -394,13 +440,13 @@ class Trader:
         self.model_target.set_weights(self.model.get_weights())
         print(self.__participant['id'], 'episode reward:', self.episode_reward)
 
-    #     # update the the target network with new weights
-    #     # self.model_target.set_weights(self.model.get_weights())
-    #     # Limit the state and reward history
-    #     if len(self.rewards_history) > 1440:
-    #         del self.rewards_history[:1]
-    #         del self.state_history[:1]
-    #         del self.action_history[:1]
+        if self.gen > 200:
+            self.learning_rate = 0.9 * self.learning_rate
+            self.learning_rate = max(self.learning_rate, 1e-7)
+
+        with self.summary_writer.as_default():
+            tf.summary.scalar('Return' , self.episode_reward, step= self.gen)
+        self.gen = self.gen + 1
 
     async def reset(self, **kwargs):
         self.episode_reward = 0
