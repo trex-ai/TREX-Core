@@ -1,4 +1,5 @@
 import commentjson
+import os
 import random
 from _utils import db_utils
 from _utils import jkson as json
@@ -18,15 +19,29 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
+    def __load_json_file(self, file_path):
+        with open(file_path) as f:
+            json_file = commentjson.load(f)
+        return json_file
+
     def __get_config(self, config_name: str, resume, **kwargs):
         config_file = '_configs/' + config_name + '.json'
-        with open(config_file) as f:
-            config = commentjson.load(f)
+        config = self.__load_json_file(config_file)
+
+        credentials_file = '_configs/_credentials.json'
+        credentials = self.__load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
 
         if 'name' in config['study'] and config['study']['name']:
             study_name = config['study']['name'].replace(' ', '_')
         else:
             study_name = config_name
+
+        if credentials or 'profiles_db_location' not in config['study']:
+            config['study']['profiles_db_location'] = credentials['profiles_db_location']
+
+        if credentials or 'output_db_location' not in config['study']:
+            config['study']['output_db_location'] = credentials['output_db_location']
+
         db_string = config['study']['output_db_location'] + '/' + study_name
         engine = create_engine(db_string)
 
