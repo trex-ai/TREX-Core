@@ -10,7 +10,7 @@ from collections import OrderedDict
 import numpy as np
 from _agent._utils.metrics import Metrics
 from _utils import utils
-from _utils.drl_utils import robust_argmax
+from _utils.drl_utils import robust_argmax, ExperienceReplayBuffer
 
 import sqlalchemy
 from sqlalchemy import MetaData, Column
@@ -45,14 +45,20 @@ class Trader:
 
         # Generate actions
         self.actions = {
-            'price': sorted(list(np.round(np.linspace(bid_price, ask_price, 12), 4))),
-            'quantity': [int(q) for q in list(set(np.round(np.linspace(-26, 26, 13))))]
+            'price': sorted(list(np.round(np.linspace(bid_price, ask_price, 7), 4))),
+            'quantity': [int(q) for q in list(set(np.round(np.linspace(-17, 17, 7))))]
             # 'quantity': [-17, ]
             # 'quantity': [-17, 17]
         }
         if 'storage' in self.__participant:
             # self.storage_type = self.__participant['storage']['type'].lower()
             self.actions['storage'] = self.actions['quantity']
+
+        # initialize all the counters we need
+        self.train_step = 0
+        self.total_step = 0
+        self.steps = 0
+        self.gen = 0
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
@@ -61,16 +67,13 @@ class Trader:
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
         self.summary_writer = tf.summary.create_file_writer(trader_path)
-        self.train_step = 0
-        self.total_step = 0
-        # tb_callback = tf.keras.callbacks.TensorBoard(trader_path) #for later maybe
-        # tb_callback.set_model(self.model)
-        tf.summary.trace_on(graph=True)
         self.model = self.__create_model()
-        with self.summary_writer.as_default():
-            tf.summary.trace_export('trader_name', step=self.train_step)
         self.model_target = self.__create_model()
         self.model_target.set_weights(self.model.get_weights())
+
+        #ToDo: make sure we an save the model architecture so we have an easier time reloading weights?
+        # with self.summary_writer.as_default():
+        #    tf.summary.trace_export('trader_name', step=self.train_step)
 
         # Initialize learning parameters
         self.learning = kwargs['learning'] if 'learning' in kwargs else False
@@ -82,30 +85,26 @@ class Trader:
                 self.__participant['market_info'])
 
         #DQN hyperparameters:
-
         self.learning_rate = kwargs['learning_rate'] if 'learning_rate' in kwargs else 0.00025 # Original DQN uses RMSProp, learning rate of α = 0.00025, Rainbow’s variants used a learning rate of α/4, selected among {α/2, α/4, α/6}, and a value of 1.5 × 10−4 for Adam’s  hyper-parameter,
-        self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate) # Adam over RMSprop because apparently less sensitive to choice of α (see Rainbow)
+        self.optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, epsilon=1.5*10e-4) # Adam over RMSprop because apparently less sensitive to choice of α (see Rainbow)
         self.loss_function = keras.losses.Huber()  # Classic Huber loss, this is known to be a straight improvement over square loss
-        self.batch_size = 128 #ToDo: figure out usual hyperparam, iIrc this is 16?
+        self.batch_size = 32
         self.discount_factor = kwargs['discount_factor'] if 'discount_factor' in kwargs else 0.99
-
-        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.6 #DQN and Rainbow both start with epsilon 1 and decrease to 0.1-0.01 relatively fast with subsequent annealing down.
-        #ToDO: figure out what best-practise for annealing in MARL are!
-
+        self.exploration_factor = kwargs['exploration_factor'] if 'exploration_factor' in kwargs else 0.99 #DQN and Rainbow both start with epsilon 1 and decrease to 0.1-0.01 relatively fast with subsequent annealing down.
         # Replay buffer initialization, Rainbow mentions default value of 200K replay buffer filling BEFORE learning!
         # ToDO: Rewrite replay bufffer completely into a separate class/object
-        self.replay_buffer_length = 3*1440 #Setting this to a multiple of the batch size and then mulitply with the number of days in one gen for now
         self.backprop_frequency = 4 #figure out if we really need this?
         self.target_network_update_frequency = int(1440)
             #3*128*self.backprop_frequency #set the update frequency to the length of the sim, so we update once per gen for now, more time to converge just in case!
+        self.experience_replay_buffer = ExperienceReplayBuffer(max_length=10*1440, #Setting this to a multiple of the batch size and then mulitply with the number of days in one gen for now
+                                                               learn_wait=int(1440))
+        self.tau = 1
 
         self.action_history = OrderedDict()
         self.state_history = OrderedDict()
         self.rewards_history = OrderedDict()
         self.episode_reward = 0
-        # self.episode_reward_history = []
-        self.steps = 0
-        self.gen = 0
+
 
     def __init_metrics(self):
         import sqlalchemy
@@ -141,13 +140,11 @@ class Trader:
                                            # bias_initializer=initializer,
                                            kernel_initializer=initializer)(internal_signal)
 
-        #ToDo: this is stilen from a tutorial on dueling DQN, reread paper and check other implementations!
         value = layers.Dense(1)(internal_signal)
         for action in self.actions:
             advantage = layers.Dense(len(self.actions[action]))(internal_signal)
-            advantage = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
-            Q_action = value + advantage
-            Q[action] = Q_action
+            advantage_centerd = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
+            Q[action] = value + advantage_centerd
 
         return keras.Model(inputs=inputs, outputs=Q)
 
@@ -173,6 +170,9 @@ class Trader:
     async def learn(self, **kwargs):
         if not self.learning:
             return
+        current_round = self.__participant['timing']['current_round']
+        next_settle = self.__participant['timing']['next_settle']
+        round_duration = self.__participant['timing']['duration']
 
         reward = await self._rewards.calculate()
         if reward is None:
@@ -180,60 +180,62 @@ class Trader:
             # del self.state_history[-1]
             # del self.action_history[-1]
             return
-
-        current_round = self.__participant['timing']['current_round']
-        next_settle = self.__participant['timing']['next_settle']
-        round_duration = self.__participant['timing']['duration']
         # align reward with action timing
         # in the current market setup the reward is for actions taken 3 steps ago
         # if self._rewards.type == 'net_profit':
         reward_time_offset = current_round[1] - next_settle[1] - round_duration
-        # print(reward_time_offset)
-        self.rewards_history[current_round[1] + reward_time_offset] = reward
-        # self.rewards_history.append((current_round[1] - 180, reward))
+        reward_timestamp = current_round[1] + reward_time_offset
+
         self.episode_reward += reward
         await self.metrics.track('rewards', reward)
+        with self.summary_writer.as_default():
+            tf.summary.scalar('reward', reward, step=self.total_step)
 
-        if len(self.rewards_history) >= 0.25*self.replay_buffer_length  and not self.steps % self.backprop_frequency:
-            # TODO: change sampling to use dictionaries so timestamps line up properly
-            common_ts = list(set(list(self.rewards_history.keys())).intersection(list(self.state_history.keys())[:-2]))
-            indices = utils.secure_random.sample(common_ts, len(common_ts))
+        if reward_timestamp in self.state_history and reward_timestamp in self.action_history:  # we found matching ones, buffer and pop
+            self.experience_replay_buffer.add_entry(ts=reward_timestamp,
+                                                    rewards=reward,
+                                                    actions=self.action_history[reward_timestamp],
+                                                    states=self.state_history[reward_timestamp],
+                                                    episode=self.gen)
 
-            state_sample = np.array([self.state_history[k] for k in indices])
-            state_next_sample = np.array([self.state_history[k + round_duration] for k in indices])
-            rewards_sample = [self.rewards_history[k] for k in indices]
-            action_sample = [self.action_history[k] for k in indices]
+            self.action_history.pop(reward_timestamp)
+            self.state_history.pop(reward_timestamp)
 
-            q_next_values = self.model_target.predict(state_next_sample, batch_size=min(self.batch_size, int(0.05 * len(rewards_sample))))
+        if self.experience_replay_buffer.should_we_learn() and not self.total_step % self.backprop_frequency:
+            batch = self.experience_replay_buffer.fetch_batch(batchsize=self.batch_size)
+
+            # states_equal = np.all(np.equal(state_sample, batch['states']))
+            # next_states_equal = np.all(np.equal(state_next_sample, batch['next_states']))
+            # rewards_equal = np.all(np.equal(rewards_sample, batch['rewards']))
+
+            q_bootstrap = self.model_target(batch['next_states'], training=False)
 
             losses = []
             #TODO: repeat q update -> apply gradient for every head
             with tf.GradientTape() as tape:
                 # Train the model on the states and updated Q-values
-                q_values = self.model(state_sample)
+                q_values = self.model(batch['states'])
                 for action in self.actions:
-                    action_key_idx = list(self.actions.keys()).index(action)
                     #Get the bootstrapping target
-                    updated_q_values = rewards_sample + self.discount_factor * tf.reduce_max(q_next_values[action], axis=1)
-                    num_actions = len(self.actions[action])
+                    q_target = batch['rewards'] + self.discount_factor * tf.reduce_max(q_bootstrap[action], axis=1)
 
-                    # Create a mask so we only calculate loss on the updated Q-values
-                    action_sample_a = [i[action] for i in action_sample]
-                    masks = tf.one_hot(action_sample_a, num_actions)
-
+                    # Create a mask so we only calculate loss on the chosen action's  Q-values
                     # Apply the masks to the Q-values to get the Q-value for action taken
-                    q_action = tf.reduce_sum(tf.multiply(q_values[action], masks), axis=1)
-                    # Calculate loss between new Q-value and old Q-value
-                    loss = self.loss_function(updated_q_values, q_action)
+                    q_action = q_values[action]
+                    # action_sample_action = [i[action] for i in action_sample]
+                    action_batch = [i[action] for i in batch['actions']]
+                    # actions_equal = np.all(np.equal(action_sample_action, action_batch))
+                    masks = tf.one_hot(action_batch,
+                                       len(self.actions[action]))
+                    q_action_chosen = tf.reduce_sum(tf.multiply(q_action, masks), axis=1)
+
+                    # Calculate loss between new Q-value and old Q-value, append
+                    loss = self.loss_function(q_target, q_action_chosen)
                     losses.append(loss)
 
             # Backpropagation
             grads = tape.gradient(losses, self.model.trainable_variables)
             self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
-
-            #updating target network
-            if not self.steps % self.target_network_update_frequency:
-                self.model_target.set_weights(self.model.get_weights())
 
             #clearing replay buffer
             # if len(self.rewards_history) > self.replay_buffer_length:
@@ -249,11 +251,14 @@ class Trader:
                 for action in self.actions.keys():
                     action_key_idx = list(self.actions.keys()).index(action)
                     tf.summary.scalar('loss_'+action, losses[action_key_idx], step=self.train_step)
-                tf.summary.scalar('reward', reward, step=self.train_step)
-            # if len(self.rewards_history) > 5000:
-            #     self.rewards_history = self.rewards_history[1000:]
-            #     self.state_history = self.state_history[1000:]
-            #     self.action_history = self.action_history[1000:]
+
+        #updating target network, if tau smaller one perform soft update
+        if not self.total_step % self.target_network_update_frequency:
+            if self.tau < 1:
+                target_network_w = [target_weight * (1 - self.tau) + q_weight * self.tau for q_weight, target_weight in zip(self.model.get_weights(), self.model_target.get_weights())]
+                self.model_target.set_weights(target_network_w)
+            else:
+                self.model_target.set_weights(self.model.get_weights())
 
     async def act(self, **kwargs):
         # Generate state (inputs to model):
@@ -451,7 +456,7 @@ class Trader:
     async def reset(self, **kwargs):
         self.episode_reward = 0
         self.steps = 0
-        self.rewards_history.clear()
         self.state_history.clear()
         self.action_history.clear()
+
         return True
