@@ -6,6 +6,13 @@ from _utils import utils
 from collections import OrderedDict
 
 # this is a function to robustly pick the argmax in a random fashion if we happen to have several identically maximal values
+def tf_shuffle_axis(value, axis=0, seed=None, name=None):
+    perm = list(range(tf.rank(value)))
+    perm[axis], perm[0] = perm[0], perm[axis]
+    value = tf.random.shuffle(tf.transpose(value, perm=perm))
+    value = tf.transpose(value, perm=perm)
+    return value
+
 async def robust_argmax(tensor):
     max_value = tf.reduce_max(tensor)
     max_value_idxs = tf.where(tf.math.equal(max_value, tf.squeeze(tensor, axis=0)))
@@ -50,21 +57,21 @@ class ExperienceReplayBuffer:
     #     same_episode = np.equal(start, trajectory).tolist()
 
     def fetch_batch_indices(self, batchsize):
-        indices = np.random.choice(len(self.buffer) - 1, batchsize, replace=False)
-        passed_trajectory_check = 0
-        inspected_index_number = 0
-        while not passed_trajectory_check < 1.0:  # check to see if we have the followup entry from the same trajectory
-            index = indices[inspected_index_number]
-            if self.buffer[index]['episode'] == self.buffer[index + 1]['episode']:
-                passed_trajectory_check = + 1 / len(indices)
-                inspected_index_number = + 1
-            else:
-                print('.')
-                found_replacement = False
-                while not found_replacement:
-                    replacement_candidate = np.random.choice(len(self.buffer) - 1, 1)
-                    if replacement_candidate not in indices:
-                        found_replacement = True
+        indices = np.random.choice(len(self.buffer) - 1, batchsize, replace=False) #ToDo: implement some type of check for between trajectories stuffs!
+        # passed_trajectory_check = 0
+        # inspected_index_number = 0
+        # while passed_trajectory_check < 1.0:  # check to see if we have the followup entry from the same trajectory
+        #     index = indices[inspected_index_number]
+        #     if self.buffer[index]['episode'] == self.buffer[index + 1]['episode']:
+        #         passed_trajectory_check = + 1 / len(indices)
+        #         inspected_index_number = + 1
+        #     else:
+        #         print('.')
+        #         found_replacement = False
+        #         while not found_replacement:
+        #             replacement_candidate = np.random.choice(len(self.buffer) - 1, 1)
+        #             if replacement_candidate not in indices:
+        #                 found_replacement = True
 
         return indices
 
