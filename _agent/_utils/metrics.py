@@ -72,7 +72,7 @@ class Metrics:
             
     async def fetch_one(self, timestamp):
         if 'db' not in self.__db:
-            self.__db['db'] = databases.Database(self.__db['path'])
+            self.__db['db'] = databases.Database(self.__db['path'], max_size=20)
 
         if 'table' not in self.__db or self.__db['table'] is None:
             table_name = self.__db.pop('table_name')
