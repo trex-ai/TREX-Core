@@ -94,7 +94,7 @@ class Participant:
             db_path ([type]): [description]
         """
         self.__profile_db['path'] = db_path
-        self.__profile_db['db'] = databases.Database(db_path, max_size=20)
+        self.__profile_db['db'] = databases.Database(db_path)
         profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
             else self.participant_id
         self.__profile_db['table'] = db_utils.get_table(db_path, profile_name)
