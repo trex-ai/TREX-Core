@@ -11,7 +11,7 @@ import numpy as np
 from _agent._utils.metrics import Metrics
 from _utils import utils
 from _utils.drl_utils import robust_argmax
-from _utils.drl_utils import ExperienceReplayBuffer_New as ExperienceReplayBuffer
+from _utils.drl_utils import ExperienceReplayBuffer as ExperienceReplayBuffer
 
 import sqlalchemy
 from sqlalchemy import MetaData, Column
@@ -62,7 +62,7 @@ class Trader:
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
-        logs_path = os.path.join(cwd, 'InProgress')
+        logs_path = os.path.join(cwd, 'Battery_Test')
         experiment_path = os.path.join(logs_path, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
@@ -99,7 +99,8 @@ class Trader:
         n_step = kwargs['n_step'] if 'n_step' in kwargs else 1
         self.experience_replay_buffer = ExperienceReplayBuffer(max_length=buffer_length_base, #Setting this to a multiple of the batch size and then mulitply with the number of days in one gen for now
                                                                learn_wait=int(buffer_length_base/2),
-                                                               n_steps=n_step)
+                                                               # n_steps=n_step,
+                                                               )
 
         self.ddqn = True
 
@@ -127,7 +128,7 @@ class Trader:
 
     def __create_model(self):
         num_inputs = 2 if 'storage' not in self.actions else 3
-        num_hidden = 64 if 'storage' not in self.actions else 300
+        num_hidden = 64 if 'storage' not in self.actions else 64
         num_hidden_layers = 2 #lets see how far we get with this first
         # num_hidden = 64
         # num_hidden = 128
@@ -309,7 +310,7 @@ class Trader:
             # max_charge = storage_schedule[next_settle]['energy_potential'][1]
             # max_discharge = storage_schedule[next_settle]['energy_potential'][0]
             # state.extend([max_charge, max_discharge])
-            soc = storage_schedule['projected_soc_end']
+            soc = storage_schedule[next_settle]['projected_soc_end']
             state.append(soc)
 
         state = np.array(state)
