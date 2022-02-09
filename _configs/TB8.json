@@ -1,7 +1,7 @@
 {
     "version": "3.6.1",
     "study": {
-      "name": "ute3b-dqn-mh-bess-test",
+      "name": "D3QN_1Step_ANN2x64",
       "description": "",
       "start_datetime": "2018-07-01 0:0:0",
       "start_datetime_sequence": "sequential",
@@ -11,15 +11,8 @@
       "sim_root": ""
     },
     "curriculum": {
-      "0": {
-        "learning": true
-      },
-      "500": {
-        "learning": true,
-        "anneal": {"exploration_factor": [0.98, "multiply"]}
-      },
-      "600": {
-        "learning": true
+      "10": {
+        "anneal": {"exploration_factor": [0.95, "multiply", 0.05]}
       }
     },
     "server": {
@@ -44,6 +37,13 @@
           "bid_price": 0.14,
           "ask_price": 0.07,
           "learning": true,
+          "n_step": 1,
+          "discount_factor": 0.99,
+          "exploration_factor": 0.99,
+          "learning_rate": 7e-5,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 20000,
+
           "reward_function": "net_profit",
           "use_synthetic_profile": "test_profile_1kw_square_p2+1"
         },
