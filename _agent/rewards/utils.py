@@ -35,13 +35,17 @@ async def process_ledger(last_deliver, ledger, market_info):
         # print(extra_transactions['financial'])
         if extra_transactions['financial']['buy']:
             financial_buy_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['buy']])
-            financial_costs = [transaction['quantity'] * transaction['settlement_price_buy'] for transaction in
+            financial_costs_s = [transaction['quantity'] * transaction['settlement_price_sell'] for transaction in
+                                 extra_transactions['financial']['buy']]
+            financial_costs_b = [transaction['quantity'] * transaction['settlement_price_buy'] for transaction in
                                extra_transactions['financial']['buy']]
-            financial_costs = sum(financial_costs)
+            financial_costs = sum(financial_costs_s) + sum(financial_costs_b)
         if extra_transactions['financial']['sell']:
             financial_sell_qty = sum([transaction['quantity'] for transaction in extra_transactions['financial']['sell']])
-            financial_profit = [transaction['quantity'] * transaction['settlement_price_sell'] for transaction in
+            financial_profit_s = [transaction['quantity'] * transaction['settlement_price_sell'] for transaction in
                                 extra_transactions['financial']['sell']]
-            financial_profit = sum(financial_profit)
+            financial_profit_b = [transaction['quantity'] * transaction['settlement_price_buy'] for transaction in
+                                  extra_transactions['financial']['sell']]
+            financial_profit = sum(financial_profit_s) + sum(financial_profit_b)
         financial_transactions = (financial_costs, financial_profit, financial_buy_qty, financial_sell_qty)
     return market_transactions, grid_transactions, financial_transactions

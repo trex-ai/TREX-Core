@@ -239,6 +239,8 @@ class Controller:
     async def monitor(self):
         while True:
             await self.delay(self.status['monitor_timeout'])
+            # print(self.status)
+
             if not self.status['registered_on_server']:
                 continue
 
@@ -339,7 +341,10 @@ class Controller:
         await self.__client.emit('load_weights', message, namespace='/simulation')
 
     async def __print_step_time(self):
-        if self.__current_step % 1440 == 0:
+        # if not self.__current_step:
+        #     print('starting generation', self.__generation)
+
+        if self.__current_step % 1440 == 0 and self.__current_step:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start

@@ -1,4 +1,5 @@
 import commentjson
+import os
 import random
 from _utils import db_utils
 from _utils import jkson as json
@@ -23,19 +24,29 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
-    def __get_config(self, config_name: str, resume, **kwargs):
-        # TODO: Nov 30, 2021; this fixes the path problem
-        # Fixme: Dec 1, 2021; this is unfortunately going to have to be passed to trex somehow
-        path_to_trex = str(Path('C:/source/Trex-Core/'))
-        config_file = path_to_trex + '/_configs/' + config_name + '.json'
+    def __load_json_file(self, file_path):
+        with open(file_path) as f:
+            json_file = commentjson.load(f)
+        return json_file
 
-        with open(config_file) as f:
-            config = commentjson.load(f)
+    def __get_config(self, config_name: str, resume, **kwargs):
+        config_file = '_configs/' + config_name + '.json'
+        config = self.__load_json_file(config_file)
+
+        credentials_file = '_configs/_credentials.json'
+        credentials = self.__load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
 
         if 'name' in config['study'] and config['study']['name']:
             study_name = config['study']['name'].replace(' ', '_')
         else:
             study_name = config_name
+
+        if credentials or 'profiles_db_location' not in config['study']:
+            config['study']['profiles_db_location'] = credentials['profiles_db_location']
+
+        if credentials or 'output_db_location' not in config['study']:
+            config['study']['output_db_location'] = credentials['output_db_location']
+
         db_string = config['study']['output_db_location'] + '/' + study_name
         engine = create_engine(db_string)
 
@@ -44,7 +55,7 @@ class Runner:
                 db_string = kwargs['db_string']
             # look for existing db in db. if one exists, return it
             if database_exists(db_string):
-                if engine.dialect.has_table(engine, 'configs'):
+                if sqlalchemy.inspect(engine).has_table('configs'):
                     db = dataset.connect(db_string)
                     configs_table = db['configs']
                     configs = configs_table.find_one(id=0)['data']
@@ -117,7 +128,7 @@ class Runner:
         #     os.mkdir(sim_path)
 
         engine = create_engine(self.configs['study']['output_database'])
-        if not sqlalchemy.inspect(engine).has_table("metadata"):
+        if not sqlalchemy.inspect(engine).has_table('metadata'):
             self.__create_metadata_table(self.configs['study']['output_database'])
         db = dataset.connect(self.configs['study']['output_database'])
         metadata_table = db['metadata']
@@ -207,6 +218,7 @@ class Runner:
             else:
                 for participant in learning_participants:
                     config['participants'][participant]['trader']['learning'] = True
+                    config['participants'][participant]['trader']['study_name'] = config['study']['name']
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
