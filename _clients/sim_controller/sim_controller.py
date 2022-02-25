@@ -5,7 +5,7 @@ import json
 import os
 import time
 import asyncio
-
+sys.path.append(os.getcwd())
 import socketio
 from sqlalchemy_utils import database_exists
 import databases
@@ -172,6 +172,7 @@ class Controller:
         await self.delay(utils.secure_random.random() * 10)
         if not success:
             await self.register()
+            return
         self.status['registered_on_server'] = True
 
     # Track ending of turns
