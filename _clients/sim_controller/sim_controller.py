@@ -263,6 +263,8 @@ class Controller:
                 await self.__client.emit('is_market_online', namespace='/simulation')
                 continue
 
+            # TODO Jan 31 2022: Is this code pattern still functional, can I use it to make sure that the GymAgents have
+            # actions?
             if 'remote_agent_ready' in self.status and not self.status['remote_agent_ready']:
                 message = {
                     'market_id': self.__config['market']['id']

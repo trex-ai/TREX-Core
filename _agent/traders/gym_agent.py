@@ -1,22 +1,16 @@
-'''
-This is the gym plug api for TREX. It needs to have the following 3 methods:
-1. __init__
-2. act
-    this one needs to return an action
-3. learn
-    this is simply a holder since all the learning will be done outside.
-'''
 import asyncio
 # from _utils._agent.gym_utils import GymPlug
-
+from _agent._utils.metrics import Metrics
 import numpy as np
 import datetime
 
 
 class Trader:
+    """This trader is the endpoint for agents that are using the multi agent gym environment.
+    """
     def __init__(self, **kwargs):
         '''
-        This should initialize the gym agent. 
+        This initializes the gym agent.
 
         '''
         self.__participant = kwargs['trader_fns']
@@ -27,13 +21,33 @@ class Trader:
             'weights_saving': False,
             'weights_saved': True
         }
+        #TODO Feb 2 2022: see if this is the way to handle stalling the actions
         self.next_actions = {}
         self.wait_for_actions = asyncio.Event()
+
+        # Initialize learning parameters
         self.learning = False
+
+        # Initialize metrics tracking
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
+        self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
+        if self.track_metrics:
+            self.__init_metrics()
 
+    def __init_metrics(self):
+        '''
+        Initializes metrics to record into database
+        '''
+        import sqlalchemy
+        self.metrics.add('timestamp', sqlalchemy.Integer)
+        self.metrics.add('actions_dict', sqlalchemy.JSON)
+        self.metrics.add('rewards', sqlalchemy.Float)
+        self.metrics.add('next_settle_load', sqlalchemy.Integer)
+        self.metrics.add('next_settle_generation', sqlalchemy.Integer)
+        if 'storage' in self.__participant:
+            self.metrics.add('storage_soc', sqlalchemy.Float)
 
-    async def _act(self):
+    async def act(self):
         '''
         This method will poll the envcontroller for the actions.
         '''
@@ -65,7 +79,7 @@ class Trader:
         # get the observations:
         observations = await self._get_observations()
 
-        # send the message to the gym controller asking for actions
+        # send the message to the envcontroller asking for actions
         print('Getting actions', self.next_actions)
         await self.__participant['emit']('get_remote_actions',
                                          data=observations,
@@ -161,8 +175,8 @@ class Trader:
         #                                 data=observations,
         #                                 namespace='/simulation')
         message = {}
+        await self.__participant['emit']('')
 
-        # TODO: Nov 16: I think that the env controller should be notified that the agent has the actions 
-        # Once all agents have notified the envcontroller, it can signal to the sim_controller to move the settlement along
-        
+
+        action = []
         return action
