@@ -4,12 +4,12 @@ Main functions are client management and message relay
 """
 
 import sys
-sys.path.append("C:/source/TREX-Core")
+sys.path.append("/")
 import os
 import asyncio
 import socket
 import socketio
-from _utils import jkson as json
+from TREX_Core._utils import jkson as json
 
 if os.name == 'posix':
     import uvloop

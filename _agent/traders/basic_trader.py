@@ -1,9 +1,9 @@
 # from _clients.participants.participants import Residential
 
 import tenacity
-from _agent._utils.metrics import Metrics
+from TREX_Core._agent._utils.metrics import Metrics
 import asyncio
-from _utils import jkson as json
+from TREX_Core._utils import jkson as json
 # import serialize
 
 

@@ -40,7 +40,7 @@
         "type": "Residential",
         "trader": {
           "track_metrics": true,
-          "type": "dqn_mh",
+          "type": "basic_trader",
           "bid_price": 0.14,
           "ask_price": 0.07,
           "learning": true,
@@ -52,13 +52,6 @@
         },
         "generation": {
           "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 7000,
-          "power": 3500,
-          "efficiency": 1,
-          "monthly_sdr": 0
         }
       },
       "egauge16616": {

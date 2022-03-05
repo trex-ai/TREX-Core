@@ -1,6 +1,6 @@
 from datetime import datetime
 import pytz
-from _utils import utils
+from TREX_Core._utils import utils
 
 class Market:
     """The Grid should emulate the retail price schedule as closely as possible.

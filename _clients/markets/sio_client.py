@@ -4,9 +4,9 @@ import importlib
 import socketio
 import tenacity
 import json
-from _utils import jkson
+from TREX_Core._utils import jkson
 
-from _clients.markets.ns_common import NSDefault, NSSimulation
+from TREX_Core._clients.markets.ns_common import NSDefault, NSSimulation
 
 if os.name == 'posix':
     import uvloop
@@ -28,8 +28,8 @@ class Client:
         grid_params = market_configs.pop('grid', {})
 
         # Initialize market information
-        Market = importlib.import_module('_clients.markets.' + market_configs['type']).Market
-        NSMarket = importlib.import_module('_clients.markets.' + market_configs['type']).NSMarket
+        Market = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).Market
+        NSMarket = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).NSMarket
 
         self.market = Market(sio_client=self.sio_client,
                              **market_configs,

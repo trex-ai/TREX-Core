@@ -5,8 +5,8 @@ import ast
 import databases
 import sqlalchemy
 import tenacity
-from _clients.participants import ledger
-from _utils import db_utils, utils
+from TREX_Core._clients.participants import ledger
+from TREX_Core._utils import db_utils, utils
 
 class Participant:
     """
@@ -62,7 +62,7 @@ class Participant:
         trader_type = trader_params.pop('type', None)
         if trader_type == 'remote_agent':
             trader_fns['emit'] = self.__client.emit
-        Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
+        Trader = importlib.import_module('TREX_Core._agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
@@ -74,7 +74,7 @@ class Participant:
             self.__profile_params['synthetic_profile'] = synthetic_profile
 
         if 'market_ns' in kwargs:
-            NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
+            NSMarket = importlib.import_module("TREX_Core."+kwargs['market_ns']).NSMarket
             self.__client.register_namespace(NSMarket(self))
 
     async def delay(self, s):

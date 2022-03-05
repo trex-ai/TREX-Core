@@ -8,9 +8,9 @@ import random
 from collections import OrderedDict
 
 import numpy as np
-from _agent._utils.metrics import Metrics
-from _utils import utils
-from _utils.drl_utils import robust_argmax, ExperienceReplayBuffer
+from TREX_Core._agent._utils.metrics import Metrics
+from TREX_Core._utils import utils
+from TREX_Core._utils.drl_utils import robust_argmax, ExperienceReplayBuffer
 
 import sqlalchemy
 from sqlalchemy import MetaData, Column
@@ -30,6 +30,7 @@ class Trader:
     The trader tries to learn the right prices for each minute of the day. This is done by initializing two prices tables, one for bid prices and one for ask prices. Each table is 1440 elements long. The tables are initialized by randomizing prices of each minute within a price range. A 15 minute window is used for initialization, which means that only 96 initial prices are generated. This is meant to decrease initial noise. Successful trades will nudge bid and ask prices to the point of most profit and least cost.
     """
     def __init__(self, bid_price, ask_price, **kwargs):
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
         # Some utility parameters
         self.__participant = kwargs['trader_fns']
         self.study_name = kwargs['study_name'] if 'study_name' in kwargs else None
@@ -78,7 +79,7 @@ class Trader:
         self.learning = kwargs['learning'] if 'learning' in kwargs else False
         reward_function = kwargs['reward_function'] if 'reward_function' in kwargs else None
         if reward_function:
-            self._rewards = importlib.import_module('_agent.rewards.' + reward_function).Reward(
+            self._rewards = importlib.import_module('TREX_Core._agent.rewards.' + reward_function).Reward(
                 self.__participant['timing'],
                 self.__participant['ledger'],
                 self.__participant['market_info'])
@@ -138,9 +139,42 @@ class Trader:
                                            kernel_initializer=initializer)(internal_signal)
 
         value = layers.Dense(1)(internal_signal)
+        # print('internal signal', internal_signal)
         for action in self.actions:
+
+            print(' in the for loop', action, len(self.actions[action]))
             advantage = layers.Dense(len(self.actions[action]))(internal_signal)
-            Q[action] = value + advantage - tf.reduce_mean(advantage, axis=1, keepdims=True)
+            print(tf.reduce_mean(advantage, axis=-1, keepdims=True))
+            Q[action] = value + advantage - tf.reduce_mean(advantage, axis=-1, keepdims=True)
+        # print('This is the Q dictionary', Q)
+        return keras.Model(inputs=inputs, outputs=Q)
+
+    def __create_model_GRU(self):
+        num_inputs = 2 if 'storage' not in self.actions else 8
+        num_hidden = 64 if 'storage' not in self.actions else 300
+        num_hidden_layers = 2 #lets see how far we get with this first
+        # num_hidden = 64
+        # num_hidden = 128
+        # num_hidden = 256
+        initializer = tf.keras.initializers.HeNormal()
+        Q = {}
+        inputs = layers.Input(shape=(num_inputs,)) #shape inputs is [batch,observations]
+        inputs = tf.expand_dims(inputs, axis=1) #shape inputs is [batch,1,observations]
+
+        internal_signal = inputs
+        # for hidden_layer_number in range(num_hidden_layers): #hidden layers
+        #     internal_signal = layers.Dense(num_hidden,
+        #                                    activation="elu",
+        #                                    # bias_initializer=initializer,
+        #                                    kernel_initializer=initializer)(internal_signal)
+
+        internal_signal = layers.GRU(num_hidden, return_sequences=True)(internal_signal)
+        value = layers.Dense(1)(internal_signal)
+        for action in self.actions:
+
+            advantage = layers.Dense(len(self.actions[action]))(internal_signal)
+            Q[action] = value + advantage - tf.reduce_mean(advantage, axis=-1, keepdims=True) #shape [batch, 1, actions]
+            Q[action] = tf.squeeze(Q[action], axis=1 )# shape [batch, actions]
 
         return keras.Model(inputs=inputs, outputs=Q)
 

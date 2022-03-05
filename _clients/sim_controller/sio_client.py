@@ -4,10 +4,10 @@ import asyncio
 import socket
 import socketio
 import tenacity
-from _utils import jkson
-from _clients.sim_controller.sim_controller import Controller
-from _clients.sim_controller.ns_common import NSDefault
-from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
+from TREX_Core._utils import jkson
+from TREX_Core._clients.sim_controller.sim_controller import Controller
+from TREX_Core._clients.sim_controller.ns_common import NSDefault
+from TREX_Core._clients.sim_controller.sim_controller import NSMarket, NSSimulation
 
 if os.name == 'posix':
     import uvloop

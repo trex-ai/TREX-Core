@@ -3,8 +3,8 @@ import asyncio
 import importlib
 import socketio
 import tenacity
-from _utils import jkson
-from _clients.participants.ns_common import NSDefault, NSSimulation
+from TREX_Core._utils import jkson
+from TREX_Core._clients.participants.ns_common import NSDefault, NSSimulation
 
 if os.name == 'posix':
     import uvloop
@@ -23,8 +23,8 @@ class Client:
                                                randomization_factor=0.5,
                                                json=jkson)
 
-        Participant = importlib.import_module('_clients.participants.' + participant_type).Participant
-        NSMarket = importlib.import_module('_clients.participants.' + participant_type).NSMarket
+        Participant = importlib.import_module('TREX_Core._clients.participants.' + participant_type).Participant
+        NSMarket = importlib.import_module('TREX_Core._clients.participants.' + participant_type).NSMarket
 
         self.participant = Participant(sio_client=self.sio_client,
                                        participant_id = participant_id,

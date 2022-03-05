@@ -2,7 +2,7 @@ import random
 import tensorflow as tf
 from random import randint
 import numpy as np
-from _utils import utils
+from TREX_Core._utils import utils
 from collections import OrderedDict
 
 # this is a function to robustly pick the argmax in a random fashion if we happen to have several identically maximal values

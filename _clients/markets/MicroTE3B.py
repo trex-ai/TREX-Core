@@ -8,8 +8,8 @@ from cuid import cuid
 import tenacity
 
 import asyncio
-from _clients.markets.Grid import Market as Grid
-from _utils import db_utils, source_classifier
+from TREX_Core._clients.markets.Grid import Market as Grid
+from TREX_Core._utils import db_utils, source_classifier
 
 
 class Market:

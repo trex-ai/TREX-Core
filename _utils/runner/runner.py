@@ -1,13 +1,14 @@
 import commentjson
 import os
 import random
-from _utils import db_utils
-from _utils import jkson as json
+from TREX_Core._utils import db_utils
+from TREX_Core._utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
 from packaging import version
+
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
@@ -25,6 +26,8 @@ class Runner:
         return json_file
 
     def __get_config(self, config_name: str, resume, **kwargs):
+        cwd = os.getcwd()
+        print("in get_config", cwd)
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
 
@@ -257,7 +260,7 @@ class Runner:
         finally:
             subprocess.run(['python', args[0], *args[1]])
 
-    def run(self, simulations):
+    def run(self, simulations, run=True):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
@@ -271,7 +274,10 @@ class Runner:
             launch_list.extend(self.make_launch_list(config))
             seq += 1
 
-        pool_size = len(launch_list)
-        pool = Pool(pool_size)
-        pool.map(self.run_subprocess, launch_list)
-        pool.close()
+        if run:
+            pool_size = len(launch_list)
+            pool = Pool(pool_size)
+            pool.map(self.run_subprocess, launch_list)
+            pool.close()
+        else:
+            return launch_list

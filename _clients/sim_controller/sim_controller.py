@@ -10,8 +10,8 @@ import socketio
 from sqlalchemy_utils import database_exists
 import databases
 import dataset
-from _clients.sim_controller.training_controller import TrainingController
-from _utils import utils, db_utils
+from TREX_Core._clients.sim_controller.training_controller import TrainingController
+from TREX_Core._utils import utils, db_utils
 
 
 class Controller:
