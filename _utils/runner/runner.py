@@ -28,6 +28,7 @@ class Runner:
     def __get_config(self, config_name: str, resume, **kwargs):
         cwd = os.getcwd()
         print("in get_config", cwd)
+        # TODO: this is where we could use the resources package to open these files
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
 
@@ -227,8 +228,8 @@ class Runner:
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
-        import _utils.runner.make.sim_controller as sim_controller
-        import _utils.runner.make.participant as participant
+        import TREX_Core._utils.runner.make.sim_controller as sim_controller
+        import TREX_Core._utils.runner.make.participant as participant
 
         exclude = {'sim_controller', 'participants'}
         exclude.update(skip)
