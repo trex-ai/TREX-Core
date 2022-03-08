@@ -27,7 +27,6 @@ class Runner:
 
     def __get_config(self, config_name: str, resume, **kwargs):
         cwd = os.getcwd()
-        print("in get_config", cwd)
         # TODO: this is where we could use the resources package to open these files
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
@@ -236,10 +235,9 @@ class Runner:
 
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
-
         for module_n in dynamic:
             try:
-                module = import_module('_utils.runner.make.' + module_n)
+                module = import_module('TREX_Core._utils.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
             except:
                 pass

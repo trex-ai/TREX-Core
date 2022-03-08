@@ -1,7 +1,7 @@
 import os
 
 if __name__ == '__main__':
-    from _utils.runner.runner import Runner
+    from TREX_Core._utils.runner import Runner
     # configuration to be used must be under _configs
     # file name must be config name. Case sensitive.
     # it is sometimes possible to resume a simulation in case it crashes in the middle

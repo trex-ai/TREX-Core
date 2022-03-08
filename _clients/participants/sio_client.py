@@ -45,6 +45,7 @@ class Client:
     async def start_client(self):
         """Function to connect client to server.
         """
+        print("Participant sio_client.start_client", self.participant)
         await self.sio_client.connect(self.server_address, namespaces=['/market', '/simulation'])
         await self.sio_client.wait()
 
@@ -54,6 +55,7 @@ class Client:
         Raises:
             SystemExit: [description]
         """
+
         tasks = [
             asyncio.create_task(self.start_client()),
             asyncio.create_task(self.participant.ping())]

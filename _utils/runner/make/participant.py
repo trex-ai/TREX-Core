@@ -1,7 +1,8 @@
 import json
 
 def cli(configs, participant_id):
-    script_path = '_clients/participants/sio_client.py'
+    path = __file__.split('_utils')
+    script_path = path[0] + '_clients/participants/sio_client.py'
 
     if 'server' not in configs:
         return None, None

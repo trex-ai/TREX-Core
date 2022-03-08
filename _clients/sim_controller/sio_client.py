@@ -36,6 +36,7 @@ class Client:
         await self.sio_client.wait()
 
     async def run(self):
+
         tasks = [
             asyncio.create_task(self.start_client()),
             asyncio.create_task(self.controller.monitor())

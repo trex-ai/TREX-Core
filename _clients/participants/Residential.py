@@ -51,7 +51,7 @@ class Participant:
             #     'id': self.participant_id,
             #     'timing': self.__timing
             # }
-            self.storage = importlib.import_module('_devices.' + storage_type).Storage(**storage_params)
+            self.storage = importlib.import_module('TREX_Core._devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
             trader_fns['storage'] = {
                 'info': self.storage.get_info,

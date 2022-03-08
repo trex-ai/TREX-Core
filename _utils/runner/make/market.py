@@ -1,7 +1,9 @@
 import json
 
 def cli(configs):
-    script_path = '_clients/markets/sio_client.py'
+    path = __file__.split('_utils')
+
+    script_path = path[0] + '_clients/markets/sio_client.py'
 
     if 'server' not in configs:
         return None, None
