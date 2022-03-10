@@ -345,25 +345,22 @@ class Simulation(socketio.AsyncNamespace):
     # #     # print('connect to sim')
     #     pass
 
-    async def on_get_remote_actions(self, sid, observations):
+
+    async def on_pre_transition_data(self, sid, pre_transition_data):
         """Event emitted by the thin remote agent to get next actions from a centralized learning agent
         Args:
             sid ([type]): [description]
-            observations ([type]): [description]
+            pre_transition_data ([dict]): [pre transition data to be passed to the EnvController]
         """
         # await server.sleep(random.randint(1, 3))
-        if not 'remote_agent' in clients:
-            await server.emit(
-                event='got_remote_actions',
-                data={},
-                to=sid,
-                namespace='/simulation')
-        else:
-            await server.emit(
-                event='get_remote_actions',
-                data=observations,
-                to=clients['remote_agent']['sid'],
-                namespace='/simulation')
+
+        await server.emit(
+            event='pre_transition_data',
+            data={'sid': sid,
+                  'data': pre_transition_data},
+            to=clients["env_controller"]['sid'],
+            namespace='/simulation')
+
 
     async def on_got_remote_actions(self, sid, actions):
         """Event emitted by the centralized learning agent to get return actions to the thin remote agent
@@ -414,14 +411,15 @@ class Simulation(socketio.AsyncNamespace):
                 server.enter_room(sid=sid, room=market_id, namespace='/simulation')
                 return True
 
-        elif client_data['type'][0] == 'remote_agent':
+        elif client_data['type'][0] == 'env_controller':
             # register sim controller in session and client lists
-            # sessions[sid] = {'client_id': client_data['id'],
-            #                  'client_type': 'remote_agent'}
+            sessions[sid] = {'client_id': client_data['id'],
+                             'client_type': 'env_controller'}
 
-            clients['remote_agent'] = {
+            clients['env_controller'] = {
                 'sid': sid
             }
+            return True
 
         return False
 

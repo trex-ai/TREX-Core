@@ -27,6 +27,7 @@ class Runner:
 
     def __get_config(self, config_name: str, resume, **kwargs):
         cwd = os.getcwd()
+        print("Configs working dir", cwd)
         # TODO: this is where we could use the resources package to open these files
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)

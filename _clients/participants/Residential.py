@@ -60,7 +60,7 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
-        if trader_type == 'remote_agent':
+        if trader_type == 'gym_agent':
             trader_fns['emit'] = self.__client.emit
         Trader = importlib.import_module('TREX_Core._agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
