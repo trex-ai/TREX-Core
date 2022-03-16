@@ -1,0 +1,83 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "PPO-Truncated_4",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 1,
+      "generations": 500,
+      "sim_root": "simulations/"
+    },
+    "curriculum": {
+
+    },
+    "server": {
+      "host": "",
+      "port": "5400"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "egauge19821": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+
+          "learning": true,
+          "alpha_critic": 0.001,
+          "alpha_actor": 0.0003,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 300,
+          "policy_clip": 0.2,
+          "kl_stop": 0.03,
+          "gamma": 0.99,
+
+          "critic_patience": 100,
+          "max_train_steps": 1000,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "egauge16616": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "basic_trader",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "learning": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl",
+          // "use_synthetic_profile": "test_profile_1kw_square_p2+1",
+
+
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  
