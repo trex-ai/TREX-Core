@@ -4,6 +4,23 @@ from random import randint
 import numpy as np
 from _utils import utils
 from collections import OrderedDict, Counter
+import itertools
+import scipy.signal
+
+def discount_cumsum(x, discount):
+    """
+    magic from rllab for computing discounted cumulative sums of vectors.
+    input:
+        vector x,
+        [x0,
+         x1,
+         x2]
+    output:
+        [x0 + discount * x1 + discount^2 * x2,
+         x1 + discount * x2,
+         x2]
+    """
+    return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 # this is a function to robustly pick the argmax in a random fashion if we happen to have several identically maximal values
 def tf_shuffle_axis(value, axis=0, seed=None, name=None):
@@ -46,7 +63,20 @@ class EarlyStopper:
 
         return stop_early, model
 
+def normalize_buffer_entry(buffer, key):
+    array = []
+    for episode in buffer.keys():
+        episode_array = [step[key] for step in buffer[episode]]
+        array.extend(episode_array)
 
+    mean = np.mean(array)
+    std = np.std(array)
+
+    for episode in buffer.keys():
+        for t in range(len(buffer[episode])):
+            buffer[episode][t][key] = (buffer[episode][t][key] - mean) / (std + 1e-10)
+
+    return buffer
 
 
 class ExperienceReplayBuffer:
@@ -159,12 +189,13 @@ class ExperienceReplayBuffer:
         return batch
 
 class PPO_ExperienceReplay:
-    def __init__(self, max_length=1e4, trajectory_length=1, action_types=None):
+    def __init__(self, max_length=1e4, trajectory_length=1, action_types=None, multivariate=True):
         self.max_length = max_length
         self.buffer = {}  # a dict of lists, each entry is an episode which is itself a list of entries such as below
         self.last_episode = []
         self.action_types = action_types
         self.trajectory_length = trajectory_length  # trajectory length
+        self.multivariate = multivariate
         # each entry on an episode_n_transitions looks like this
         # entry = {   'as_taken': actions taken
         #            'logprob_as_taken': logprobs of actions taken
@@ -211,31 +242,47 @@ class PPO_ExperienceReplay:
         else:
             return False
 
-    async def calculate_advantage(self, critic, gamma=0.99, gae_lambda=0.95, normalize=True):         #ToDo: calculate advantage
+    async def calculate_advantage(self, gamma=0.99, gae_lambda=0.95, normalize=True, entropy_reg=0.1):         #ToDo: calculate advantage
 
+        for episode in self.buffer:
+            V_episode = [step['values'] for step in self.buffer[episode]]
+            V_pseudo_terminal = V_episode[-1]
+
+            r_episode = [step['rewards'] for step in self.buffer[episode]]
+            r_episode.append(V_pseudo_terminal)
+            r_episode = np.array(r_episode)
+
+            G_episode = discount_cumsum(r_episode, gamma)[:-1]
+            for t in range(len(G_episode)):
+                self.buffer[episode][t]['Return'] = G_episode[t]
+
+        A = []
+        self.buffer = normalize_buffer_entry(self.buffer, key='rewards')
         for episode in self.buffer: #because we need to calculate those separately!
+            V_episode = [step['values'] for step in self.buffer[episode]]
+            V_pseudo_terminal = V_episode[-1]
+            V_episode.append(V_pseudo_terminal)
+            V_episode = np.array(V_episode)
 
-            for t in range(len(self.buffer[episode]) - 1):
-                discount = 1
-                a_t = 0
-                for k in range(t, len(self.buffer[episode]) - 1): #so given t we want to calculate the advantage onwards till the end
-                    r_k = self.buffer[episode][k]['rewards']
-                    V_k = self.buffer[episode][k]['values']
-                    V_k_next = self.buffer[episode][k+1]['values']
+            r_episode = [step['rewards'] for step in self.buffer[episode]]
+            r_episode.append(V_pseudo_terminal)
+            r_episode = np.array(r_episode)
 
-                    a_t += discount * (r_k + gamma * V_k_next - V_k)
-                    discount *= gamma * gae_lambda
+            deltas = (r_episode[:-1] ) + gamma * V_episode[1:] - V_episode[:-1]
+            A_eisode = discount_cumsum(deltas, gamma * gae_lambda)
+            A_eisode = A_eisode
+            A_eisode = A_eisode.tolist()
+            A.extend(A_eisode)
+            for t in range(len(A_eisode)):
+                self.buffer[episode][t]['advantage'] = A_eisode[t]
 
-                self.buffer[episode][t]['advantage'] = a_t
+        #normalize advantage:
+        self.buffer = normalize_buffer_entry(self.buffer, key='advantage')
 
-            #normalize advantage: #ToDo: check impact of this techcnique
-            if normalize:
-                a_episode = [self.buffer[episode][t]['advantage'] for t in range(len(self.buffer[episode]) - 1)]
-                a_mean = np.mean(a_episode)
-                a_std = np.std(a_episode)
-                a_episode = [((a_t - a_mean)/(a_std + 1e-10)) for a_t in a_episode]
-                for t in range(len(self.buffer[episode]) - 1):
-                    self.buffer[episode][t]['advantage'] = a_episode[t]
+        # for episode in self.buffer.keys():
+        #     for t in range(len.self.buffer[episode]):
+        #         self.buffer[episode][t]['advantage'] = self.buffer[episode][t]['advantage'] - entropy_reg * self.buffer[episode][t]['logprob']
+
 
         return True
 
@@ -245,26 +292,34 @@ class PPO_ExperienceReplay:
         batch_indices = self.available_indices[:batchsize]
 
         #ToDo: implement trajectories longer than 1, might be base on same code as DQN buffer
-        actions_batch = {}
-        log_probs_batch = {}
-        for action_type in self.action_types:
-            actions_batch[action_type] = [self.buffer[sample_episode][transition]['a_taken'][action_type]
+
+        if not self.multivariate:
+            actions_batch = {}
+            log_probs_batch = {}
+            for action_type in self.action_types:
+                actions_batch[action_type] = [self.buffer[sample_episode][transition]['a_taken'][action_type]
+                                              for [sample_episode, transition] in batch_indices]
+
+                log_probs_batch[action_type] = [self.buffer[sample_episode][transition]['logprob'][action_type]
+                                                for [sample_episode, transition] in batch_indices]
+        else:
+            actions_batch = [self.buffer[sample_episode][transition]['a_taken']
                                           for [sample_episode, transition] in batch_indices]
 
-            log_probs_batch[action_type] = [self.buffer[sample_episode][transition]['logprob'][action_type]
+            log_probs_batch = [self.buffer[sample_episode][transition]['logprob']
                                             for [sample_episode, transition] in batch_indices]
 
         states_batch = [self.buffer[sample_episode][transition]['states']
                         for [sample_episode, transition] in batch_indices]
         advantages_batch = [self.buffer[sample_episode][transition]['advantage']
                         for [sample_episode, transition] in batch_indices]
-        values_batch = [self.buffer[sample_episode][transition]['values']
+        returns_batch = [self.buffer[sample_episode][transition]['Return']
                         for [sample_episode, transition] in batch_indices]
 
         batch = {'actions_taken': actions_batch, #dictionary with a batch f
                  'log_probs': log_probs_batch,
                  'states': states_batch,
-                 'values': values_batch,
+                 'Return': returns_batch,
                  'advantages': advantages_batch
                  }
         return batch

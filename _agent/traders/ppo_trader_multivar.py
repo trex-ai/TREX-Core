@@ -89,13 +89,17 @@ class Trader:
         self.max_train_steps = kwargs['max_train_steps'] if 'max_train_steps' in kwargs else 100 #ToDO: figure out reasonable default valye and make this a hyperparam
         self.kl_stop = kwargs['kl_stop'] if 'kl_stop' in kwargs else 0.03 #according to baselines tends to be bewteen 0.01 and 0.05
         self.critic_patience = kwargs['critic_patience'] if 'critic_patience' in kwargs else int(self.max_train_steps/10)
-
+        self.entropy_reg = kwargs['entropy_reg'] if 'entropy_reg' in kwargs else 0.1
+        self.gamma = kwargs['gamma'] if 'gamma' in kwargs else 0.99
+        self.gae_lambda = kwargs['gae_lambda'] if 'gae_lambda' in kwargs else 0.95
+        self.normalize_advantages = kwargs['normalize_advantages'] if 'normalize_advantages' in kwargs else True
         self.ppo_actor = self.__build_actor()
         self.ppo_actor.compile(optimizer=keras.optimizers.Adam(learning_rate=self.alpha_actor,
                                                                # epsilon=1.5*10e-4 #ToDo: research usual ADAM hyperparams for PPO types
                                                                ),
                                )
-        self.ppo_actor_dist = tfp.distributions.TruncatedNormal
+        self.ppo_actor_dist = tfp.distributions.Dirichlet
+
         self.ppo_critic = self.__build_critic()
         self.ppo_critic.compile(optimizer=keras.optimizers.Adam(learning_rate=self.alpha_critic,
                                                                 # epsilon=1.5*10e-4
@@ -104,7 +108,8 @@ class Trader:
         self.ppo_critic_loss = tf.keras.losses.MeanSquaredError()
 
         self.experience_replay_buffer = PPO_ExperienceReplay(max_length=int(kwargs['experience_replay_buffer_length']) if 'experience_replay_buffer_length' in kwargs else int(10*1440), #bigger is smoother, but might require a bigger replay buffer
-                                                            action_types=self.actions
+                                                            action_types=self.actions,
+                                                             multivariate=True,
                                                             )
 
         # Buffers we need for logging stuff before putting into the PPo Memory
@@ -142,9 +147,10 @@ class Trader:
         num_inputs = 2 if 'storage' not in self.actions else 3
         num_hidden = 32 if 'storage' not in self.actions else 64
         num_hidden_layers = 2 #lets see how far we get with this first
+        num_actions = len(self.actions)
 
         initializer = tf.keras.initializers.HeNormal()
-        pi = {}
+
         inputs = layers.Input(shape=(num_inputs,), name='Actor_Input')
 
         internal_signal = inputs
@@ -155,28 +161,16 @@ class Trader:
                                            kernel_initializer=initializer,
                                            name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
 
-        for action in self.actions: #ToDo: look up some other repos to see what type of activation function they use for these types of outputs
-            pi_action_scale = layers.Dense(1,
-                                     activation=None,
-                                     kernel_initializer=initializer,
-                                     name=action + '_scale_head')(internal_signal)
-            pi_action_scale = tf.math.exp(pi_action_scale, name=action + 'scale_post_scaling')
-            tolerance=1e-8
-            pi_action_scale = tf.where(tf.greater(pi_action_scale, tolerance), pi_action_scale, tolerance)
+        concentration = layers.Dense(num_actions,
+                                  activation=None,
+                                  kernel_initializer=initializer,
+                                  name='concentration')(internal_signal)
+        concentration = tf.where(tf.math.greater(concentration,1.0),  #essentially just huber function it so its bigger than 0
+                                 tf.abs(concentration),
+                                 tf.square(concentration))
+        concentration = concentration + 1e-10 #so we prevent it from being 0
 
-            pi_action_loc = layers.Dense(1,
-                                     activation=None,
-                                     kernel_initializer=initializer,
-                                     name=action + 'mean_head')(internal_signal)
-            pi_action_loc = self.actions[action]['min'] + tf.math.sigmoid(pi_action_loc) * (
-                        self.actions[action]['max'] - self.actions[action]['min'])
-
-            pi_action_loc = tf.identity(pi_action_loc, name=action + 'scaled_mean')
-
-            pi[action] = {'loc': tf.squeeze(pi_action_loc),
-                          'scale': tf.squeeze(pi_action_scale)}
-
-        return keras.Model(inputs=inputs, outputs=pi)
+        return keras.Model(inputs=inputs, outputs=concentration)
 
     def __build_critic(self):
         num_inputs = 2 if 'storage' not in self.actions else 3
@@ -203,7 +197,6 @@ class Trader:
     def anneal(self, parameter:str, adjustment, mode:str='multiply', limit=None):
         if not hasattr(self, parameter):
             return False
-
 
     # Core Functions, learn and act, called from outside
     async def learn(self, **kwargs):
@@ -242,8 +235,11 @@ class Trader:
             self.state_buffer.pop(reward_timestamp)
 
             if self.experience_replay_buffer.should_we_learn():
-                advantage_calulated = await self.experience_replay_buffer.calculate_advantage(
-                    self.ppo_critic)  # ToDo: check once more on a different immplementation if this is right
+                advantage_calulated = await self.experience_replay_buffer.calculate_advantage(gamma=self.gamma,
+                                                                                              gae_lambda=self.gae_lambda,
+                                                                                              normalize=self.normalize_advantages,
+                                                                                              entropy_reg=self.entropy_reg
+                                                                                              )  # ToDo: check once more on a different immplementation if this is right
                 buffer_indexed = await self.experience_replay_buffer.generate_availale_indices()  # so we can caluclate the batches faster
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, func=self.train_RL_agent)
@@ -263,17 +259,14 @@ class Trader:
             batch = self.experience_replay_buffer.fetch_batch(batchsize=self.batch_size) #to see the batch data structure check this method
             states = tf.convert_to_tensor(batch['states'], dtype=tf.float32)
             advantages = tf.convert_to_tensor(batch['advantages'], dtype=tf.float32)
-            values = tf.convert_to_tensor(batch['values'], dtype=tf.float32)
-            log_probs = batch['log_probs']
-            actions_taken = batch['actions_taken']
+
 
             if not early_stop_critic:
                 with tf.GradientTape() as tape_critic:
                 #calculate critic loss and backpropagate
 
                     critic_Vs = self.ppo_critic(states)
-                    returns = advantages + values
-                    losses_critic = self.ppo_critic_loss(critic_Vs, returns)
+                    losses_critic = self.ppo_critic_loss(critic_Vs, tf.convert_to_tensor(batch['Return'], dtype=tf.float32))
 
                     # calculate the stopping crtierions
                     early_stop_critic, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
@@ -283,71 +276,65 @@ class Trader:
                         print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
                     else:
                         critic_vars = self.ppo_critic.trainable_variables
-                        actor_grads = tape_critic.gradient(losses_critic, critic_vars)
-                        self.ppo_critic.optimizer.apply_gradients(zip(actor_grads, critic_vars))
+                        critic_grads = tape_critic.gradient(losses_critic, critic_vars)
+                        self.ppo_critic.optimizer.apply_gradients(zip(critic_grads, critic_vars))
 
                         with self.summary_writer.as_default():
                             tf.summary.scalar('critic_loss', losses_critic, step=self.train_step)
 
             if not early_stop_actor:
+                log_probs_old = tf.convert_to_tensor(batch['log_probs'])
+                a_taken = tf.convert_to_tensor(batch['actions_taken'])
+
                 with tf.GradientTape() as tape_actor:
                     pi_batch_new = self.ppo_actor(states)
 
-                    losses_actor = []
-                    approx_kl = []
-                    entropy = []
-                    for action in self.actions: #calculate the actor losses for each action type over a batch
+                    dist = self.ppo_actor_dist(concentration=pi_batch_new, #ToDO: make sure this works with batch dimension etc!
+                                              validate_args=False,
+                                               allow_nan_stats=False,
+                                               force_probs_to_zero_outside_support=False,
+                                               )
 
-                        new_dist = self.ppo_actor_dist(loc=pi_batch_new[action]['loc'], #ToDO: make sure this works with batch dimension etc!
-                                                       scale=pi_batch_new[action]['scale'],
-                                                       low=self.actions[action]['min'],
-                                                       high=self.actions[action]['max'],
-                                                       validate_args=False,
-                                                       allow_nan_stats=False,
-                                                       )
-                        a_taken = tf.convert_to_tensor(actions_taken[action])
-                        log_probs_new = new_dist.log_prob(a_taken)
-                        log_probs_old = tf.convert_to_tensor(log_probs[action])
+                    log_probs_new = dist.log_prob(a_taken)
+                    #This is how baselines does it
 
-                        #Checks because Daniel is sad and hates shit ... we're having NAN issues with our loss somehow
-                        isnan = tf.reduce_max(tf.cast(tf.math.is_nan(log_probs_new), dtype=tf.float16)).numpy().tolist()
-                        if isnan != 0.0:
-                            test = new_dist.sample(1)
-                            print('log probs new is nan')
+                    ratio = tf.exp(log_probs_new - log_probs_old)  # pi(a|s) / pi_old(a|s)
+                    # entropy = -dist.entropy()
+                    entropy = -log_probs_new
+                    soft_advantages = advantages + self.entropy_reg * entropy
 
-                        #This is how baselines does it
-                        ratio = tf.exp(log_probs_new - log_probs_old)  # pi(a|s) / pi_old(a|s)
-                        clipped_ratio = tf.clip_by_value(ratio, 1-self.policy_clip, 1+self.policy_clip)
-                        weighted_ratio = clipped_ratio * advantages
-                        action_loss = -tf.math.minimum(ratio*advantages, weighted_ratio)
-                        action_loss = tf.math.reduce_mean(action_loss)
-                        losses_actor.append(action_loss)
+                    clipped_ratio = tf.clip_by_value(ratio, 1-self.policy_clip, 1+self.policy_clip)
+                    weighted_ratio = clipped_ratio * soft_advantages
+                    loss_actor = -tf.math.minimum(ratio*soft_advantages, weighted_ratio)
+                    loss_actor = tf.math.reduce_mean(loss_actor)
+                    loss_actor = tf.math.maximum(loss_actor, -500)
 
-                        # PPO early stopping as implemented in baselines
-                        approx_kl_action = tf.math.reduce_mean(log_probs_new - log_probs_old)
-                        approx_kl.append(approx_kl_action.numpy())
 
-                        # collect entropy because why not
-                        entropy_action = tf.reduce_mean(-log_probs_new)
-                        entropy.append(entropy_action)
+                    # PPO early stopping as implemented in baselines
+                    approx_kl = tf.math.reduce_mean(log_probs_old - log_probs_new)
 
-                    # early stopping condition or keep training
+                    # collect entropy because why not. If this keeps growing we might have a too small memory and too smal batchsize
+                    entropy = tf.reduce_mean(-log_probs_new)
+
+                    # early stopping condition or keep training, consider having this a running avg of 5 or sth?
                     if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
                         early_stop_actor = True
                         print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
                     else:
                         # Backpropagation
+
                         actor_vars = self.ppo_actor.trainable_variables
-                        actor_grads = tape_actor.gradient(losses_actor, actor_vars)
+
+                        actor_grads = tape_actor.gradient(loss_actor, actor_vars)
+                        sum_grads = tf.reduce_sum(actor_grads[0]).numpy()
+                        if np.isnan(sum_grads):
+                            print("AAAAAAAA!!")
                         self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
 
                         with self.summary_writer.as_default():
-                            for action in self.actions.keys():
-                                action_key_idx = list(self.actions.keys()).index(action)
-                                tf.summary.scalar('actor_loss' + action, losses_actor[action_key_idx],
-                                                  step=self.train_step)
-                                tf.summary.scalar('approx_KL' + action, approx_kl[action_key_idx], step=self.train_step)
-                                tf.summary.scalar('entropy_' + action, entropy[action_key_idx], step=self.train_step)
+                            tf.summary.scalar('actor_loss', loss_actor, step=self.train_step)
+                            tf.summary.scalar('approx_KL', approx_kl, step=self.train_step)
+                            tf.summary.scalar('entropy', entropy, step=self.train_step)
 
             self.train_step = self.train_step + 1
 
@@ -355,29 +342,37 @@ class Trader:
         self.experience_replay_buffer.clear_buffer()
 
     async def __sample_pi(self, pi_actions): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
-        taken_action = {}
-        log_probabilities = {}
-        for action in self.actions:
-            loc = pi_actions[action]['loc']
-            scale = pi_actions[action]['scale']
 
-            dist = self.ppo_actor_dist(loc=loc,
-                                        scale=scale,
-                                        low=self.actions[action]['min'],
-                                        high=self.actions[action]['max'],
-                                        validate_args=False,
-                                        allow_nan_stats=False,
-                                        )
+        dist = self.ppo_actor_dist(concentration=pi_actions,
+                                   validate_args=False,
+                                   force_probs_to_zero_outside_support=True,
+                                   allow_nan_stats=False)
 
-            a_taken = dist.sample(1)
-            taken_action[action] = tf.squeeze(a_taken).numpy()  # dunno if this is robust wrt to all later applications!
+        a_dist = dist.sample(1)
+       #  a_dist = tf.math.minimum(tf.math.maximum(a_dist, 1e-10), 1.0-1e-10)
+        a_dist = tf.math.maximum(a_dist, 1e-10)
+        log_prob = dist.log_prob(a_dist)
 
-            log_prob = dist.log_prob(taken_action[action])
-            log_probabilities[action] = tf.squeeze(log_prob).numpy()
+        log_prob = tf.squeeze(log_prob)
+        log_prob = log_prob.numpy().tolist()
+        if np.isnan(log_prob):
+            print('AAAAA')
 
+        a_dist = tf.squeeze(a_dist)
+        a_dist = a_dist.numpy().tolist()
+        if np.isnan(np.sum(a_dist)):
+            print('AAAAA1')
 
+        a_scaled = {}
+        keys = list(self.actions.keys())
+        for action_index in range(len(keys)):
+            a = a_dist[action_index]
+            min = self.actions[keys[action_index]]['min']
+            max = self.actions[keys[action_index]]['max']
+            a = min + (a * (max - min))
+            a_scaled[keys[action_index]] = a
 
-        return taken_action, log_probabilities
+        return a_scaled, log_prob, a_dist
 
     async def act(self, **kwargs):
         # Generate state (inputs to model):
@@ -398,8 +393,8 @@ class Trader:
                  # np.cos(2 * np.pi * current_round_end.hour / 24),
                  # np.sin(2 * np.pi * current_round_end.minute / 60),
                  # np.cos(2 * np.pi * current_round_end.minute / 60),
-                 next_generation,
-                 next_load]
+                 float(next_generation/17),
+                 float(next_load/17)]
 
         if 'storage' in self.__participant: #ToDo: Check if this is the right way to acess SOC
             storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
@@ -408,16 +403,18 @@ class Trader:
 
         state = np.array(state)
         pi_actions = self.ppo_actor(tf.expand_dims(state, axis=0))
+        if np.isnan(np.sum(pi_actions.numpy())):
+             print("AAAAA3")
 
 
         value = self.ppo_critic(tf.expand_dims(state, axis=0))
         value = tf.squeeze(value, axis=0).numpy().tolist()[0]
-        taken_action, log_probabilities = await self.__sample_pi(pi_actions)
+        taken_action, log_prob, dist_action = await self.__sample_pi(pi_actions)
 
         # lets log the stuff needed for the replay buffer
         self.state_buffer[current_round[1]] = state
-        self.actions_buffer[current_round[1]] = taken_action
-        self.log_prob_buffer[current_round[1]] = log_probabilities
+        self.actions_buffer[current_round[1]] = dist_action
+        self.log_prob_buffer[current_round[1]] = log_prob
         self.value_buffer[current_round[1]] = value
         self.value_history.append(value)
         # for action in self.actions:
@@ -438,26 +435,25 @@ class Trader:
 
     async def decode_actions(self, taken_action, next_settle):
         actions = dict()
-        # print(action_indices)
 
-        #ToDO: could be faster if we turn this into a multidimensional distribution!
+
         price = taken_action['price']
-        price = np.squeeze(price)
-        price = price.tolist()
         price = round(price, 4)
-        #ToDO: transform them into floats or integers instead of tensors!
-        if taken_action['quantity'] > 0:
+        quantity = taken_action['quantity']
+        quantity = int(quantity)
+
+        if quantity > 0:
             actions['bids'] = {
                 str(next_settle): {
-                    'quantity': int(taken_action['quantity']),
-                    'price': price #ToDo: ceck the decimals we need
+                    'quantity': quantity,
+                    'price': price
                 }
             }
-        elif taken_action['quantity'] < 0:
+        elif quantity < 0:
             actions['asks'] = {
                 'solar': {
                     str(next_settle): {
-                        'quantity': -int(taken_action['quantity']),
+                        'quantity': -quantity,
                         'price': price
                     }
                 }
@@ -538,6 +534,7 @@ class Trader:
             tf.summary.histogram('Values',
                                  self.value_history,
                                  step=self.gen)
+
             for action in self.actions:
                 tf.summary.histogram(action, self.actions_history[action], step=self.gen)
 
