@@ -1,0 +1,167 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "hard-PPO_1gen1load_priceonly",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 3,
+      "generations": 500,
+      "sim_root": ""
+    },
+    "curriculum": {
+    },
+    "server": {
+      "host": "",
+      "port": "5000"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "egauge19821": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+
+          "learning": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 500,
+          "policy_clip": 0.2,
+          "kl_stop": 0.03,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 500,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "egauge16616": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+
+          "learning": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 500,
+          "policy_clip": 0.2,
+          "kl_stop": 0.03,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 500,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "egauge17073": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+
+           "learning": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 500,
+          "policy_clip": 0.2,
+          "kl_stop": 0.03,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 500,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "egauge13974": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+
+          "learning": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 500,
+          "policy_clip": 0.2,
+          "kl_stop": 0.03,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 500,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  

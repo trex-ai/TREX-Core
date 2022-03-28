@@ -50,8 +50,8 @@ class Trader:
         self.actions = {
             'price': {'min': ask_price,
                       'max': bid_price},
-            'quantity': {'min': kwargs['min_quantity'] if 'min_quantity' in kwargs else -17,
-                         'max': kwargs['max_quantity'] if 'max_quantity' in kwargs else 17}
+           # 'quantity': {'min': kwargs['min_quantity'] if 'min_quantity' in kwargs else -17,
+           #              'max': kwargs['max_quantity'] if 'max_quantity' in kwargs else 17}
         }
         if 'storage' in self.__participant:
             # self.storage_type = self.__participant['storage']['type'].lower()
@@ -98,7 +98,10 @@ class Trader:
                                                                # epsilon=1.5*10e-4 #ToDo: research usual ADAM hyperparams for PPO types
                                                                ),
                                )
-        self.ppo_actor_dist = tfp.distributions.Dirichlet
+        if len(self.actions) > 1:
+            self.ppo_actor_dist = tfp.distributions.Dirichlet
+        else:
+            self.ppo_actor_dist = tfp.distributions.Beta
 
         self.ppo_critic = self.__build_critic()
         self.ppo_critic.compile(optimizer=keras.optimizers.Adam(learning_rate=self.alpha_critic,
@@ -160,17 +163,39 @@ class Trader:
                                            # bias_initializer=initializer,
                                            kernel_initializer=initializer,
                                            name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
+        pi = {}
+        if num_actions > 1:
+            concentration = layers.Dense(num_actions,
+                                      activation=None,
+                                      kernel_initializer=initializer,
+                                      name='concentration')(internal_signal)
+            concentration = tf.where(tf.math.greater(concentration,1.0),  #essentially just huber function it so its bigger than 0
+                                     tf.abs(concentration),
+                                     tf.square(concentration))
+            concentration = concentration + 1e-10 #so we prevent it from being 0
+            pi['concentration'] = concentration
+        else:
+            concentration1 = layers.Dense(1,
+                                      activation=None,
+                                      kernel_initializer=initializer,
+                                      name='concentration1')(internal_signal)
+            concentration1 = tf.where(tf.math.greater(concentration1,1.0),  #essentially just huber function it so its bigger than 0
+                                     tf.abs(concentration1),
+                                     tf.square(concentration1))
+            concentration1 = concentration1 + 1e-10 #so we prevent it from being 0
+            pi['concentration1'] = concentration1
 
-        concentration = layers.Dense(num_actions,
-                                  activation=None,
-                                  kernel_initializer=initializer,
-                                  name='concentration')(internal_signal)
-        concentration = tf.where(tf.math.greater(concentration,1.0),  #essentially just huber function it so its bigger than 0
-                                 tf.abs(concentration),
-                                 tf.square(concentration))
-        concentration = concentration + 1e-10 #so we prevent it from being 0
+            concentration0 = layers.Dense(1,
+                                      activation=None,
+                                      kernel_initializer=initializer,
+                                      name='concentration0')(internal_signal)
+            concentration0 = tf.where(tf.math.greater(concentration0,1.0),  #essentially just huber function it so its bigger than 0
+                                     tf.abs(concentration0),
+                                     tf.square(concentration0))
+            concentration0 = concentration0 + 1e-10 #so we prevent it from being 0
+            pi['concentration0'] = concentration0
 
-        return keras.Model(inputs=inputs, outputs=concentration)
+        return keras.Model(inputs=inputs, outputs=pi)
 
     def __build_critic(self):
         num_inputs = 2 if 'storage' not in self.actions else 3
@@ -246,8 +271,6 @@ class Trader:
 
     def train_RL_agent(self):
 
-        print('started learning')
-
         early_stop_critic = False #ToDo: implement these
         early_stop_actor = False
         max_train_steps = self.train_step + self.max_train_steps
@@ -260,7 +283,6 @@ class Trader:
             states = tf.convert_to_tensor(batch['states'], dtype=tf.float32)
             advantages = tf.convert_to_tensor(batch['advantages'], dtype=tf.float32)
 
-
             if not early_stop_critic:
                 with tf.GradientTape() as tape_critic:
                 #calculate critic loss and backpropagate
@@ -271,7 +293,11 @@ class Trader:
                     # calculate the stopping crtierions
                     early_stop_critic, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
                                                                                     self.ppo_critic)
-                    # stop or update
+                    # log
+                    with self.summary_writer.as_default():
+                        tf.summary.scalar('critic_loss', losses_critic, step=self.train_step)
+
+                    #early stop or learn
                     if early_stop_critic:
                         print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
                     else:
@@ -279,23 +305,24 @@ class Trader:
                         critic_grads = tape_critic.gradient(losses_critic, critic_vars)
                         self.ppo_critic.optimizer.apply_gradients(zip(critic_grads, critic_vars))
 
-                        with self.summary_writer.as_default():
-                            tf.summary.scalar('critic_loss', losses_critic, step=self.train_step)
+
 
             if not early_stop_actor:
                 log_probs_old = tf.convert_to_tensor(batch['log_probs'])
                 a_taken = tf.convert_to_tensor(batch['actions_taken'])
 
                 with tf.GradientTape() as tape_actor:
-                    pi_batch_new = self.ppo_actor(states)
-
-                    dist = self.ppo_actor_dist(concentration=pi_batch_new, #ToDO: make sure this works with batch dimension etc!
-                                              validate_args=False,
-                                               allow_nan_stats=False,
-                                               force_probs_to_zero_outside_support=False,
-                                               )
+                    pi_batch = self.ppo_actor(states)
+                    pi_batch['validate_args'] = False
+                    pi_batch['allow_nan_stats'] = False
+                    pi_batch['force_probs_to_zero_outside_support'] = False
+                    dist = self.ppo_actor_dist(**pi_batch)
 
                     log_probs_new = dist.log_prob(a_taken)
+                    # check = tf.reduce_sum(log_probs_new).numpy()
+                    # if np.isnan(check) or np.isinf(check):
+                    #     probs = dist.prob(a_taken)
+                    #     print('shit')
                     #This is how baselines does it
 
                     ratio = tf.exp(log_probs_new - log_probs_old)  # pi(a|s) / pi_old(a|s)
@@ -306,9 +333,8 @@ class Trader:
                     clipped_ratio = tf.clip_by_value(ratio, 1-self.policy_clip, 1+self.policy_clip)
                     weighted_ratio = clipped_ratio * soft_advantages
                     loss_actor = -tf.math.minimum(ratio*soft_advantages, weighted_ratio)
+                    # loss_actor = tf.clip_by_value(loss_actor, clip_value_min=-100, clip_value_max=100)
                     loss_actor = tf.math.reduce_mean(loss_actor)
-                    loss_actor = tf.math.maximum(loss_actor, -500)
-
 
                     # PPO early stopping as implemented in baselines
                     approx_kl = tf.math.reduce_mean(log_probs_old - log_probs_new)
@@ -316,52 +342,53 @@ class Trader:
                     # collect entropy because why not. If this keeps growing we might have a too small memory and too smal batchsize
                     entropy = tf.reduce_mean(-log_probs_new)
 
+                    # log
+                    with self.summary_writer.as_default():
+                        tf.summary.scalar('actor_loss', loss_actor, step=self.train_step)
+                        tf.summary.scalar('approx_KL', approx_kl, step=self.train_step)
+                        tf.summary.scalar('entropy', entropy, step=self.train_step)
+
                     # early stopping condition or keep training, consider having this a running avg of 5 or sth?
                     if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
                         early_stop_actor = True
                         print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
                     else:
                         # Backpropagation
-
                         actor_vars = self.ppo_actor.trainable_variables
-
                         actor_grads = tape_actor.gradient(loss_actor, actor_vars)
-                        sum_grads = tf.reduce_sum(actor_grads[0]).numpy()
-                        if np.isnan(sum_grads):
-                            print("AAAAAAAA!!")
                         self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
-
-                        with self.summary_writer.as_default():
-                            tf.summary.scalar('actor_loss', loss_actor, step=self.train_step)
-                            tf.summary.scalar('approx_KL', approx_kl, step=self.train_step)
-                            tf.summary.scalar('entropy', entropy, step=self.train_step)
 
             self.train_step = self.train_step + 1
 
         #clear the buffer after we learned it
         self.experience_replay_buffer.clear_buffer()
+        self.train_step = max_train_steps #to make sure we log all the algorithms that might be running in parallel at the same scales
 
-    async def __sample_pi(self, pi_actions): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
 
-        dist = self.ppo_actor_dist(concentration=pi_actions,
-                                   validate_args=False,
-                                   force_probs_to_zero_outside_support=True,
-                                   allow_nan_stats=False)
+    async def __sample_pi(self, pi_dict): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
+
+        pi_dict['validate_args'] = False
+        pi_dict['allow_nan_stats'] = False
+        pi_dict['force_probs_to_zero_outside_support'] = False
+        dist = self.ppo_actor_dist(**pi_dict)
 
         a_dist = dist.sample(1)
-       #  a_dist = tf.math.minimum(tf.math.maximum(a_dist, 1e-10), 1.0-1e-10)
-        a_dist = tf.math.maximum(a_dist, 1e-10)
+        min = 1e-10
+        a_dist = tf.clip_by_value(a_dist, clip_value_min=min, clip_value_max=0.9999999)
+
         log_prob = dist.log_prob(a_dist)
-
-        log_prob = tf.squeeze(log_prob)
+        carinality = len(log_prob.get_shape())
+        to_be_reduced = np.arange(carinality-1, dtype=int).tolist()
+        log_prob = tf.squeeze(log_prob, axis=to_be_reduced)
         log_prob = log_prob.numpy().tolist()
-        if np.isnan(log_prob):
-            print('AAAAA')
+        # if np.isnan(log_prob) or np.isinf(log_prob):
+        #     probs = dist.prob(a_dist)
+        #     print('AAAAA')
 
-        a_dist = tf.squeeze(a_dist)
+        carinality = len(a_dist.get_shape())
+        to_be_reduced = np.arange(carinality - 1, dtype=int).tolist()
+        a_dist = tf.squeeze(a_dist, axis=to_be_reduced)
         a_dist = a_dist.numpy().tolist()
-        if np.isnan(np.sum(a_dist)):
-            print('AAAAA1')
 
         a_scaled = {}
         keys = list(self.actions.keys())
@@ -383,6 +410,7 @@ class Trader:
         current_round = self.__participant['timing']['current_round']
         next_settle = self.__participant['timing']['next_settle']
         next_generation, next_load = await self.__participant['read_profile'](next_settle)
+        self.net_load = next_load - next_generation
 
         timezone = self.__participant['timing']['timezone']
         # current_round_end = utils.timestamp_to_local(current_round[1], timezone)
@@ -402,14 +430,12 @@ class Trader:
             state.append(soc)
 
         state = np.array(state)
-        pi_actions = self.ppo_actor(tf.expand_dims(state, axis=0))
-        if np.isnan(np.sum(pi_actions.numpy())):
-             print("AAAAA3")
+        pi_dict = self.ppo_actor(tf.expand_dims(state, axis=0))
+        taken_action, log_prob, dist_action = await self.__sample_pi(pi_dict)
 
 
         value = self.ppo_critic(tf.expand_dims(state, axis=0))
         value = tf.squeeze(value, axis=0).numpy().tolist()[0]
-        taken_action, log_prob, dist_action = await self.__sample_pi(pi_actions)
 
         # lets log the stuff needed for the replay buffer
         self.state_buffer[current_round[1]] = state
@@ -436,11 +462,17 @@ class Trader:
     async def decode_actions(self, taken_action, next_settle):
         actions = dict()
 
+        if 'price' in taken_action:
+            price = taken_action['price']
+            price = round(price, 4)
+        else:
+            price = 0.11 #ToDO: ok default?
 
-        price = taken_action['price']
-        price = round(price, 4)
-        quantity = taken_action['quantity']
-        quantity = int(quantity)
+        if 'quantity' in taken_action:
+            quantity = taken_action['quantity']
+            quantity = int(quantity)
+        else:
+            quantity = self.net_load
 
         if quantity > 0:
             actions['bids'] = {
