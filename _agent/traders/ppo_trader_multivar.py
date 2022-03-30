@@ -266,7 +266,7 @@ class Trader:
         self.rewards_history.append(reward)
 
         if reward_timestamp in self.state_buffer and reward_timestamp in self.actions_buffer:  # we found matching ones, buffer and pop
-            #ToDO: are we supposed to log the log_probs or the normal probs??
+
             self.experience_replay_buffer.add_entry(states=self.state_buffer[reward_timestamp],
                                                     actions_taken=self.actions_buffer[reward_timestamp],
                                                     log_probs=self.log_prob_buffer[reward_timestamp],
@@ -276,7 +276,6 @@ class Trader:
 
             self.actions_buffer.pop(reward_timestamp) #ToDo: check if we can pop into the above function, would look nicer
             self.log_prob_buffer.pop(reward_timestamp)
-            # self.pi_history.pop(reward_timestamp)
             self.value_buffer.pop(reward_timestamp)
             self.state_buffer.pop(reward_timestamp)
 
@@ -469,6 +468,14 @@ class Trader:
         next_generation, next_load = await self.__participant['read_profile'](next_settle)
         self.net_load = next_load - next_generation
 
+        # if 'quantity' in self.actions:
+        #     if self.net_load > 0:
+        #         self.actions['quantity']['min'] = 0.0
+        #         self.actions['quantity']['max'] = self.net_load
+        #     else:
+        #         self.actions['quantity']['min'] = self.net_load
+        #         self.actions['quantity']['max'] = 0.0
+
         timezone = self.__participant['timing']['timezone']
         # current_round_end = utils.timestamp_to_local(current_round[1], timezone)
         # next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
@@ -558,50 +565,7 @@ class Trader:
         for action in self.actions:
             self.actions_history[action].append(taken_action[action])
         return actions
-    # async def save_model(self, **kwargs):
-    #     '''
-    #     Save the price tables at the end of the episode into database
-    #     '''
-    #
-    #     table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
-    #     table = self.__create_weights_table(table_name)
-    #     await db_utils.create_table(db_string=kwargs['db_path'],
-    #                                 table_type='custom',
-    #                                 custom_table=table)
-    #     weights = [{
-    #         'generation': kwargs['generation'],
-    #         'bid_prices': str(self.bid_prices),
-    #         'ask_prices': str(self.ask_prices)
-    #     }]
-    #     await db_utils.dump_data(weights, kwargs['db_path'], table)
-    #
-    # def __create_weights_table(self, table_name):
-    #     columns = [
-    #         Column('generation', sqlalchemy.Integer, primary_key=True),
-    #         Column('bid_prices', sqlalchemy.String),
-    #         Column('ask_prices', sqlalchemy.String),
-    #     ]
-    #     table = sqlalchemy.Table(
-    #         table_name,
-    #         MetaData(),
-    #         *columns
-    #     )
-    #     return table
-    #
-    # async def load_model(self, **kwargs):
-    #     self.status['weights_loading'] = True
-    #     table_name = '_'.join((str(kwargs['generation']), kwargs['market_id'], 'weights', self.__participant['id']))
-    #     db = dataset.connect(kwargs['db_path'])
-    #     weights_table = db[table_name]
-    #     weights = weights_table.find_one(generation=kwargs['generation'])
-    #     if weights is not None:
-    #         self.bid_prices = ast.literal_eval(weights['bid_prices'])
-    #         self.ask_prices = ast.literal_eval(weights['ask_prices'])
-    #         self.status['weights_loading'] = False
-    #         return True
-    #
-    #     self.status['weights_loading'] = False
-    #     return False
+
     async def step(self):
         next_actions = await self.act()
         await self.learn()
