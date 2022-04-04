@@ -4,6 +4,23 @@ from random import randint
 import numpy as np
 from _utils import utils
 from collections import OrderedDict, Counter
+import itertools
+import scipy.signal
+
+def discount_cumsum(x, discount):
+    """
+    magic from rllab for computing discounted cumulative sums of vectors.
+    input:
+        vector x,
+        [x0,
+         x1,
+         x2]
+    output:
+        [x0 + discount * x1 + discount^2 * x2,
+         x1 + discount * x2,
+         x2]
+    """
+    return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 # this is a function to robustly pick the argmax in a random fashion if we happen to have several identically maximal values
 def tf_shuffle_axis(value, axis=0, seed=None, name=None):
@@ -19,7 +36,50 @@ async def robust_argmax(tensor):
     random_max_value_idx = tf.random.shuffle(max_value_idxs)[0]
     return random_max_value_idx
 
-class ExperienceReplayBuffer_New:
+class EarlyStopper:
+    def __init__(self, patience=30, tolerance=1e-8):
+        self.patience = patience
+        self.tolerance = tolerance
+
+        self.best_loss = np.inf
+        self.iterations_not_improved = 0
+
+        self.best_model = None
+
+    def check_iteration(self, loss, model):
+        stop_early = False
+
+        if loss <= self.best_loss:
+            self.best_loss = loss
+            self.best_model = model
+            self.iterations_not_improved = 0
+
+        else:
+            self.iterations_not_improved += 1
+
+            if self.iterations_not_improved >= self.patience:
+                stop_early = True
+                model = self.best_model
+
+        return stop_early, model
+
+def normalize_buffer_entry(buffer, key):
+    array = []
+    for episode in buffer.keys():
+        episode_array = [step[key] for step in buffer[episode]]
+        array.extend(episode_array)
+
+    mean = np.mean(array)
+    std = np.std(array)
+
+    for episode in buffer.keys():
+        for t in range(len(buffer[episode])):
+            buffer[episode][t][key] = (buffer[episode][t][key] - mean) / (std + 1e-10)
+
+    return buffer
+
+
+class ExperienceReplayBuffer:
     def __init__(self, max_length=1e4, learn_wait=100, n_steps=1):
         self.max_length = max_length
         self.learn_wait = learn_wait
@@ -39,7 +99,6 @@ class ExperienceReplayBuffer_New:
                  'r': rewards,  # rewards
                  'episode': episode,
                  }
-        #FixMe: this does not work in parallel acess cases!!!
 
 
         if episode not in self.buffer:
@@ -129,3 +188,138 @@ class ExperienceReplayBuffer_New:
                  }
         return batch
 
+class PPO_ExperienceReplay:
+    def __init__(self, max_length=1e4, trajectory_length=1, action_types=None, multivariate=True):
+        self.max_length = max_length
+        self.buffer = {}  # a dict of lists, each entry is an episode which is itself a list of entries such as below
+        self.last_episode = []
+        self.action_types = action_types
+        self.trajectory_length = trajectory_length  # trajectory length
+        self.multivariate = multivariate
+        # each entry on an episode_n_transitions looks like this
+        # entry = {   'as_taken': actions taken
+        #            'logprob_as_taken': logprobs of actions taken
+        #            'values': values of critic at time #ToDo: probably get rid of this
+        #            'states: #..
+        #            'rewards': ...
+        #           'episode': #episode
+        #            }
+
+    def add_entry(self, actions_taken, log_probs, values, states, rewards, episode=0):
+
+        entry = {'states': states,
+                 'logprob': log_probs,
+                 'values': values,
+                 'a_taken': actions_taken,
+                 'rewards': rewards,
+                 }
+
+        if episode not in self.buffer:
+            self.buffer[episode] = []
+        self.buffer[episode].append(entry)
+
+    def clear_buffer(self):
+        self.buffer = {}
+
+    async def generate_availale_indices(self):
+
+        #get available indices
+        available_indices = []
+        for episode in self.buffer:
+            for step in range(len(self.buffer[episode]) - self.trajectory_length):
+                available_indices.append([episode, step])
+
+        self.available_indices = available_indices
+        return True
+
+    def should_we_learn(self):
+        buffer_length = 0
+        for episode in self.buffer:
+            buffer_length += len(self.buffer[episode])
+
+        if buffer_length >= self.max_length:
+            return True
+        else:
+            return False
+
+    async def calculate_advantage(self, gamma=0.99, gae_lambda=0.95, normalize=True, entropy_reg=0.1):         #ToDo: calculate advantage
+
+        for episode in self.buffer:
+            V_episode = [step['values'] for step in self.buffer[episode]]
+            V_pseudo_terminal = V_episode[-1]
+
+            r_episode = [step['rewards'] for step in self.buffer[episode]]
+            r_episode.append(V_pseudo_terminal)
+            r_episode = np.array(r_episode)
+
+            G_episode = discount_cumsum(r_episode, gamma)[:-1]
+            for t in range(len(G_episode)):
+                self.buffer[episode][t]['Return'] = G_episode[t]
+
+        A = []
+        self.buffer = normalize_buffer_entry(self.buffer, key='rewards')
+        for episode in self.buffer: #because we need to calculate those separately!
+            V_episode = [step['values'] for step in self.buffer[episode]]
+            V_pseudo_terminal = V_episode[-1]
+            V_episode.append(V_pseudo_terminal)
+            V_episode = np.array(V_episode)
+
+            r_episode = [step['rewards'] for step in self.buffer[episode]]
+            r_episode.append(V_pseudo_terminal)
+            r_episode = np.array(r_episode)
+
+            deltas = (r_episode[:-1] ) + gamma * V_episode[1:] - V_episode[:-1]
+            A_eisode = discount_cumsum(deltas, gamma * gae_lambda)
+            A_eisode = A_eisode
+            A_eisode = A_eisode.tolist()
+            A.extend(A_eisode)
+            for t in range(len(A_eisode)):
+                self.buffer[episode][t]['advantage'] = A_eisode[t]
+
+        #normalize advantage:
+        self.buffer = normalize_buffer_entry(self.buffer, key='advantage')
+
+        # for episode in self.buffer.keys():
+        #     for t in range(len.self.buffer[episode]):
+        #         self.buffer[episode][t]['advantage'] = self.buffer[episode][t]['advantage'] - entropy_reg * self.buffer[episode][t]['logprob']
+
+
+        return True
+
+    def fetch_batch(self, batchsize=32, indices=None):
+
+        np.random.shuffle(self.available_indices)
+        batch_indices = self.available_indices[:batchsize]
+
+        #ToDo: implement trajectories longer than 1, might be base on same code as DQN buffer
+
+        if not self.multivariate:
+            actions_batch = {}
+            log_probs_batch = {}
+            for action_type in self.action_types:
+                actions_batch[action_type] = [self.buffer[sample_episode][transition]['a_taken'][action_type]
+                                              for [sample_episode, transition] in batch_indices]
+
+                log_probs_batch[action_type] = [self.buffer[sample_episode][transition]['logprob'][action_type]
+                                                for [sample_episode, transition] in batch_indices]
+        else:
+            actions_batch = [self.buffer[sample_episode][transition]['a_taken']
+                                          for [sample_episode, transition] in batch_indices]
+
+            log_probs_batch = [self.buffer[sample_episode][transition]['logprob']
+                                            for [sample_episode, transition] in batch_indices]
+
+        states_batch = [self.buffer[sample_episode][transition]['states']
+                        for [sample_episode, transition] in batch_indices]
+        advantages_batch = [self.buffer[sample_episode][transition]['advantage']
+                        for [sample_episode, transition] in batch_indices]
+        returns_batch = [self.buffer[sample_episode][transition]['Return']
+                        for [sample_episode, transition] in batch_indices]
+
+        batch = {'actions_taken': actions_batch, #dictionary with a batch f
+                 'log_probs': log_probs_batch,
+                 'states': states_batch,
+                 'Return': returns_batch,
+                 'advantages': advantages_batch
+                 }
+        return batch
