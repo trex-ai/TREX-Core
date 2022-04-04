@@ -1,6 +1,8 @@
+import socket
 import commentjson
+import os
 import random
-from _utils import db_utils
+from _utils import utils, db_utils
 from _utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
@@ -11,22 +13,36 @@ from packaging import version
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.configs = self.__get_config(config, resume, **kwargs)
-        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.0"))
+        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.2"))
 
         # if not resume:
         #     r = tenacity.Retrying(
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
+    def __load_json_file(self, file_path):
+        with open(file_path) as f:
+            json_file = commentjson.load(f)
+        return json_file
+
     def __get_config(self, config_name: str, resume, **kwargs):
         config_file = '_configs/' + config_name + '.json'
-        with open(config_file) as f:
-            config = commentjson.load(f)
+        config = self.__load_json_file(config_file)
+
+        credentials_file = '_configs/_credentials.json'
+        credentials = self.__load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
 
         if 'name' in config['study'] and config['study']['name']:
             study_name = config['study']['name'].replace(' ', '_')
         else:
             study_name = config_name
+
+        if credentials or 'profiles_db_location' not in config['study']:
+            config['study']['profiles_db_location'] = credentials['profiles_db_location']
+
+        if credentials or 'output_db_location' not in config['study']:
+            config['study']['output_db_location'] = credentials['output_db_location']
+
         db_string = config['study']['output_db_location'] + '/' + study_name
         engine = create_engine(db_string)
 
@@ -35,7 +51,7 @@ class Runner:
                 db_string = kwargs['db_string']
             # look for existing db in db. if one exists, return it
             if database_exists(db_string):
-                if engine.dialect.has_table(engine, 'configs'):
+                if sqlalchemy.inspect(engine).has_table('configs'):
                     db = dataset.connect(db_string)
                     configs_table = db['configs']
                     configs = configs_table.find_one(id=0)['data']
@@ -108,7 +124,7 @@ class Runner:
         #     os.mkdir(sim_path)
 
         engine = create_engine(self.configs['study']['output_database'])
-        if not engine.dialect.has_table(engine, 'metadata'):
+        if not sqlalchemy.inspect(engine).has_table('metadata'):
             self.__create_metadata_table(self.configs['study']['output_database'])
         db = dataset.connect(self.configs['study']['output_database'])
         metadata_table = db['metadata']
@@ -151,11 +167,25 @@ class Runner:
         if not self.__config_version_valid:
             return []
 
-        seq = kwargs['seq'] if 'seq' in kwargs else 0
-
         config = json.loads(json.dumps(self.configs))
-        default_port = int(self.configs['server']['port']) if self.configs['server']['port'] else 3000
-        config['server']['port'] = default_port + seq
+
+        if 'server' not in self.configs or 'host' not in self.configs['server'] or not self.configs['server']['host']:
+            config['server']['host'] = socket.gethostbyname(socket.getfqdn())
+
+        if 'server' not in self.configs or 'port' not in self.configs['server'] or not self.configs['server']['port']:
+            config['server']['port'] = 42069
+
+        seq = kwargs['seq'] if 'seq' in kwargs else 0
+        config['server']['port'] += seq
+
+        # iterate ports until an available one is found, starting from the default or the preferred port
+        while True:
+            if utils.port_is_open(config['server']['host'], config['server']['port']):
+                config['server']['port'] += 1
+            else:
+                break
+
+        # config['server']['port'] = default_port + seq
         config['study']['type'] = simulation_type
 
         # if resume is False, then drop all tables relevant to the study type
@@ -197,6 +227,7 @@ class Runner:
             else:
                 for participant in learning_participants:
                     config['participants'][participant]['trader']['learning'] = True
+                    config['participants'][participant]['trader']['study_name'] = config['study']['name']
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -241,7 +272,7 @@ class Runner:
         finally:
             subprocess.run(['python', args[0], *args[1]])
 
-    def run(self, simulations):
+    def run(self, simulations, **kwargs):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
@@ -252,7 +283,7 @@ class Runner:
         for sim_param in simulations:
             config = self.modify_config(**sim_param, seq=seq)
             self.__create_sim_metadata(config)
-            launch_list.extend(self.make_launch_list(config))
+            launch_list.extend(self.make_launch_list(config, **kwargs))
             seq += 1
 
         pool_size = len(launch_list)
