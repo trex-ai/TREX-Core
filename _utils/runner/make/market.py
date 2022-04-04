@@ -9,8 +9,8 @@ def cli(configs):
     if 'market' not in configs:
         return None, None
 
-    host = configs['server']['host'] if 'host' in configs['server'] else None
-    port = str(configs['server']['port']) if 'port' in configs['server'] else None
+    host = configs['server']['host']
+    port = str(configs['server']['port'])
 
     market_configs = configs['market']
     market_configs['timezone'] = configs['study']['timezone']
