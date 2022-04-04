@@ -2,7 +2,6 @@ from _agent.rewards.utils import process_ledger
 
 class Reward:
     def __init__(self, timing=None, ledger=None, market_info=None, **kwargs):
-        self.type = 'net_profit'
         self.__timing = timing
         self.__ledger = ledger
         self.__market_info = market_info
@@ -34,7 +33,5 @@ class Reward:
 
         total_profit = market_profit + grid_profit + financial_profit
         total_cost = market_cost + grid_cost + financial_cost
-        reward = float(total_profit - total_cost) / 1000
-        # reward = float(total_profit - total_cost)
-        # print(last_deliver, market_transactions, grid_transactions, financial_transactions, reward)
+        reward = float(total_profit - total_cost)/1000
         return reward

@@ -148,7 +148,7 @@ class Market:
         self.__status['active_participants'] -= 1
 
     async def __classify_source(self, source):
-        return source_classifier.classify(source)
+        return await source_classifier.classify(source)
 
     # Initialize variables for new time step
     def __reset_status(self):
@@ -842,11 +842,11 @@ class Market:
 
         # extra purchase by buyer
         # buyer settled for more than consumed
-        # if extra_purchase:
-        #     print('-extra---------')
-        #     print(buyer_id, extra_purchase)
-        #     print(settlement)
-        #     print(self.__participants[buyer_id]['meter'][time_delivery])
+        if extra_purchase:
+            print('-extra---------')
+            print(buyer_id, extra_purchase)
+            print(settlement)
+            print(self.__participants[buyer_id]['meter'][time_delivery])
 
         # extra_purchase and deficit_generation SHOULD be mutually exclusive
 
@@ -973,9 +973,7 @@ class Market:
 
     @tenacity.retry(wait=tenacity.wait_fixed(5))
     async def __ensure_transactions_complete(self):
-        print('checking transactions completion')
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-        print(table_len, self.transactions_count)
         if table_len < self.transactions_count:
             raise Exception
         return True
@@ -984,6 +982,7 @@ class Market:
         """This function records the transaction records into the ledger
 
         """
+
         if check_table_len:
             table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
             if table_len < self.transactions_count:
@@ -1000,10 +999,8 @@ class Market:
             return False
 
         transactions = self.__transactions[:transactions_len]
-        if delay:
-            asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
-        else:
-            await db_utils.dump_data(transactions, self.__db['path'], self.__db['table'])
+        asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
+
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
         del self.__transactions[:transactions_len]
         self.transactions_count += transactions_len
@@ -1097,10 +1094,8 @@ class Market:
             self.__participants[participant]['meter'].clear()
 
     async def end_sim_generation(self):
-        # print('recording transactions')
         await self.record_transactions(delay=False)
-        # print('transactions recorded')
-        # await self.__ensure_transactions_complete()
+        await self.__ensure_transactions_complete()
         await self.reset_market()
         await self.__client.emit('market_ready', namespace='/simulation')
 
