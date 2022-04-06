@@ -2,12 +2,14 @@ import socket
 import commentjson
 import os
 import random
+import itertools
 from _utils import utils, db_utils
 from _utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
+import numpy as np
 from packaging import version
 
 class Runner:
@@ -216,18 +218,32 @@ class Runner:
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
-            if 'target' in kwargs:
-                if not kwargs['target'] in config['participants']:
-                    return []
+            # if 'target' in kwargs:
+            #     if not kwargs['target'] in config['participants']:
+            #         return []
+            #
+            #     config['market']['id'] += '-' + kwargs['target']
+            #     for participant in learning_participants:
+            #         config['participants'][participant]['trader']['learning'] = False
+            #     config['participants'][kwargs['target']]['trader']['learning'] = True
+            # else:
+            if 'hyperparameters' in kwargs:
+                config['training']['hyperparameters'] = kwargs['hyperparameters']
 
-                config['market']['id'] += '-' + kwargs['target']
-                for participant in learning_participants:
-                    config['participants'][participant]['trader']['learning'] = False
-                config['participants'][kwargs['target']]['trader']['learning'] = True
-            else:
-                for participant in learning_participants:
-                    config['participants'][participant]['trader']['learning'] = True
-                    config['participants'][participant]['trader']['study_name'] = config['study']['name']
+                # change simulation name to include hyperparameters
+                hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
+                                                          key, value in config['training']['hyperparameters'].items()])
+                config["study"]["name"] += '-' + hyperparameters_formatted_str
+
+            for participant in learning_participants:
+                config['participants'][participant]['trader']['learning'] = True
+                config['participants'][participant]['trader']['study_name'] = config['study']['name']
+                if 'hyperparameters' in kwargs:
+                    # if hyperparameter is defined for the trader, then
+                    # overwrite default hyperparameter with one to be searched
+                    for hyperparameter in config['training']['hyperparameters']:
+                        if hyperparameter in config['participants'][participant]['trader']:
+                            config['participants'][participant]['trader'][hyperparameter] = hyperparameter
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -278,15 +294,53 @@ class Runner:
             return
         from multiprocessing import Pool
 
+        simulations_list = []
         launch_list = []
         seq = 0
-        for sim_param in simulations:
+
+        do_hyperparameter_search = 'training' in self.configs and 'hyperparameters' in self.configs['training']
+        if do_hyperparameter_search:
+            #TODO: make hyperparam search work with validations too
+            hp_search_types = set()
+
+            # if training or validation needed to be done, then their parameters have to be modified
+            if 'training' in simulations:
+                simulations.remove('training')
+                hp_search_types.add('training')
+            # if 'validation' in simulations:
+            #     simulations.remove('validation')
+            #     hp_search_types.add('validation')
+
+            # find permutations of hyperparameters
+            hyperparameters = self.configs['training']['hyperparameters']
+            for hyperparameter in hyperparameters:
+                parameters = hyperparameters[hyperparameter]
+                if isinstance(parameters, dict):
+                    # round hyperparameter to 4 decimal places
+                    hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
+                elif isinstance(parameters, int) or isinstance(parameters, float):
+                    hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
+            hp_keys, hp_values = zip(*hyperparameters.items())
+            hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
+
+            for sim_type in hp_search_types:
+                for permutation in hp_permutations:
+                    simulations_list.append({'simulation_type': sim_type,
+                                             'hyperparameters': permutation})
+
+            for simulation in simulations:
+                simulations_list.append({'simulation_type': simulation})
+
+        for sim_param in simulations_list:
             config = self.modify_config(**sim_param, seq=seq)
             self.__create_sim_metadata(config)
             launch_list.extend(self.make_launch_list(config, **kwargs))
             seq += 1
 
-        pool_size = len(launch_list)
+        # from pprint import pprint
+        # print(seq)
+        # pprint(launch_list)
+        pool_size = kwargs['pool_size'] if ['pool_size'] in kwargs else len(launch_list)
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)
         pool.close()
