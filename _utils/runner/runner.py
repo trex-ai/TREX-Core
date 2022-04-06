@@ -14,8 +14,11 @@ from packaging import version
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
+        self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.configs = self.__get_config(config, resume, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.2"))
+        if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
+            self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
         # if not resume:
         #     r = tenacity.Retrying(
@@ -125,10 +128,10 @@ class Runner:
         # if not os.path.exists(sim_path):
         #     os.mkdir(sim_path)
 
-        engine = create_engine(self.configs['study']['output_database'])
+        engine = create_engine(config['study']['output_database'])
         if not sqlalchemy.inspect(engine).has_table('metadata'):
-            self.__create_metadata_table(self.configs['study']['output_database'])
-        db = dataset.connect(self.configs['study']['output_database'])
+            self.__create_metadata_table(config['study']['output_database'])
+        db = dataset.connect(config['study']['output_database'])
         metadata_table = db['metadata']
         for generation in range(config['study']['generations']):
             # check if metadata is in table
@@ -140,6 +143,14 @@ class Runner:
                     'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
                 }
                 metadata_table.insert(dict(generation=generation, data=metadata))
+
+    def __create_sim_db(self, db_string, config):
+        if not database_exists(db_string):
+            db_utils.create_db(db_string)
+            self.__create_configs_table(db_string)
+            db = dataset.connect(db_string)
+            configs_table = db['configs']
+            configs_table.insert({'id': 0, 'data': config})
 
     def __create_table(self, db_string, table):
         engine = create_engine(db_string)
@@ -227,13 +238,6 @@ class Runner:
             #         config['participants'][participant]['trader']['learning'] = False
             #     config['participants'][kwargs['target']]['trader']['learning'] = True
             # else:
-            if 'hyperparameters' in kwargs:
-                config['training']['hyperparameters'] = kwargs['hyperparameters']
-
-                # change simulation name to include hyperparameters
-                hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
-                                                          key, value in config['training']['hyperparameters'].items()])
-                config['market']['id'] += '-' + hyperparameters_formatted_str
 
             for participant in learning_participants:
                 config['participants'][participant]['trader']['learning'] = True
@@ -245,6 +249,26 @@ class Runner:
                         if hyperparameter in config['participants'][participant]['trader']:
                             config['participants'][participant]['trader'][hyperparameter] = hyperparameter
 
+            if 'hyperparameters' in kwargs:
+                config['training']['hyperparameters'] = kwargs['hyperparameters']
+
+                # change simulation name to include hyperparameters
+                hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
+                                                          key, value in config['training']['hyperparameters'].items()])
+
+                # For hyperparameter search, each permutation may need its own database
+                # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
+                # config['market']['id'] += '-' + hyperparameters_formatted_str
+                config['study']['name'] += '-' + hyperparameters_formatted_str
+                db_string = config['study']['output_db_location'] + '/' + config['study']['name']
+                config['study']['output_database'] = db_string
+                if self.purge_db:
+                    if database_exists(db_string):
+                        drop_database(db_string)
+
+                # for hyoerparameter search, the modified config file will be saved for easier inspection
+                self.__create_sim_db(db_string, config)
+
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
@@ -252,6 +276,20 @@ class Runner:
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
         return config
+
+    def __find_hyperparameters_permutations(self):
+        # find permutations of hyperparameters
+        hyperparameters = self.configs['training']['hyperparameters']
+        for hyperparameter in hyperparameters:
+            parameters = hyperparameters[hyperparameter]
+            if isinstance(parameters, dict):
+                # round hyperparameter to 4 decimal places
+                hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
+            elif isinstance(parameters, int) or isinstance(parameters, float):
+                hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
+        hp_keys, hp_values = zip(*hyperparameters.items())
+        hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
+        return hp_permutations
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
@@ -298,9 +336,8 @@ class Runner:
         launch_list = []
         seq = 0
 
-        do_hyperparameter_search = 'training' in self.configs and 'hyperparameters' in self.configs['training']
-        if do_hyperparameter_search:
-            #TODO: make hyperparam search work with validations too
+        if hasattr(self, 'hyperparameters_permutations'):
+            # TODO: make hyperparam search work with validations too
             hp_search_types = set()
 
             # if training or validation needed to be done, then their parameters have to be modified
@@ -311,20 +348,8 @@ class Runner:
             #     simulations.remove('validation')
             #     hp_search_types.add('validation')
 
-            # find permutations of hyperparameters
-            hyperparameters = self.configs['training']['hyperparameters']
-            for hyperparameter in hyperparameters:
-                parameters = hyperparameters[hyperparameter]
-                if isinstance(parameters, dict):
-                    # round hyperparameter to 4 decimal places
-                    hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
-                elif isinstance(parameters, int) or isinstance(parameters, float):
-                    hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
-            hp_keys, hp_values = zip(*hyperparameters.items())
-            hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
-
             for sim_type in hp_search_types:
-                for permutation in hp_permutations:
+                for permutation in self.hyperparameters_permutations:
                     simulations_list.append({'simulation_type': sim_type,
                                              'hyperparameters': permutation})
 
