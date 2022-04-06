@@ -251,32 +251,27 @@ class Runner:
                         if hyperparameter in config['participants'][participant]['trader']:
                             config['participants'][participant]['trader'][hyperparameter] = hyperparameter
 
-            if 'hyperparameters' in kwargs:
-                config['training']['hyperparameters'] = kwargs['hyperparameters']
-
-                # change simulation name to include hyperparameters
-                hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
-                                                          key, value in config['training']['hyperparameters'].items()])
-
-                # For hyperparameter search, each permutation may need its own database
-                # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
-                # config['market']['id'] += '-' + hyperparameters_formatted_str
-                config['study']['name'] += '-' + hyperparameters_formatted_str
-                db_string = config['study']['output_db_location'] + '/' + config['study']['name']
-                config['study']['output_database'] = db_string
-                # if self.purge_db:
-                #     if database_exists(db_string):
-                #         drop_database(db_string)
-                #
-                # # for hyoerparameter search, the modified config file will be saved for easier inspection
-                # self.__create_sim_db(db_string, config)
-
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
+
+        if 'hyperparameters' in kwargs:
+            config['training']['hyperparameters'] = kwargs['hyperparameters']
+
+            # change simulation name to include hyperparameters
+            hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
+                                                      key, value in config['training']['hyperparameters'].items()])
+
+            # For hyperparameter search, each permutation may need its own database
+            # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
+            # config['market']['id'] += '-' + hyperparameters_formatted_str
+            config['study']['name'] += '-' + hyperparameters_formatted_str
+            db_string = config['study']['output_db_location'] + '/' + config['study']['name']
+            config['study']['output_database'] = db_string
+
         return config
 
     def __find_hyperparameters_permutations(self):
