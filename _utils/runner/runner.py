@@ -48,38 +48,40 @@ class Runner:
         if credentials or 'output_db_location' not in config['study']:
             config['study']['output_db_location'] = credentials['output_db_location']
 
-        db_string = config['study']['output_db_location'] + '/' + study_name
-        engine = create_engine(db_string)
 
-        if resume:
-            if 'db_string' in kwargs:
-                db_string = kwargs['db_string']
-            # look for existing db in db. if one exists, return it
-            if database_exists(db_string):
-                if sqlalchemy.inspect(engine).has_table('configs'):
-                    db = dataset.connect(db_string)
-                    configs_table = db['configs']
-                    configs = configs_table.find_one(id=0)['data']
-                    configs['study']['resume'] = resume
-                    return configs
+        # engine = create_engine(db_string)
 
-        # if not resume
+        # if resume:
+        #     if 'db_string' in kwargs:
+        #         db_string = kwargs['db_string']
+        #     # look for existing db in db. if one exists, return it
+        #     if database_exists(db_string):
+        #         if sqlalchemy.inspect(engine).has_table('configs'):
+        #             db = dataset.connect(db_string)
+        #             configs_table = db['configs']
+        #             configs = configs_table.find_one(id=0)['data']
+        #             configs['study']['resume'] = resume
+        #             return configs
+        #
+        # # if not resume
         config['study']['name'] = study_name
+        db_string = config['study']['output_db_location'] + '/' + study_name
         if 'output_database' not in config['study'] or not config['study']['output_database']:
             config['study']['output_database'] = db_string
-
-        if 'purge' in kwargs and kwargs['purge']:
-            if database_exists(db_string):
-                drop_database(db_string)
-
-        if not database_exists(db_string):
-            db_utils.create_db(db_string)
-            self.__create_configs_table(db_string)
-            db = dataset.connect(db_string)
-            configs_table = db['configs']
-            configs_table.insert({'id': 0, 'data': config})
-
-        config['study']['resume'] = resume
+        #
+        # if 'purge' in kwargs and kwargs['purge']:
+        #     if database_exists(db_string):
+        #         drop_database(db_string)
+        #
+        # if not database_exists(db_string):
+        #     db_utils.create_db(db_string)
+        #     self.__create_configs_table(db_string)
+        #     db = dataset.connect(db_string)
+        #     configs_table = db['configs']
+        #     configs_table.insert({'id': 0, 'data': config})
+        #
+        # config['study']['resume'] = False
+        # config['study']['resume'] = resume
         return config
 
     # Give starting time for simulation
@@ -202,13 +204,13 @@ class Runner:
         config['study']['type'] = simulation_type
 
         # if resume is False, then drop all tables relevant to the study type
-        if not config['study']['resume']:
-            study_name = config['study']['name']
-            db_string = config['study']['output_db_location'] + '/' + study_name
-            db = dataset.connect(db_string)
-            tables = [table for table in db.tables if simulation_type + '_' in table]
-            for table in tables:
-                db[table].drop()
+        # if not config['study']['resume']:
+        #     study_name = config['study']['name']
+        #     db_string = config['study']['output_db_location'] + '/' + study_name
+        #     db = dataset.connect(db_string)
+        #     tables = [table for table in db.tables if simulation_type + '_' in table]
+        #     for table in tables:
+        #         db[table].drop()
 
         learning_participants = [participant for participant in config['participants'] if
                                  'learning' in config['participants'][participant]['trader'] and
@@ -262,12 +264,12 @@ class Runner:
                 config['study']['name'] += '-' + hyperparameters_formatted_str
                 db_string = config['study']['output_db_location'] + '/' + config['study']['name']
                 config['study']['output_database'] = db_string
-                if self.purge_db:
-                    if database_exists(db_string):
-                        drop_database(db_string)
-
-                # for hyoerparameter search, the modified config file will be saved for easier inspection
-                self.__create_sim_db(db_string, config)
+                # if self.purge_db:
+                #     if database_exists(db_string):
+                #         drop_database(db_string)
+                #
+                # # for hyoerparameter search, the modified config file will be saved for easier inspection
+                # self.__create_sim_db(db_string, config)
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -332,6 +334,7 @@ class Runner:
             return
         from multiprocessing import Pool
 
+        db_purged = False
         simulations_list = []
         launch_list = []
         seq = 0
@@ -358,6 +361,12 @@ class Runner:
 
         for sim_param in simulations_list:
             config = self.modify_config(**sim_param, seq=seq)
+            db_string = config['study']['output_database']
+            if ('hyperparameters' in sim_param and self.purge_db) or \
+                    ('hyperparameters' not in sim_param and self.purge_db and not db_purged):
+                if database_exists(db_string):
+                    drop_database(db_string)
+            self.__create_sim_db(db_string, self.configs)
             self.__create_sim_metadata(config)
             launch_list.extend(self.make_launch_list(config, **kwargs))
             seq += 1

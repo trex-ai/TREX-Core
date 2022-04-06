@@ -141,9 +141,9 @@ class Controller:
         if not database_exists(db_string):
             return 0
 
-        #TODO: rewrite generation detection for resume
-        if self.__config['study']['resume']:
-            pass
+        # TODO: rewrite generation detection for resume
+        # if self.__config['study']['resume']:
+        #     pass
             # return 0
 
         return 0
