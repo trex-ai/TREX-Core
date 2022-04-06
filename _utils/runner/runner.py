@@ -16,7 +16,7 @@ class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.configs = self.__get_config(config, resume, **kwargs)
-        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.2"))
+        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
         if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
             self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
@@ -342,9 +342,10 @@ class Runner:
             if 'training' in simulations:
                 simulations.remove('training')
                 hp_search_types.add('training')
-            # if 'validation' in simulations:
-            #     simulations.remove('validation')
-            #     hp_search_types.add('validation')
+
+            if 'validation' in simulations:
+                simulations.remove('validation')
+                hp_search_types.add('validation')
 
             for sim_type in hp_search_types:
                 for permutation in self.hyperparameters_permutations:
