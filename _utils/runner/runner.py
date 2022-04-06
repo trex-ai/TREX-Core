@@ -233,8 +233,6 @@ class Runner:
                 # change simulation name to include hyperparameters
                 hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
                                                           key, value in config['training']['hyperparameters'].items()])
-
-                # config["study"]["name"] += '-' + hyperparameters_formatted_str
                 config['market']['id'] += '-' + hyperparameters_formatted_str
 
             for participant in learning_participants:
