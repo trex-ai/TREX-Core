@@ -19,10 +19,8 @@ import ast
 
 from itertools import product
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow import keras as k
 import tensorflow_probability as tfp
-import tensorboard as tb
 
 
 class Trader:
@@ -47,16 +45,18 @@ class Trader:
 
         # Generate actions
         #I think we could stay with quantized actions, however I'd like to start testing on the non-quantized version ASAP so we do non quantized
-        self.actions = {
-            'price': {'min': ask_price,
-                      'max': bid_price},
-           'quantity': {'min': kwargs['min_quantity'] if 'min_quantity' in kwargs else -17,
-                         'max': kwargs['max_quantity'] if 'max_quantity' in kwargs else 17}
-        }
-
-        if 'storage' in self.__participant:
-            # self.storage_type = self.__participant['storage']['type'].lower()
-            self.actions['storage'] = self.actions['quantity']
+        self.actions = {}
+        self.flip = {}
+        for action in kwargs['actions']:
+            if action == 'price':
+                self.actions['price'] = {'min': ask_price, 'max': bid_price}
+                self.flip['price'] = np.random.choice([True, False])
+            if action == 'quantity':
+                self.actions['quantity'] = {'min': -1.6*17.0, 'max': 1.6*17.0}
+                self.flip['quantity'] = np.random.choice([True, False])
+            if action == 'storage' and 'storage' in self.__participant:
+                self.actions['storage'] = {'min': -20.0, 'max': 20.0}
+                self.flip['storage'] = np.random.choice([True, False])
 
         # initialize all the counters we need
         self.train_step = 0
@@ -65,7 +65,7 @@ class Trader:
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
-        logs_path = os.path.join(cwd, 'Battery_Test')
+        logs_path = os.path.join(cwd, '4Player-QuantPrice-2')
         experiment_path = os.path.join(logs_path, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
@@ -105,17 +105,12 @@ class Trader:
                                                              multivariate=True,
                                                             )
 
-        self.ppo_actor = self.__build_actor()
-        self.ppo_actor.compile(optimizer=keras.optimizers.Adam(learning_rate=self.alpha_actor,),)
-
-        if len(self.actions) > 1:
-            self.ppo_actor_dist = tfp.distributions.Dirichlet
-        else:
-            self.ppo_actor_dist = tfp.distributions.Beta
+        self.ppo_actor_dist, self.ppo_actor = self.__build_actor(distribution='Beta')
+        self.ppo_actor.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_actor,),)
 
         self.ppo_critic = self.__build_critic()
-        self.ppo_critic.compile(optimizer=keras.optimizers.Adam(learning_rate=self.alpha_critic,),)
-        self.ppo_critic_loss = tf.keras.losses.MeanSquaredError()
+        self.ppo_critic.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_critic,),)
+        self.ppo_critic_loss = k.losses.MeanSquaredError()
 
 
         # Buffers we need for logging stuff before putting into the PPo Memory
@@ -149,78 +144,115 @@ class Trader:
         if 'storage' in self.__participant:
             self.metrics.add('storage_soc', sqlalchemy.Float)
 
-    def __build_actor(self):
+    def __build_actor(self, distribution='Beta'):
         num_inputs = 2 if 'storage' not in self.actions else 3
         num_hidden = 32 if 'storage' not in self.actions else 64
         num_hidden_layers = 2 #lets see how far we get with this first
         num_actions = len(self.actions)
 
-        initializer = tf.keras.initializers.HeNormal()
+        initializer = k.initializers.HeNormal()
 
-        inputs = layers.Input(shape=(num_inputs,), name='Actor_Input')
+        inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
 
         internal_signal = inputs
         for hidden_layer_number in range(num_hidden_layers): #hidden layers
-            internal_signal = layers.Dense(num_hidden,
+            internal_signal = k.layers.Dense(num_hidden,
                                            activation="elu",
-                                           # bias_initializer=initializer,
                                            kernel_initializer=initializer,
                                            name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
+
         pi = {}
-        if num_actions > 1:
-            concentration = layers.Dense(num_actions,
+        if distribution == 'Beta' or distribution =='Dirichlet':
+            self.rescale_actions = True
+            self.crop_actions = False
+            if num_actions > 1: #Choose Dirichlet distribution Head
+                concentration = k.layers.Dense(num_actions,
+                                          activation=None,
+                                          kernel_initializer=initializer,
+                                          name='concentration')(internal_signal)
+                concentration = tf.where(tf.math.greater(concentration,1.0),  #essentially just huber function it so its bigger than 0
+                                         tf.abs(concentration),
+                                         tf.square(concentration))
+                concentration = concentration + 1e-10 #so we prevent it from being 0
+                pi['concentration'] = concentration
+
+                ppo_actor_dist = tfp.distributions.Dirichlet
+
+            else: #Choose Beta Head
+                concentration1 = k.layers.Dense(1,
+                                          activation=None,
+                                          kernel_initializer=initializer,
+                                          name='concentration1')(internal_signal)
+                concentration1 = tf.where(tf.math.greater(concentration1,1.0),  #essentially just huber function it so its bigger than 0
+                                         tf.abs(concentration1),
+                                         tf.square(concentration1))
+                concentration1 = concentration1 + 1e-10 #so we prevent it from being 0
+                pi['concentration1'] = concentration1
+
+                concentration0 = k.layers.Dense(1,
+                                          activation=None,
+                                          kernel_initializer=initializer,
+                                          name='concentration0')(internal_signal)
+                concentration0 = tf.where(tf.math.greater(concentration0,1.0),  #essentially just huber function it so its bigger than 0
+                                         tf.abs(concentration0),
+                                         tf.square(concentration0))
+                concentration0 = concentration0 + 1e-10 #so we prevent it from being 0
+                pi['concentration0'] = concentration0
+
+                ppo_actor_dist = tfp.distributions.Beta
+        elif distribution == 'Normal' or distribution == 'MultivariateNormal':
+            self.rescale_actions = False
+            self.crop_actions = True
+
+            scale = k.layers.Dense(num_actions,
                                       activation=None,
                                       kernel_initializer=initializer,
-                                      name='concentration')(internal_signal)
-            concentration = tf.where(tf.math.greater(concentration,1.0),  #essentially just huber function it so its bigger than 0
-                                     tf.abs(concentration),
-                                     tf.square(concentration))
-            concentration = concentration + 1e-10 #so we prevent it from being 0
-            pi['concentration'] = concentration
+                                      name='scale')(internal_signal)
+            scale = tf.where(tf.math.greater(scale,1.0),  #essentially just huber function it so its bigger than 0
+                                     tf.abs(scale),
+                                     tf.square(scale))
+            scale = scale + 1e-10 #so we prevent it from being 0
+
+
+            loc = k.layers.Dense(num_actions,
+                                      activation=None,
+                                      kernel_initializer=initializer,
+                                      name='loc')(internal_signal)
+
+            if num_actions > 1:
+                pi['scale_diag'] = scale
+                pi['loc'] = loc
+                ppo_actor_dist = tfp.distributions.MultivariateNormalDiag
+            else:
+                pi['scale'] = scale
+                pi['loc'] = loc
+                ppo_actor_dist = tfp.distributions.Normal
         else:
-            concentration1 = layers.Dense(1,
-                                      activation=None,
-                                      kernel_initializer=initializer,
-                                      name='concentration1')(internal_signal)
-            concentration1 = tf.where(tf.math.greater(concentration1,1.0),  #essentially just huber function it so its bigger than 0
-                                     tf.abs(concentration1),
-                                     tf.square(concentration1))
-            concentration1 = concentration1 + 1e-10 #so we prevent it from being 0
-            pi['concentration1'] = concentration1
+            print('provided faulty distribution type')
 
-            concentration0 = layers.Dense(1,
-                                      activation=None,
-                                      kernel_initializer=initializer,
-                                      name='concentration0')(internal_signal)
-            concentration0 = tf.where(tf.math.greater(concentration0,1.0),  #essentially just huber function it so its bigger than 0
-                                     tf.abs(concentration0),
-                                     tf.square(concentration0))
-            concentration0 = concentration0 + 1e-10 #so we prevent it from being 0
-            pi['concentration0'] = concentration0
-
-        return keras.Model(inputs=inputs, outputs=pi)
+        return ppo_actor_dist, k.Model(inputs=inputs, outputs=pi)
 
     def __build_critic(self):
         num_inputs = 2 if 'storage' not in self.actions else 3
         num_hidden = 32 if 'storage' not in self.actions else 64
         num_hidden_layers = 2 #lets see how far we get with this first
 
-        initializer = tf.keras.initializers.HeNormal()
-        inputs = layers.Input(shape=(num_inputs,), name='Actor_Input')
+        initializer = k.initializers.HeNormal()
+        inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
 
         internal_signal = inputs
         for hidden_layer_number in range(num_hidden_layers): #hidden layers
-            internal_signal = layers.Dense(num_hidden,
+            internal_signal = k.layers.Dense(num_hidden,
                                            activation="elu",
                                            kernel_initializer=initializer,
                                            name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
 
-        value = layers.Dense(1,
+        value = k.layers.Dense(1,
                              activation=None,
                              kernel_initializer=initializer,
                              name='ValueHead')(internal_signal)
 
-        return keras.Model(inputs=inputs, outputs=value)
+        return k.Model(inputs=inputs, outputs=value)
 
     def anneal(self, parameter:str, adjustment, mode:str='multiply', limit=None):
         if not hasattr(self, parameter):
@@ -337,9 +369,6 @@ class Trader:
                 if not self.warmup_actor:
                     with tf.GradientTape() as tape_actor:
                         pi_batch = self.ppo_actor(states)
-                        pi_batch['validate_args'] = False
-                        pi_batch['allow_nan_stats'] = False
-                        pi_batch['force_probs_to_zero_outside_support'] = False
                         dist = self.ppo_actor_dist(**pi_batch)
 
                         log_probs_new = dist.log_prob(a_taken)
@@ -422,36 +451,46 @@ class Trader:
 
     async def __sample_pi(self, pi_dict): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
 
-        pi_dict['validate_args'] = False
-        pi_dict['allow_nan_stats'] = False
-        pi_dict['force_probs_to_zero_outside_support'] = False
         dist = self.ppo_actor_dist(**pi_dict)
 
         a_dist = dist.sample(1)
-        min = 1e-10
-        a_dist = tf.clip_by_value(a_dist, clip_value_min=min, clip_value_max=0.9999999)
+        carinality = len(a_dist.get_shape())
+        to_be_reduced = np.arange(carinality - 1, dtype=int).tolist()
+        a_dist = tf.squeeze(a_dist, axis=to_be_reduced)
+        a_dist = a_dist.numpy().tolist()
+
+        if self.rescale_actions: #actions between 0 1nd 1
+            min = 1e-10
+            a_dist = tf.clip_by_value(a_dist, clip_value_min=min, clip_value_max=0.9999999)
+            a_dist = a_dist.numpy().tolist()
+        if self.crop_actions:
+            keys = list(self.actions.keys())
+            for action_index in range(len(keys)):
+                min = self.actions[keys[action_index]]['min']
+                max = self.actions[keys[action_index]]['max']
+                a = tf.clip_by_value(a_dist[action_index], clip_value_min=min, clip_value_max=max)
+                a_dist[action_index] = a.numpy().tolist()
 
         log_prob = dist.log_prob(a_dist)
         carinality = len(log_prob.get_shape())
         to_be_reduced = np.arange(carinality-1, dtype=int).tolist()
         log_prob = tf.squeeze(log_prob, axis=to_be_reduced)
         log_prob = log_prob.numpy().tolist()
-        # if np.isnan(log_prob) or np.isinf(log_prob):
-        #     probs = dist.prob(a_dist)
-        #     print('AAAAA')
 
-        carinality = len(a_dist.get_shape())
-        to_be_reduced = np.arange(carinality - 1, dtype=int).tolist()
-        a_dist = tf.squeeze(a_dist, axis=to_be_reduced)
-        a_dist = a_dist.numpy().tolist()
 
         a_scaled = {}
         keys = list(self.actions.keys())
         for action_index in range(len(keys)):
             a = a_dist[action_index]
-            min = self.actions[keys[action_index]]['min']
-            max = self.actions[keys[action_index]]['max']
-            a = min + (a * (max - min))
+            if self.rescale_actions:
+                if not self.flip[keys[action_index]]: #ToDo: find a better hack than this ...  this is horrible
+                    min = self.actions[keys[action_index]]['min']
+                    max = self.actions[keys[action_index]]['max']
+                else:
+                    max = self.actions[keys[action_index]]['min']
+                    min = self.actions[keys[action_index]]['max']
+                a = min + (a * (max - min))
+
             a_scaled[keys[action_index]] = a
 
         return a_scaled, log_prob, a_dist
@@ -468,7 +507,7 @@ class Trader:
         next_generation, next_load = await self.__participant['read_profile'](next_settle)
         self.net_load = next_load - next_generation
 
-        # if 'quantity' in self.actions:
+        # if 'quantity' in self.actions: #pseudosmart quantities because so far we havent figure out how to manage the full action space...
         #     if self.net_load > 0:
         #         self.actions['quantity']['min'] = 0.0
         #         self.actions['quantity']['max'] = self.net_load
@@ -488,7 +527,7 @@ class Trader:
                  float(next_generation/17),
                  float(next_load/17)]
 
-        if 'storage' in self.__participant: #ToDo: Check if this is the right way to acess SOC
+        if 'storage' in self.__participant:
             storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
             soc = storage_schedule[next_settle]['projected_soc_end']
             state.append(soc)
@@ -530,11 +569,10 @@ class Trader:
             price = taken_action['price']
             price = round(price, 4)
         else:
-            price = 0.11 #ToDO: ok default?
+            price = 0.11
 
         if 'quantity' in taken_action:
-            quantity = taken_action['quantity']
-            quantity = int(quantity)
+            quantity = int(taken_action['quantity'])
         else:
             quantity = self.net_load
 
