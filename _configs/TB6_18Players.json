@@ -1,0 +1,706 @@
+{
+    "version": "3.6.1",
+    "study": {
+      "name": "16Players_128batch_0Entropy-1-1",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 2,
+      "generations": 500,
+      "sim_root": ""
+    },
+    "hyperparameters":{
+      // "alpha_critic": {"start": 0.1, "stop": 0.2, "num": 3},
+      // "alpha_actor": 0.1 //hyperparameters to be kept constant over all participating agents
+    },
+    "curriculum": {
+     "8": {
+       "anneal": {
+         // "entropy_reg": [0.97,"multiply", 0.1],
+          "warmup_actor":  [false, "set"]}}
+    },
+    "server": {
+      "host": "",
+      "port": "7005"
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "Seller1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller2": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller3": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller4": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller5": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller6": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller7": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller8": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+      "Seller9": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price", "storage"],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      },
+
+      "Buyer1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer2": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer3": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer4": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer5": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer6": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer7": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer8": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "Buyer9": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "actions": ["quantity", "price"],
+           "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 128,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0,
+          "limit_actions": true,
+
+          "critic_patience": 60,
+          "max_train_steps": 300,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      }
+    }
+  }
+  

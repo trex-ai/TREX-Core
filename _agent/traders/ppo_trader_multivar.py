@@ -65,7 +65,7 @@ class Trader:
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
-        logs_path = os.path.join(cwd, '4Player-QuantPrice-2')
+        logs_path = os.path.join(cwd, 'PPOBuyers_vs_ExpertSellers')
         experiment_path = os.path.join(logs_path, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
@@ -355,7 +355,8 @@ class Trader:
 
                     #early stop or learn
                     if early_stop_critic:
-                        print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
+                        # print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
+                        pass
                     else:
                         critic_vars = self.ppo_critic.trainable_variables
                         critic_grads = tape_critic.gradient(losses_critic, critic_vars)
@@ -407,7 +408,7 @@ class Trader:
                         if self.use_early_stop_actor:
                             if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
                                 early_stop_actor = True
-                                print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
+                                # print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
 
                         if not early_stop_actor:
                             # Backpropagation
@@ -436,8 +437,8 @@ class Trader:
 
                     # early stop or learn
                     if early_stop_actor:
-                        print('stopping actor warmup early, after ',
-                              self.train_step + self.max_train_steps - max_train_steps)
+                        # print('stopping actor warmup early, after ', self.train_step + self.max_train_steps - max_train_steps)
+                        pass
                     else:
                         actor_vars = self.ppo_actor.trainable_variables
                         actor_grads = tape_warmup.gradient(losses_warmup, actor_vars)
@@ -569,7 +570,7 @@ class Trader:
             price = taken_action['price']
             price = round(price, 4)
         else:
-            price = 0.11
+            price = 0.111
 
         if 'quantity' in taken_action:
             quantity = int(taken_action['quantity'])
@@ -629,15 +630,15 @@ class Trader:
                 tf.summary.histogram(action, self.actions_history[action], step=self.gen)
 
 
-            for layer in self.ppo_critic.layers:
-                if layer.name not in ['Input']:
-                    for weights in layer.weights:
-                        tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
-
-            for layer in self.ppo_actor.layers:
-                if layer.name not in ['Input']:
-                    for weights in layer.weights:
-                        tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
+            # for layer in self.ppo_critic.layers:
+            #     if layer.name not in ['Input']:
+            #         for weights in layer.weights:
+            #             tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
+            #
+            # for layer in self.ppo_actor.layers:
+            #     if layer.name not in ['Input']:
+            #         for weights in layer.weights:
+            #             tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
 
 
         self.gen = self.gen + 1
