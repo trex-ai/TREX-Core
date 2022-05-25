@@ -78,24 +78,15 @@ class Trader:
                 self.__participant['ledger'],
                 self.__participant['market_info'])
 
-        if len(self.actions) > 1:
-            self.ppo_actor_dist = tfp.distributions.Dirichlet
-            self.pi = {'concentration': [1.0 for key in self.actions],
-                       'validate_args': False,
-                       'allow_nan_stats': True,
-                       'force_probs_to_zero_outside_support': False,
-                       'name': self.__participant['id'] + '_dirichlet'
-                       }
-        else:
-            self.ppo_actor_dist = tfp.distributions.Beta
-            self.pi = {'concentration0': 1.0,
-                       'concentration1': 1.0,
-                       'validate_args': False,
-                       'allow_nan_stats': True,
-                       'force_probs_to_zero_outside_support': False,
-                       'name': self.__participant['id'] + '_dirichlet'
-                       }
-
+        self.ppo_actor_dist = tfp.distributions.Dirichlet(concentration =[2.0, 2.0],
+                                                       validate_args=False,
+                                                       allow_nan_stats=True,
+                                                       name='Uniform' + self.__participant['id'])
+        # self.ppo_actor_dist = tfp.distributions.Uniform(high=1.0,
+        #                                                 low=0.0,
+        #                                                 validate_args=False,
+        #                                                 allow_nan_stats=True,
+        #                                                 name='Uniform' + self.__participant['id'])
         # Buffers we need for logging stuff before putting into the PPo Memory
         self.actions_buffer = {}
 
@@ -134,27 +125,24 @@ class Trader:
             self.rewards_history.append(reward)
             await self.metrics.track('rewards', reward)
 
-    async def __sample_pi(self): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
+    async def __sample_pi(self):
 
-        dist = self.ppo_actor_dist(**self.pi)
-
-        a_dist = dist.sample()
-        min = 1e-10
-        a_dist = tf.clip_by_value(a_dist, clip_value_min=min, clip_value_max=0.9999999)
-
-        carinality = len(a_dist.get_shape())
-        to_be_reduced = np.arange(carinality - 1, dtype=int).tolist()
-        a_dist = tf.squeeze(a_dist, axis=to_be_reduced)
-        a_dist = a_dist.numpy().tolist()
-
+#        min = 1e-10
+#        a_dist = tf.clip_by_value(a_dist, clip_value_min=min, clip_value_max=0.9999999)
+#         a = self.ppo_actor_dist.sample()
+#         a = tf.clip_by_value(a, clip_value_min=1e-10, clip_value_max=0.9999999)
+#         a = a.numpy().tolist()
+        a = self.ppo_actor_dist.sample()
+        a = tf.clip_by_value(a, clip_value_min=1e-10, clip_value_max=0.9999999)
+        a = a.numpy().tolist()
         a_scaled = {}
         keys = list(self.actions.keys())
         for action_index in range(len(keys)):
-            a = a_dist[action_index]
+            a_index = a[action_index]
             min = self.actions[keys[action_index]]['min']
             max = self.actions[keys[action_index]]['max']
-            a = min + (a * (max - min))
-            a_scaled[keys[action_index]] = a
+            a_index = min + (a_index * (max - min))
+            a_scaled[keys[action_index]] = a_index
 
         return a_scaled
 
