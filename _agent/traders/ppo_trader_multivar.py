@@ -67,8 +67,8 @@ class Trader:
         # Generate actions
         #I think we could stay with quantized actions, however I'd like to start testing on the non-quantized version ASAP so we do non quantized
         self.actions = {}
-        if 'P_max' in self.__participant:
-            p_max = self.__participant['P_max']
+        if 'P_max' in kwargs:
+            p_max = kwargs['P_max']
         else:
             p_max = 17
         for action in kwargs['actions']:
@@ -76,7 +76,7 @@ class Trader:
                 self.actions['price'] = {'min': ask_price, 'max': bid_price}
             if action == 'quantity':
                 self.actions['quantity'] = {'min': -p_max, 'max': p_max}
-            if action == 'storage' and 'storage' in self.__participant:
+            if action == 'storage':
                 self.actions['storage'] = {'min': -p_max, 'max': p_max}
 
 
@@ -87,7 +87,7 @@ class Trader:
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
-        logs_path = os.path.join(cwd, '18P_Tests')
+        logs_path = os.path.join(cwd, 'BESS_Test')
         experiment_path = os.path.join(logs_path, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
@@ -526,6 +526,9 @@ class Trader:
         else:
             quantity = self.net_load
 
+        if 'storage' in taken_action:
+            storage = int(taken_action['storage'])
+
         if quantity > 0:
             actions['bids'] = {
                 str(next_settle): {
@@ -545,7 +548,7 @@ class Trader:
 
         if 'storage' in self.actions:
             actions['bess'] = {
-                str(next_settle): taken_action['storage']
+                str(next_settle): storage
                 }
         # print(actions)
 

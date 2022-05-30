@@ -6,6 +6,11 @@ from _utils import utils
 from collections import OrderedDict, Counter
 import itertools
 import scipy.signal
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import tensorflow_probability as tfp
+
+
 
 def discount_cumsum(x, discount):
     """
@@ -23,6 +28,18 @@ def discount_cumsum(x, discount):
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 # this is a function to robustly pick the argmax in a random fashion if we happen to have several identically maximal values
+def huber(x, epsilon=1e-10):
+    x = tf.where(tf.math.greater(x, 1.0),
+                             # essentially just huber function it so its bigger than 0
+                             tf.abs(x),
+                             tf.square(x))
+    if epsilon > 0:
+        x = tf.where(tf.math.greater(x, epsilon),
+                     # essentially just huber function it so its bigger than 0
+                     x,
+                     epsilon)
+    return x
+
 def tf_shuffle_axis(value, axis=0, seed=None, name=None):
     perm = list(range(tf.rank(value)))
     perm[axis], perm[0] = perm[0], perm[axis]
@@ -77,7 +94,6 @@ def normalize_buffer_entry(buffer, key):
             buffer[episode][t][key] = (buffer[episode][t][key] - mean) / (std + 1e-10)
 
     return buffer
-
 
 class ExperienceReplayBuffer:
     def __init__(self, max_length=1e4, learn_wait=100, n_steps=1):
