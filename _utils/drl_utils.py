@@ -10,8 +10,38 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow_probability as tfp
 
+def tb_plotter(data_list, summary_writer):
+    with summary_writer.as_default():
+        for entry in data_list:
+            type = entry['type']
+            name = entry['name']
+            data = entry['data']
+            step = entry['step']
+            if type == 'scalar':
+                tf.summary.scalar(name, data, step)
+            elif type == 'histogram':
+                if 'buckets' in entry:
+                    buckets = entry['buckets']
+                else:
+                    buckets = None
+                tf.summary.histogram(name, data, step, buckets=buckets)
+            elif type == 'pseudo3D':
+                if 'buckets' not in entry:
+                    print('did not assign periodicity/buckets value,expect break')
+                else:
+                    periodicity = entry['buckets']
 
+                expected_values = np.zeros(periodicity)
+                for t in range(periodicity):
+                    data_t = data[t:periodicity:]
+                    expected_values[t] = np.mean(data_t)  # so we're in % SoC
 
+                pseudo_counts = []
+                for t in range(periodicity):
+                    count = int(expected_values[t])
+                    for _ in range(count):
+                        pseudo_counts.append(t)
+                tf.summary.histogram(name, pseudo_counts, step, buckets=buckets)
 def discount_cumsum(x, discount):
     """
     magic from rllab for computing discounted cumulative sums of vectors.

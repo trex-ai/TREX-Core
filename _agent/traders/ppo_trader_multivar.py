@@ -9,9 +9,9 @@ import numpy as np
 from _agent._utils.metrics import Metrics
 from _utils import utils
 from _utils.drl_utils import robust_argmax
-from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber
+from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber, tb_plotter
 import asyncio
-
+from matplotlib import pyplot as plt
 import sqlalchemy
 from sqlalchemy import MetaData, Column
 import dataset
@@ -87,8 +87,7 @@ class Trader:
 
         #prepare TB functionality, to open TB use the terminal command: tensorboard --logdir <dir_path>
         cwd = os.getcwd()
-        logs_path = os.path.join(cwd, 'BESS_Test')
-        experiment_path = os.path.join(logs_path, self.study_name)
+        experiment_path = os.path.join(cwd, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
 
         self.summary_writer = tf.summary.create_file_writer(trader_path)
@@ -147,6 +146,8 @@ class Trader:
         #logs we need for plotting
         self.rewards_history = []
         self.value_history = []
+        self.state_history = []
+        self.net_load_history = []
         self.actions_history = {}
         self.pdf_history = {}
         for action in self.actions:
@@ -169,8 +170,8 @@ class Trader:
             self.metrics.add('storage_soc', sqlalchemy.Float)
 
     def __build_actor(self, distribution='Beta'):
-        num_inputs = 2 if 'storage' not in self.actions else 3
-        num_hidden = 32 if 'storage' not in self.actions else 64
+        num_inputs = 4 if 'storage' not in self.actions else 5
+        num_hidden = 32 if 'storage' not in self.actions else 32
         num_hidden_layers = 2 #lets see how far we get with this first
         num_actions = len(self.actions)
 
@@ -199,8 +200,8 @@ class Trader:
         return ppo_actor_dist, k.Model(inputs=inputs, outputs=concentrations)
 
     def __build_critic(self):
-        num_inputs = 2 if 'storage' not in self.actions else 3
-        num_hidden = 32 if 'storage' not in self.actions else 64
+        num_inputs = 4 if 'storage' not in self.actions else 5
+        num_hidden = 32 if 'storage' not in self.actions else 32
         num_hidden_layers = 2 #lets see how far we get with this first
 
         initializer = k.initializers.HeNormal()
@@ -317,9 +318,8 @@ class Trader:
                         early_stop_critic, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
                                                                                         self.ppo_critic)
                     # log
-                    with self.summary_writer.as_default():
-                        tf.summary.scalar('critic_loss', losses_critic, step=self.train_step)
-
+                    data_for_tb = [{'name': 'critic_loss', 'data':losses_critic, 'type':'scalar', 'step':self.train_step}]
+                    tb_plotter(data_for_tb, self.summary_writer)
                     #early stop or learn
                     if early_stop_critic:
                         # print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
@@ -366,10 +366,13 @@ class Trader:
                         entropy = tf.reduce_mean(-log_probs_new)
 
                         # log
-                        with self.summary_writer.as_default():
-                            tf.summary.scalar('actor_loss', loss_actor, step=self.train_step)
-                            tf.summary.scalar('approx_KL', approx_kl, step=self.train_step)
-                            tf.summary.scalar('entropy', entropy, step=self.train_step)
+                        data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
+                                       {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
+                                        'step': self.train_step},
+                                       {'name': 'entropy', 'data': entropy, 'type': 'scalar',
+                                        'step': self.train_step},
+                                       ]
+                        tb_plotter(data_for_tb, self.summary_writer)
 
                         # early stopping condition or keep training, consider having this a running avg of 5 or sth?
                         if self.use_early_stop_actor:
@@ -401,8 +404,11 @@ class Trader:
 
                     # early stop or learn
                     if not early_stop_actor:
-                        with self.summary_writer.as_default():
-                            tf.summary.scalar('actor_warmup_loss', losses_warmup, step=self.train_step)
+                        data_for_tb = [{'name':'actor_warmup_loss',
+                                        'data': losses_warmup,
+                                        'type': 'scalar',
+                                        'step': self.train_step}]
+                        tb_plotter(data_for_tb, self.summary_writer)
 
                         actor_vars = self.ppo_actor.trainable_variables
                         actor_grads = tape_warmup.gradient(losses_warmup, actor_vars)
@@ -466,20 +472,26 @@ class Trader:
         #         self.actions['quantity']['max'] = 0.0
 
         timezone = self.__participant['timing']['timezone']
-        # current_round_end = utils.timestamp_to_local(current_round[1], timezone)
+        current_round_end = utils.timestamp_to_local(current_round[1], timezone)
         # next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
 
+        minutes = int(current_round[0]/60)
+        sin_24 = np.sin(2*np.pi*minutes/24) #ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
+        cos_24 = np.cos(2 * np.pi * minutes / 24)  # ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
+        pseudohour = minutes%24
         state = [
                  # np.sin(2 * np.pi * current_round_end.hour / 24),
                  # np.cos(2 * np.pi * current_round_end.hour / 24),
                  # np.sin(2 * np.pi * current_round_end.minute / 60),
                  # np.cos(2 * np.pi * current_round_end.minute / 60),
+                 sin_24, cos_24,
                  float(next_generation/17),
                  float(next_load/17)]
-
+        # print('gen', next_generation, 'load', next_load, 'time', current_round[0])
         if 'storage' in self.__participant:
-            storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
-            soc = storage_schedule[next_settle]['projected_soc_end']
+            storage_schedule = await self.__participant['storage']['check_schedule'](current_round)
+            soc = storage_schedule[current_round]['projected_soc_end']
+            battery_out_current = storage_schedule[current_round]['energy_scheduled']
             state.append(soc)
 
         state = np.array(state)
@@ -499,6 +511,15 @@ class Trader:
         # for action in self.actions:
         #     for param in pi_actions:
         #         self.pdf_history[action][param].append(pi_actions[param])
+
+        self.state_history.append(state)
+
+        current_generation, current_load = await self.__participant['read_profile'](current_round)
+        if 'storage' in self.__participant:
+            net_load_current = current_load - current_generation + storage_schedule[current_round]['energy_scheduled']
+        else:
+            net_load_current = current_load - current_generation
+        self.net_load_history.append(net_load_current)
 
         actions = await self.decode_actions(taken_action, next_settle)
 
@@ -571,26 +592,21 @@ class Trader:
         episode_G = sum(self.rewards_history)
         print(self.__participant['id'], 'episode reward:', episode_G)
 
-        with self.summary_writer.as_default():
-            tf.summary.scalar('Return' , episode_G, step= self.gen)
-            tf.summary.histogram('Rewards during Episode', self.rewards_history, step=self.gen)
-            tf.summary.histogram('Values',
-                                 self.value_history,
-                                 step=self.gen)
-
-            for action in self.actions:
-                tf.summary.histogram(action, self.actions_history[action], step=self.gen)
+        data_for_tb = [{'name':'Return', 'data':episode_G, 'type':'scalar', 'step':self.gen},
+                       {'name': 'Episode Rewards', 'data': self.rewards_history, 'type': 'histogram', 'step':self.gen},
+                       {'name':'Values', 'data':self.value_history, 'type':'histogram', 'step':self.gen}]
+        for action in self.actions:
+            data_for_tb.append({'name':action, 'data':self.actions_history[action], 'type':'histogram', 'step':self.gen})
 
 
-            # for layer in self.ppo_critic.layers:
-            #     if layer.name not in ['Input']:
-            #         for weights in layer.weights:
-            #             tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
-            #
-            # for layer in self.ppo_actor.layers:
-            #     if layer.name not in ['Input']:
-            #         for weights in layer.weights:
-            #             tf.summary.histogram(weights.name, weights.numpy(), step=self.gen)
+        socs = np.array(self.state_history)[:,-1]*100
+        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': 24})
+
+        data_for_tb.append(
+            {'name': 'Effective_Ned_load_during_day', 'data': self.net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': 24})
+
+
+        tb_plotter(data_for_tb, self.summary_writer)
 
 
         self.gen = self.gen + 1
@@ -601,8 +617,16 @@ class Trader:
         self.actions_buffer.clear()
         self.log_prob_buffer.clear()
 
+
+        # states = np.array(self.state_history)
+        # for row in range(states.shape[-1]):
+        #     plt.plot(states[:,row])
+        #     plt.show()
+
         self.rewards_history.clear()
         self.value_history.clear()
+        self.state_history.clear()
+        self.net_load_history.clear()
         for action in self.actions:
             self.actions_history[action].clear()
         #     for param in ['loc', 'scale']:
