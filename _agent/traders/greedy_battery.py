@@ -144,7 +144,6 @@ class Trader:
         await self.metrics.track('rewards', reward)
         self.rewards_history.append(reward)
 
-
     async def act(self, **kwargs):
         # Generate state (inputs to model):
         # - time(s)
@@ -155,7 +154,6 @@ class Trader:
         current_round = self.__participant['timing']['current_round']
         next_settle = self.__participant['timing']['next_settle']
         next_generation, next_load = await self.__participant['read_profile'](next_settle)
-
         timezone = self.__participant['timing']['timezone']
 
         minutes = int(current_round[0]/60)
@@ -244,14 +242,29 @@ class Trader:
         for action in self.actions:
             data_for_tb.append({'name':action, 'data':self.actions_history[action], 'type':'histogram', 'step':self.gen})
 
-        socs = np.array(self.state_history)[:,-1]*100
-        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': 24})
+        state_history = np.array(self.state_history)
+        state_history = state_history[8:,:]
+        # plt.plot(state_history[0:24,0])
+        # plt.show()
+        # plt.plot(state_history[0:24, 1])
+        # plt.show()
+        # plt.plot(state_history[0:24, 2])
+        # plt.show()
+        # plt.plot(state_history[0:24, 3])
+        # plt.show()
+        # plt.plot(state_history[0:24, 4])
+        # plt.show()
 
-        # max = np.amax(self.net_load_history)
-        # min = np.amin(self.net_load_history)
-        # mean = np.mean(self.net_load_history)
+        day_length = 8
+        socs = state_history[:,-1]*100
+        full_days = socs.shape[-1]%24
+
+        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
+
+        net_load_history = self.net_load_history - np.amin(self.net_load_history)
+        net_load_history = net_load_history[8:]
         data_for_tb.append(
-            {'name': 'Effective_Ned_load_during_day', 'data': self.net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': 24})
+            {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
 
         tb_plotter(data_for_tb, self.summary_writer)
@@ -260,7 +273,6 @@ class Trader:
         self.gen = self.gen + 1
 
     async def reset(self, **kwargs):
-
 
         self.rewards_history.clear()
         self.state_history.clear()

@@ -9,7 +9,7 @@ import numpy as np
 from _agent._utils.metrics import Metrics
 from _utils import utils
 from _utils.drl_utils import robust_argmax
-from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber, tb_plotter
+from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber, tb_plotter,build_actor_critic_models
 import asyncio
 from matplotlib import pyplot as plt
 import sqlalchemy
@@ -125,13 +125,17 @@ class Trader:
                                                             action_types=self.actions,
                                                              multivariate=True,
                                                             )
+        self.ppo_actor, self.ppo_critic, self.ppo_actor_dist = build_actor_critic_models(num_inputs=2 if 'storage' not in self.actions else 3,
+                                                                                         hidden_actor=kwargs['actor_hidden'],
+                                                                                         actor_type='FFNN',
+                                                                                         hidden_critic=kwargs['critic_hidden'],
+                                                                                         critic_type='FFNN',
+                                                                                         num_actions=len(self.actions))
         self.distribution_type = 'Beta'
-        self.ppo_actor_dist, self.ppo_actor = self.__build_actor(distribution=self.distribution_type)
         self.ppo_actor.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_actor,),)
         if self.warmup_actor:
             self.ppo_actor_warmup_loss = k.losses.MeanSquaredError()
 
-        self.ppo_critic = self.__build_critic()
         self.ppo_critic.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_critic,),)
         self.ppo_critic_loss = k.losses.MeanSquaredError()
 
@@ -169,57 +173,55 @@ class Trader:
         if 'storage' in self.__participant:
             self.metrics.add('storage_soc', sqlalchemy.Float)
 
-    def __build_actor(self, distribution='Beta'):
-        num_inputs = 4 if 'storage' not in self.actions else 5
-        num_hidden = 32 if 'storage' not in self.actions else 32
-        num_hidden_layers = 2 #lets see how far we get with this first
-        num_actions = len(self.actions)
+    # def __build_actor(self, distribution='Beta'):
+    #     num_inputs = 4 if 'storage' not in self.actions else 5
+    #     num_hidden = 32 if 'storage' not in self.actions else 64
+    #     num_hidden_layers = 3 #lets see how far we get with this first
+    #     num_actions = len(self.actions)
+    #
+    #     initializer = k.initializers.HeNormal()
+    #
+    #     inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
+    #
+    #     internal_signal = inputs
+    #     for hidden_layer_number in range(num_hidden_layers): #hidden layers
+    #         internal_signal = k.layers.Dense(num_hidden,
+    #                                        activation="elu",
+    #                                        kernel_initializer=initializer,
+    #                                        name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
+    #
+    #
+    #     concentrations = k.layers.Dense(2*len(self.actions),
+    #                                     activation=None,
+    #                                     kernel_initializer=initializer,
+    #                                     name='concentrations')(internal_signal)
+    #     concentrations = huber(concentrations)
+    #     ppo_actor_dist = tfp.distributions.Beta
+    #
+    #
+    #     return ppo_actor_dist, k.Model(inputs=inputs, outputs=concentrations)
 
-        initializer = k.initializers.HeNormal()
-
-        inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
-
-        internal_signal = inputs
-        for hidden_layer_number in range(num_hidden_layers): #hidden layers
-            internal_signal = k.layers.Dense(num_hidden,
-                                           activation="elu",
-                                           kernel_initializer=initializer,
-                                           name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
-
-
-        concentrations = k.layers.Dense(2*len(self.actions),
-                                        activation=None,
-                                        kernel_initializer=initializer,
-                                        name='concentrations')(internal_signal)
-        concentrations = huber(concentrations)
-
-
-        ppo_actor_dist = tfp.distributions.Beta
-
-
-        return ppo_actor_dist, k.Model(inputs=inputs, outputs=concentrations)
-
-    def __build_critic(self):
-        num_inputs = 4 if 'storage' not in self.actions else 5
-        num_hidden = 32 if 'storage' not in self.actions else 32
-        num_hidden_layers = 2 #lets see how far we get with this first
-
-        initializer = k.initializers.HeNormal()
-        inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
-
-        internal_signal = inputs
-        for hidden_layer_number in range(num_hidden_layers): #hidden layers
-            internal_signal = k.layers.Dense(num_hidden,
-                                           activation="elu",
-                                           kernel_initializer=initializer,
-                                           name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
-
-        value = k.layers.Dense(1,
-                             activation=None,
-                             kernel_initializer=initializer,
-                             name='ValueHead')(internal_signal)
-
-        return k.Model(inputs=inputs, outputs=value)
+    # def __build_critic(self):
+    #     num_inputs = 4 if 'storage' not in self.actions else 5
+    #     num_hidden = 32 if 'storage' not in self.actions else 64
+    #     num_hidden_layers = 2 #lets see how far we get with this first
+    #
+    #     initializer = k.initializers.HeNormal()
+    #     inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
+    #
+    #     internal_signal = inputs
+    #     for hidden_layer_number in range(num_hidden_layers): #hidden layers
+    #         internal_signal = k.layers.Dense(num_hidden,
+    #                                        activation="elu",
+    #                                        kernel_initializer=initializer,
+    #                                        name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
+    #
+    #     value = k.layers.Dense(1,
+    #                          activation=None,
+    #                          kernel_initializer=initializer,
+    #                          name='ValueHead')(internal_signal)
+    #
+    #     return k.Model(inputs=inputs, outputs=value)
 
     def anneal(self, parameter:str, adjustment, mode:str='multiply', limit=None):
         if not hasattr(self, parameter):
@@ -365,15 +367,6 @@ class Trader:
                         # collect entropy because why not. If this keeps growing we might have a too small memory and too smal batchsize
                         entropy = tf.reduce_mean(-log_probs_new)
 
-                        # log
-                        data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
-                                       {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
-                                        'step': self.train_step},
-                                       {'name': 'entropy', 'data': entropy, 'type': 'scalar',
-                                        'step': self.train_step},
-                                       ]
-                        tb_plotter(data_for_tb, self.summary_writer)
-
                         # early stopping condition or keep training, consider having this a running avg of 5 or sth?
                         if self.use_early_stop_actor:
                             if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
@@ -385,6 +378,17 @@ class Trader:
                             actor_vars = self.ppo_actor.trainable_variables
                             actor_grads = tape_actor.gradient(loss_actor, actor_vars)
                             self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
+
+                        # log
+                        data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
+                                       {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
+                                        'step': self.train_step},
+                                       {'name': 'entropy', 'data': entropy, 'type': 'scalar',
+                                        'step': self.train_step},
+                                       {'name': 'early_stop_actor', 'data': early_stop_actor, 'type': 'scalar',
+                                        'step': self.train_step},
+                                       ]
+                        tb_plotter(data_for_tb, self.summary_writer)
 
                 else:
 
@@ -484,7 +488,7 @@ class Trader:
                  # np.cos(2 * np.pi * current_round_end.hour / 24),
                  # np.sin(2 * np.pi * current_round_end.minute / 60),
                  # np.cos(2 * np.pi * current_round_end.minute / 60),
-                 sin_24, cos_24,
+                # sin_24, cos_24,
                  float(next_generation/17),
                  float(next_load/17)]
         # print('gen', next_generation, 'load', next_load, 'time', current_round[0])
@@ -599,11 +603,13 @@ class Trader:
             data_for_tb.append({'name':action, 'data':self.actions_history[action], 'type':'histogram', 'step':self.gen})
 
 
-        socs = np.array(self.state_history)[:,-1]*100
-        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': 24})
+        #day_length = 8
+        #socs = np.array(self.state_history)[:,-1]*100
+        #data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
 
-        data_for_tb.append(
-            {'name': 'Effective_Ned_load_during_day', 'data': self.net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': 24})
+        #net_load_history = self.net_load_history - np.amin(self.net_load_history)
+        #data_for_tb.append(
+        #    {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
 
         tb_plotter(data_for_tb, self.summary_writer)

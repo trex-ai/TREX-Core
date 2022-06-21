@@ -6,9 +6,75 @@ from _utils import utils
 from collections import OrderedDict, Counter
 import itertools
 import scipy.signal
+from tensorflow import keras as k
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow_probability as tfp
+
+def build_sandwich(signal, type='FFNN', hidden=[32,32,32,32], name='Actor', initializer=k.initializers.HeNormal()):
+    num_layer = 0
+    for num_hidden in hidden:  # hidden layers
+        num_layer += 1
+        if type == 'FFNN':
+            signal = k.layers.Dense(num_hidden,
+                                             activation="elu",
+                                             kernel_initializer=initializer,
+                                             name='name' + str(num_layer))(signal)
+        else:
+            print('requested layer type (', type, ') not recognized, failed to build ', name)
+
+    return signal
+
+def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32, 32, 32], actor_type='FFNN'):
+    initializer = k.initializers.HeNormal()
+    inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
+    internal_signal = inputs
+
+    internal_signal = build_sandwich(internal_signal, type=actor_type, hidden=hidden_actor, name='Actor')
+
+    concentrations = k.layers.Dense(2 * num_actions,
+                                    activation=None,
+                                    kernel_initializer=initializer,
+                                    name='concentrations')(internal_signal)
+    concentrations = huber(concentrations)
+    actor_model = k.Model(inputs=inputs, outputs=concentrations)
+
+
+    actor_distrib = tfp.distributions.Beta
+
+    return actor_model, actor_distrib
+
+def build_critic(num_inputs=4, hidden_critic=[32, 32, 32], critic_type='FFNN'):
+    initializer = k.initializers.HeNormal()
+    inputs = k.layers.Input(shape=(num_inputs,), name='Critic_Input')
+    internal_signal = inputs
+    internal_signal = build_sandwich(internal_signal, type=critic_type, hidden=hidden_critic, name='Critic')
+    value = k.layers.Dense(1,
+                           activation=None,
+                           kernel_initializer=initializer,
+                           name='ValueHead')(internal_signal)
+
+    critic_model = k.Model(inputs=inputs, outputs=value)
+
+    return critic_model
+
+def build_actor_critic_models(num_inputs=4,
+                              hidden_actor=[32, 32, 32],
+                              actor_type='FFNN', #['FFNN', 'GRU'] #ToDo
+                              hidden_critic=[32,32,32],
+                              critic_type='FFNN', #['FFNN', 'GRU'] #ToDo
+                              num_actions=4):
+    # needs to return a suitable actor ANN, ctor PDF function and critic ANN
+    initializer = tf.keras.initializers.HeNormal()
+    actor_model, actor_distrib = build_actor(num_inputs=num_inputs,
+                              num_actions=num_actions,
+                              hidden_actor=hidden_actor,
+                              actor_type=actor_type)
+    critic_model = build_critic(num_inputs=num_inputs,
+                              hidden_critic=hidden_critic,
+                              critic_type=critic_type)
+
+    return actor_model, critic_model, actor_distrib
 
 def tb_plotter(data_list, summary_writer):
     with summary_writer.as_default():
@@ -31,17 +97,19 @@ def tb_plotter(data_list, summary_writer):
                 else:
                     periodicity = entry['buckets']
 
-                expected_values = np.zeros(periodicity)
-                for t in range(periodicity):
-                    data_t = data[t:periodicity:]
-                    expected_values[t] = np.mean(data_t)  # so we're in % SoC
+                to_be_discarded = data.shape[-1]%periodicity
+                data = data[:-to_be_discarded]
+                data = np.reshape(data, (-1,periodicity))
+                data = np.average(data, axis=0)
+                data = np.squeeze(data)
 
                 pseudo_counts = []
                 for t in range(periodicity):
-                    count = int(expected_values[t])
+                    count = int(data[t])
                     for _ in range(count):
                         pseudo_counts.append(t)
                 tf.summary.histogram(name, pseudo_counts, step, buckets=buckets)
+
 def discount_cumsum(x, discount):
     """
     magic from rllab for computing discounted cumulative sums of vectors.
@@ -234,6 +302,9 @@ class ExperienceReplayBuffer:
                  }
         return batch
 
+#ToDo:
+# in order to make this recurrent we'll need to: store states(to initialize)
+# have a length argument for the trajectory we extract
 class PPO_ExperienceReplay:
     def __init__(self, max_length=1e4, trajectory_length=1, action_types=None, multivariate=True):
         self.max_length = max_length
