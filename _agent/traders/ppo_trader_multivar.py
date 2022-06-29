@@ -106,17 +106,22 @@ class Trader:
         # Hyperparameters
         self.alpha_critic = kwargs['alpha_critic']
         self.alpha_actor = kwargs['alpha_actor']
+        self.actor_type = kwargs['actor_type']
+
         self.batch_size = kwargs['batch_size'] #bigger is smoother, but might require a bigger replay buffer
-        self.policy_clip = kwargs['policy_clip'] #ToDo: look into some type of entropy regularization to guide exploration!
-        self.max_train_steps = kwargs['max_train_steps'] #ToDO: figure out reasonable default valye and make this a hyperparam
+        self.policy_clip = kwargs['policy_clip']
         self.kl_stop = kwargs['kl_stop'] #according to baselines tends to be bewteen 0.01 and 0.05
-        self.critic_patience = kwargs['critic_patience']
         self.entropy_reg = kwargs['entropy_reg']
         self.gamma = kwargs['gamma']
         self.gae_lambda = kwargs['gae_lambda']
         self.normalize_advantages = kwargs['normalize_advantages']
         self.use_early_stop_actor = kwargs['use_early_stop_actor']
+
+        self.critic_patience = kwargs['critic_patience']
         self.use_early_stop_critic = kwargs['use_early_stop_critic']
+        self.critic_type = kwargs['critic_type']
+
+        self.max_train_steps = kwargs['max_train_steps']
         self.replay_buffer_length = kwargs['experience_replay_buffer_length']
 
         self.warmup_actor = kwargs['warmup_actor']
@@ -127,9 +132,9 @@ class Trader:
                                                             )
         self.ppo_actor, self.ppo_critic, self.ppo_actor_dist = build_actor_critic_models(num_inputs=2 if 'storage' not in self.actions else 3,
                                                                                          hidden_actor=kwargs['actor_hidden'],
-                                                                                         actor_type='FFNN',
+                                                                                         actor_type=self.actor_type,
                                                                                          hidden_critic=kwargs['critic_hidden'],
-                                                                                         critic_type='FFNN',
+                                                                                         critic_type=self.critic_type,
                                                                                          num_actions=len(self.actions))
         self.distribution_type = 'Beta'
         self.ppo_actor.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_actor,),)
@@ -269,7 +274,7 @@ class Trader:
 
         if reward_timestamp in self.state_buffer and reward_timestamp in self.actions_buffer:  # we found matching ones, buffer and pop
 
-            self.experience_replay_buffer.add_entry(states=self.state_buffer[reward_timestamp],
+            self.experience_replay_buffer.add_entry(observations=self.state_buffer[reward_timestamp],
                                                     actions_taken=self.actions_buffer[reward_timestamp],
                                                     log_probs=self.log_prob_buffer[reward_timestamp],
                                                     values=self.value_buffer[reward_timestamp],
@@ -291,134 +296,150 @@ class Trader:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, func=self.train_RL_agent)
 
+    def pretrain_actor(self, observations, actor_stopper, max_train_steps):
+        with tf.GradientTape() as tape_warmup:
+            pi_new = self.ppo_actor(observations)
+
+            targets = tf.ones(shape=pi_new.shape)
+            losses_warmup = self.ppo_actor_warmup_loss(targets, pi_new)
+
+            losses_warmup = tf.reduce_mean(losses_warmup)
+
+        # calculate the stopping crtierions
+        if self.use_early_stop_critic:
+            stop_actor_training, self.ppo_actor = actor_stopper.check_iteration(losses_warmup.numpy(),
+                                                                             self.ppo_actor)
+
+        # early stop or learn
+        if not stop_actor_training:
+            data_for_tb = [{'name': 'actor_warmup_loss',
+                            'data': losses_warmup,
+                            'type': 'scalar',
+                            'step': self.train_step}]
+            tb_plotter(data_for_tb, self.summary_writer)
+
+            actor_vars = self.ppo_actor.trainable_variables
+            actor_grads = tape_warmup.gradient(losses_warmup, actor_vars)
+            self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
+        else:
+            print('stopping warmup ', max_train_steps - self.train_step, 'steps early')
+
+        return stop_actor_training
+
+    def train_actor(self, observations, a_taken, log_probs_old, advantages):
+        stop_actor_training = False
+        with tf.GradientTape() as tape_actor:
+            pi_batch = self.ppo_actor(observations)
+            dist = build_multivar(pi_batch, self.ppo_actor_dist, self.actions)
+
+            log_probs_new = dist.log_prob(a_taken)
+            # check = tf.reduce_sum(log_probs_new).numpy()
+            # if np.isnan(check) or np.isinf(check):
+            #     probs = dist.prob(a_taken)
+            #     print('shit')
+            # This is how baselines does it
+            log_probs_new = tf.squeeze(log_probs_new)
+            log_probs_old = tf.squeeze(log_probs_old)
+
+            ratio = tf.exp(log_probs_new - log_probs_old)  # pi(a|s) / pi_old(a|s)
+            # entropy = -dist.entropy()
+            entropy = -log_probs_new
+            soft_advantages = (1.0 - self.entropy_reg) * advantages + self.entropy_reg * entropy
+
+            clipped_ratio = tf.clip_by_value(ratio, 1 - self.policy_clip, 1 + self.policy_clip)
+            weighted_ratio = clipped_ratio * soft_advantages
+            loss_actor = -tf.math.minimum(ratio * soft_advantages, weighted_ratio)
+            # loss_actor = tf.clip_by_value(loss_actor, clip_value_min=-100, clip_value_max=100)
+            loss_actor = tf.math.reduce_mean(loss_actor)
+
+            # PPO early stopping as implemented in baselines
+            approx_kl = tf.math.reduce_mean(log_probs_old - log_probs_new)
+
+            # collect entropy because why not. If this keeps growing we might have a too small memory and too smal batchsize
+            entropy = tf.reduce_mean(-log_probs_new)
+
+            # early stopping condition or keep training, consider having this a running avg of 5 or sth?
+            if self.use_early_stop_actor:
+                if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
+                    stop_actor_training = True
+                    # print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
+
+            if not stop_actor_training:
+                # Backpropagation
+                actor_vars = self.ppo_actor.trainable_variables
+                actor_grads = tape_actor.gradient(loss_actor, actor_vars)
+                self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
+
+            # log
+            data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
+                           {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
+                            'step': self.train_step},
+                           {'name': 'entropy', 'data': entropy, 'type': 'scalar',
+                            'step': self.train_step},
+                           {'name': 'early_stop_actor', 'data': stop_actor_training, 'type': 'scalar',
+                            'step': self.train_step},
+                           ]
+            tb_plotter(data_for_tb, self.summary_writer)
+
+        return stop_actor_training
+
+    def train_critic(self, observations, Return,  critic_stopper):
+        with tf.GradientTape() as tape_critic:
+            # calculate critic loss and backpropagate
+
+            critic_Vs = self.ppo_critic(observations)
+            critic_Vs = tf.squeeze(critic_Vs, axis=-1)
+            G = tf.convert_to_tensor(Return, dtype=tf.float32)
+            losses_critic = self.ppo_critic_loss(critic_Vs, G)
+
+            # calculate the stopping crtierions
+            if self.use_early_stop_critic:
+                stop_critic_training, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
+                                                                                    self.ppo_critic)
+            # log
+            data_for_tb = [{'name': 'critic_loss', 'data': losses_critic, 'type': 'scalar', 'step': self.train_step}]
+            tb_plotter(data_for_tb, self.summary_writer)
+            # early stop or learn
+            if stop_critic_training:
+                # print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
+                pass
+            else:
+                critic_vars = self.ppo_critic.trainable_variables
+                critic_grads = tape_critic.gradient(losses_critic, critic_vars)
+                self.ppo_critic.optimizer.apply_gradients(zip(critic_grads, critic_vars))
+
+        return stop_critic_training
+
     def train_RL_agent(self):
 
-        early_stop_critic = False #ToDo: implement these
-        early_stop_actor = False
+        stop_critic_training = False #ToDo: implement these
+        stop_actor_training = False
         max_train_steps = self.train_step + self.max_train_steps
 
         critic_stopper = EarlyStopper(patience=self.critic_patience)
         if self.warmup_actor:
             actor_stopper = EarlyStopper(patience=self.critic_patience)
 
-        while self.train_step <= max_train_steps and not (early_stop_actor and early_stop_critic):
+        while self.train_step <= max_train_steps and not (stop_actor_training and stop_critic_training):
 
             batch = self.experience_replay_buffer.fetch_batch(batchsize=self.batch_size) #to see the batch data structure check this method
-            states = tf.convert_to_tensor(batch['states'], dtype=tf.float32)
+            observations = tf.convert_to_tensor(batch['observations'], dtype=tf.float32)
+            Return = tf.convert_to_tensor(batch['Return'], dtype=tf.float32)
 
-            if not early_stop_critic:
-                with tf.GradientTape() as tape_critic:
-                #calculate critic loss and backpropagate
+            if not stop_critic_training:
+                stop_critic_training = self.train_critic(observations, Return, critic_stopper)
 
-                    critic_Vs = self.ppo_critic(states)
-                    critic_Vs = tf.squeeze(critic_Vs, axis=-1)
-                    G = tf.convert_to_tensor(batch['Return'], dtype=tf.float32)
-                    losses_critic = self.ppo_critic_loss(critic_Vs, G)
-
-                    # calculate the stopping crtierions
-                    if self.use_early_stop_critic:
-                        early_stop_critic, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
-                                                                                        self.ppo_critic)
-                    # log
-                    data_for_tb = [{'name': 'critic_loss', 'data':losses_critic, 'type':'scalar', 'step':self.train_step}]
-                    tb_plotter(data_for_tb, self.summary_writer)
-                    #early stop or learn
-                    if early_stop_critic:
-                        # print('stopping training the critic early, after ', self.train_step + self.max_train_steps - max_train_steps)
-                        pass
-                    else:
-                        critic_vars = self.ppo_critic.trainable_variables
-                        critic_grads = tape_critic.gradient(losses_critic, critic_vars)
-                        self.ppo_critic.optimizer.apply_gradients(zip(critic_grads, critic_vars))
-
-            if not early_stop_actor:
-
+            if not stop_actor_training:
                 advantages = tf.convert_to_tensor(batch['advantages'], dtype=tf.float32)
                 log_probs_old = tf.convert_to_tensor(batch['log_probs'], dtype=tf.float32)
                 a_taken = tf.convert_to_tensor(batch['actions_taken'], dtype=tf.float32)
                 if not self.warmup_actor:
-                    with tf.GradientTape() as tape_actor:
-                        pi_batch = self.ppo_actor(states)
-                        dist = build_multivar(pi_batch, self.ppo_actor_dist, self.actions)
-
-                        log_probs_new = dist.log_prob(a_taken)
-                        # check = tf.reduce_sum(log_probs_new).numpy()
-                        # if np.isnan(check) or np.isinf(check):
-                        #     probs = dist.prob(a_taken)
-                        #     print('shit')
-                        #This is how baselines does it
-                        log_probs_new = tf.squeeze(log_probs_new)
-                        log_probs_old = tf.squeeze(log_probs_old)
-
-                        ratio = tf.exp(log_probs_new - log_probs_old)  # pi(a|s) / pi_old(a|s)
-                        # entropy = -dist.entropy()
-                        entropy = -log_probs_new
-                        soft_advantages = (1.0 - self.entropy_reg) * advantages + self.entropy_reg * entropy
-
-                        clipped_ratio = tf.clip_by_value(ratio, 1-self.policy_clip, 1+self.policy_clip)
-                        weighted_ratio = clipped_ratio * soft_advantages
-                        loss_actor = -tf.math.minimum(ratio*soft_advantages, weighted_ratio)
-                        # loss_actor = tf.clip_by_value(loss_actor, clip_value_min=-100, clip_value_max=100)
-                        loss_actor = tf.math.reduce_mean(loss_actor)
-
-                        # PPO early stopping as implemented in baselines
-                        approx_kl = tf.math.reduce_mean(log_probs_old - log_probs_new)
-
-                        # collect entropy because why not. If this keeps growing we might have a too small memory and too smal batchsize
-                        entropy = tf.reduce_mean(-log_probs_new)
-
-                        # early stopping condition or keep training, consider having this a running avg of 5 or sth?
-                        if self.use_early_stop_actor:
-                            if tf.math.reduce_mean(approx_kl).numpy() > 1.5 * self.kl_stop:
-                                early_stop_actor = True
-                                # print('stopping actor training due to exceeding KL-divergence tolerance with approx KL of', approx_kl,' after ' , self.train_step + self.max_train_steps - max_train_steps)
-
-                        if not early_stop_actor:
-                            # Backpropagation
-                            actor_vars = self.ppo_actor.trainable_variables
-                            actor_grads = tape_actor.gradient(loss_actor, actor_vars)
-                            self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
-
-                        # log
-                        data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
-                                       {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
-                                        'step': self.train_step},
-                                       {'name': 'entropy', 'data': entropy, 'type': 'scalar',
-                                        'step': self.train_step},
-                                       {'name': 'early_stop_actor', 'data': early_stop_actor, 'type': 'scalar',
-                                        'step': self.train_step},
-                                       ]
-                        tb_plotter(data_for_tb, self.summary_writer)
-
+                    stop_actor_training = self.train_actor(observations=observations,
+                                                        a_taken=a_taken,
+                                                        log_probs_old=log_probs_old,
+                                                        advantages=advantages)
                 else:
-
-                    with tf.GradientTape() as tape_warmup:
-                        pi_new = self.ppo_actor(states)
-
-                        targets = tf.ones(shape=pi_new.shape)
-                        losses_warmup = self.ppo_actor_warmup_loss(targets, pi_new)
-
-                        losses_warmup = tf.reduce_mean(losses_warmup)
-
-                    # calculate the stopping crtierions
-                    if self.use_early_stop_critic:
-                         early_stop_actor, self.ppo_actor = actor_stopper.check_iteration(losses_warmup.numpy(),
-                                                                                         self.ppo_actor)
-
-
-                    # early stop or learn
-                    if not early_stop_actor:
-                        data_for_tb = [{'name':'actor_warmup_loss',
-                                        'data': losses_warmup,
-                                        'type': 'scalar',
-                                        'step': self.train_step}]
-                        tb_plotter(data_for_tb, self.summary_writer)
-
-                        actor_vars = self.ppo_actor.trainable_variables
-                        actor_grads = tape_warmup.gradient(losses_warmup, actor_vars)
-                        self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
-                    else:
-                        print('stopping warmup ', max_train_steps - self.train_step, 'steps early')
+                    stop_actor_training = self.pretrain_actor(observations, actor_stopper, max_train_steps)
 
             self.train_step = self.train_step + 1
 

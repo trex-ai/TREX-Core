@@ -11,34 +11,52 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow_probability as tfp
 
-def build_sandwich(signal, type='FFNN', hidden=[32,32,32,32], name='Actor', initializer=k.initializers.HeNormal()):
-    num_layer = 0
-    for num_hidden in hidden:  # hidden layers
-        num_layer += 1
-        if type == 'FFNN':
-            signal = k.layers.Dense(num_hidden,
-                                             activation="elu",
-                                             kernel_initializer=initializer,
-                                             name='name' + str(num_layer))(signal)
-        else:
-            print('requested layer type (', type, ') not recognized, failed to build ', name)
+def build_hidden(signal, type='FFNN', num_hidden=32, name='Actor', initializer=k.initializers.HeNormal()):
 
-    return signal
+    if type == 'FFNN':
+        signal = k.layers.Dense(num_hidden,
+                                         activation="elu",
+                                         kernel_initializer=initializer,
+                                         name=name)(signal)
+        return signal, None
+    elif type == 'GRU':
+        signal, last_state = k.layers.GRU(num_hidden,
+                              # activation="elu",
+                              kernel_initializer=initializer,
+                              return_sequences=True, return_state=True,
+                              name=name)(signal)
+        return signal, last_state
+
+    else:
+        print('requested layer type (', type, ') not recognized, failed to build ', name)
+        return False, False
 
 def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32, 32, 32], actor_type='FFNN'):
     initializer = k.initializers.HeNormal()
-    inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
+
+    shape = (num_inputs,) if actor_type != 'GRU' else (None, num_inputs,)
+    inputs = k.layers.Input(shape=shape, name='Actor_Input')
     internal_signal = inputs
 
-    internal_signal = build_sandwich(internal_signal, type=actor_type, hidden=hidden_actor, name='Actor')
+    hidden_layer = 0
+    states = []
+    for num_hidden_neurons in hidden_actor:
+        internal_signal, state = build_hidden(internal_signal,
+                                       type=actor_type,
+                                       num_hidden=num_hidden_neurons,
+                                       name='Actor_hidden_' + str(hidden_layer))
+        states.append(state)
+        hidden_layer += 1
 
     concentrations = k.layers.Dense(2 * num_actions,
                                     activation=None,
                                     kernel_initializer=initializer,
                                     name='concentrations')(internal_signal)
     concentrations = huber(concentrations)
-    actor_model = k.Model(inputs=inputs, outputs=concentrations)
-
+    if actor_type == 'GRU':
+        actor_model = k.Model(inputs=inputs, outputs=[concentrations, states])
+    else:
+        actor_model = k.Model(inputs=inputs, outputs=concentrations)
 
     actor_distrib = tfp.distributions.Beta
 
@@ -46,15 +64,28 @@ def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32, 32, 32], actor_ty
 
 def build_critic(num_inputs=4, hidden_critic=[32, 32, 32], critic_type='FFNN'):
     initializer = k.initializers.HeNormal()
-    inputs = k.layers.Input(shape=(num_inputs,), name='Critic_Input')
+
+    shape = (num_inputs,) if critic_type != 'GRU' else (None, num_inputs,)
+    inputs = k.layers.Input(shape=shape, name='Critic_Input')
+
     internal_signal = inputs
-    internal_signal = build_sandwich(internal_signal, type=critic_type, hidden=hidden_critic, name='Critic')
+    hidden_layer = 0
+    states = []
+    for num_hidden_neurons in hidden_critic:
+        internal_signal, state = build_hidden(internal_signal,
+                                       type=critic_type,
+                                       num_hidden=num_hidden_neurons,
+                                       name='Critic_hidden' + str(hidden_layer))
+        hidden_layer += 1
     value = k.layers.Dense(1,
                            activation=None,
                            kernel_initializer=initializer,
                            name='ValueHead')(internal_signal)
 
-    critic_model = k.Model(inputs=inputs, outputs=value)
+    if critic_type == 'GRU':
+        critic_model = k.Model(inputs=inputs, outputs=[value, states])
+    else:
+        critic_model = k.Model(inputs=inputs, outputs=value)
 
     return critic_model
 
@@ -317,14 +348,14 @@ class PPO_ExperienceReplay:
         # entry = {   'as_taken': actions taken
         #            'logprob_as_taken': logprobs of actions taken
         #            'values': values of critic at time #ToDo: probably get rid of this
-        #            'states: #..
+        #            'observations: #..
         #            'rewards': ...
         #           'episode': #episode
         #            }
 
-    def add_entry(self, actions_taken, log_probs, values, states, rewards, episode=0):
+    def add_entry(self, actions_taken, log_probs, values, observations, rewards, episode=0):
 
-        entry = {'states': states,
+        entry = {'observations': observations,
                  'logprob': log_probs,
                  'values': values,
                  'a_taken': actions_taken,
@@ -426,7 +457,7 @@ class PPO_ExperienceReplay:
             log_probs_batch = [self.buffer[sample_episode][transition]['logprob']
                                             for [sample_episode, transition] in batch_indices]
 
-        states_batch = [self.buffer[sample_episode][transition]['states']
+        states_batch = [self.buffer[sample_episode][transition]['observations']
                         for [sample_episode, transition] in batch_indices]
         advantages_batch = [self.buffer[sample_episode][transition]['advantage']
                         for [sample_episode, transition] in batch_indices]
@@ -435,7 +466,7 @@ class PPO_ExperienceReplay:
 
         batch = {'actions_taken': actions_batch, #dictionary with a batch f
                  'log_probs': log_probs_batch,
-                 'states': states_batch,
+                 'observations': states_batch,
                  'Return': returns_batch,
                  'advantages': advantages_batch
                  }
