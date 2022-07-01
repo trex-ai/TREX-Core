@@ -76,6 +76,7 @@ def build_critic(num_inputs=4, hidden_critic=[32, 32, 32], critic_type='FFNN'):
                                        type=critic_type,
                                        num_hidden=num_hidden_neurons,
                                        name='Critic_hidden' + str(hidden_layer))
+        states.append(state)
         hidden_layer += 1
     value = k.layers.Dense(1,
                            activation=None,
@@ -344,25 +345,18 @@ class PPO_ExperienceReplay:
         self.action_types = action_types
         self.trajectory_length = trajectory_length  # trajectory length
         self.multivariate = multivariate
-        # each entry on an episode_n_transitions looks like this
-        # entry = {   'as_taken': actions taken
-        #            'logprob_as_taken': logprobs of actions taken
-        #            'values': values of critic at time #ToDo: probably get rid of this
-        #            'observations: #..
-        #            'rewards': ...
-        #           'episode': #episode
-        #            }
 
     def add_entry(self, actions_taken, log_probs, values, observations, rewards, episode=0):
+        entry = {}
 
         entry = {'observations': observations,
-                 'logprob': log_probs,
+                 'log_probs': log_probs,
                  'values': values,
                  'a_taken': actions_taken,
                  'rewards': rewards,
                  }
 
-        if episode not in self.buffer:
+        if episode not in self.buffer: #ToDo: we might need to change this for asynch stuff
             self.buffer[episode] = []
         self.buffer[episode].append(entry)
 
@@ -390,7 +384,7 @@ class PPO_ExperienceReplay:
         else:
             return False
 
-    async def calculate_advantage(self, gamma=0.99, gae_lambda=0.95, normalize=True, entropy_reg=0.1):         #ToDo: calculate advantage
+    async def calculate_advantage(self, gamma=0.99, gae_lambda=0.95, normalize=True):
 
         for episode in self.buffer:
             V_episode = [step['values'] for step in self.buffer[episode]]
@@ -425,14 +419,31 @@ class PPO_ExperienceReplay:
                 self.buffer[episode][t]['advantage'] = A_eisode[t]
 
         #normalize advantage:
-        self.buffer = normalize_buffer_entry(self.buffer, key='advantage')
-
-        # for episode in self.buffer.keys():
-        #     for t in range(len.self.buffer[episode]):
-        #         self.buffer[episode][t]['advantage'] = self.buffer[episode][t]['advantage'] - entropy_reg * self.buffer[episode][t]['logprob']
-
+        if normalize:
+            self.buffer = normalize_buffer_entry(self.buffer, key='advantage')
+        #ToDo: do some research if normalizing rewards here is useful
 
         return True
+
+    def _fetch_buffer_entry(self, batch_indices, key, subkeys=None):
+        #godl: trajectory_start:trajectory_start+self.trajectory_length
+        # if subkeys: #for nested buffer entries
+        #     fetched_entry = {}
+        #     for subkey in subkeys:
+        #         fetched_entry[subkey] = [self.buffer[sample_episode][trajectory_start][key][subkey]
+        #                                       for [sample_episode, trajectory_start] in batch_indices]
+        #
+        # else:
+        if self.trajectory_length <=1:
+            fetched_entry = [self.buffer[sample_episode][trajectory_start][key]
+                                          for [sample_episode, trajectory_start] in batch_indices]
+        else:
+            fetched_entry = []
+            for [sample_episode, trajectory_start] in batch_indices:
+                fetched_trajectory = [self.buffer[sample_episode][trajectory_start + step][key] for step in range(self.trajectory_length)]
+                fetched_entry.append(fetched_trajectory)
+
+        return fetched_entry
 
     def fetch_batch(self, batchsize=32, indices=None):
 
@@ -441,28 +452,14 @@ class PPO_ExperienceReplay:
 
         #ToDo: implement trajectories longer than 1, might be base on same code as DQN buffer
 
-        if not self.multivariate:
-            actions_batch = {}
-            log_probs_batch = {}
-            for action_type in self.action_types:
-                actions_batch[action_type] = [self.buffer[sample_episode][transition]['a_taken'][action_type]
-                                              for [sample_episode, transition] in batch_indices]
-
-                log_probs_batch[action_type] = [self.buffer[sample_episode][transition]['logprob'][action_type]
-                                                for [sample_episode, transition] in batch_indices]
-        else:
-            actions_batch = [self.buffer[sample_episode][transition]['a_taken']
-                                          for [sample_episode, transition] in batch_indices]
-
-            log_probs_batch = [self.buffer[sample_episode][transition]['logprob']
-                                            for [sample_episode, transition] in batch_indices]
-
-        states_batch = [self.buffer[sample_episode][transition]['observations']
-                        for [sample_episode, transition] in batch_indices]
-        advantages_batch = [self.buffer[sample_episode][transition]['advantage']
-                        for [sample_episode, transition] in batch_indices]
-        returns_batch = [self.buffer[sample_episode][transition]['Return']
-                        for [sample_episode, transition] in batch_indices]
+        # if not self.multivariate: #Deprecated since all will be multivariate
+        #     actions_batch = self._fetch_buffer_entry(batch_indices, 'a_taken', self.action_types)
+        #     log_probs_batch = self._fetch_buffer_entry(batch_indices, 'logprob', self.action_types)
+        actions_batch = self._fetch_buffer_entry(batch_indices, 'a_taken')
+        log_probs_batch = self._fetch_buffer_entry(batch_indices, 'log_probs')
+        states_batch = self._fetch_buffer_entry(batch_indices, 'observations')
+        advantages_batch = self._fetch_buffer_entry(batch_indices, 'advantage')
+        returns_batch = self._fetch_buffer_entry(batch_indices, 'Return')
 
         batch = {'actions_taken': actions_batch, #dictionary with a batch f
                  'log_probs': log_probs_batch,

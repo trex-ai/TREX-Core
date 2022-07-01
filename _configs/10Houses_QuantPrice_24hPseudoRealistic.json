@@ -1,0 +1,516 @@
+{
+    "version": "3.7.0",
+    "study": {
+      "name": "10Houses_QuantPrice_24hPseudoRealistic",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 1,
+      "generations": 1000,
+      "sim_root": ""
+    },
+  "training": {
+    "curriculum": {
+     "15": {
+       "anneal": {
+          "warmup_actor":  [false, "set"]}}
+    }
+    },
+    "server": {
+      "host": "",
+      "port": 7005
+    },
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "Node1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node2": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node3": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node4": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node5": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node6": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node7": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node8": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node9": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      },
+      "Node10": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": ["price", "quantity"], //price, quantity, storage
+          "learning": true,
+          "observations": ["generation", "load"], //generation, load, time_sin, time_cos, soc
+
+          "use_early_stop_critic": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "critic_hidden": [32,32],
+          "critic_patience": 60,
+          "critic_type": "FFNN",
+
+
+          "use_early_stop_actor": true,
+          "alpha_actor": 1.5e-4,
+          "actor_type": "FFNN",
+          "actor_hidden": [32,32],
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.1,
+
+          "batch_size": 32,
+          "experience_replay_buffer_length": 720,
+          "max_train_steps": 300,
+
+          "limit_actions": true,
+
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+
+        },
+        "load": {
+          "scale": 15
+        },
+        "generation": {
+          "scale": 15
+        }
+      }
+    }
+  }
+  

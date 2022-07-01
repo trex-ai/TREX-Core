@@ -125,12 +125,17 @@ class Trader:
         self.replay_buffer_length = kwargs['experience_replay_buffer_length']
 
         self.warmup_actor = kwargs['warmup_actor']
+        self.observations = kwargs['observations']
+
+        self.burn_in = kwargs['burn_in'] if 'burn_in' in kwargs else 0
+        self.trajectory_length = kwargs['trajectory_length'] if 'trajectory_length' in kwargs else 1
 
         self.experience_replay_buffer = PPO_ExperienceReplay(max_length=self.replay_buffer_length,
                                                             action_types=self.actions,
                                                              multivariate=True,
+                                                             trajectory_length=self.burn_in+self.trajectory_length
                                                             )
-        self.ppo_actor, self.ppo_critic, self.ppo_actor_dist = build_actor_critic_models(num_inputs=2 if 'storage' not in self.actions else 3,
+        self.ppo_actor, self.ppo_critic, self.ppo_actor_dist = build_actor_critic_models(num_inputs=len(kwargs['observations']),
                                                                                          hidden_actor=kwargs['actor_hidden'],
                                                                                          actor_type=self.actor_type,
                                                                                          hidden_critic=kwargs['critic_hidden'],
@@ -150,13 +155,18 @@ class Trader:
         # self.pi_history = {}
         self.log_prob_buffer = {}
         self.value_buffer = {}
-        self.state_buffer = {}
+        self.observations_buffer = {}
 
         #logs we need for plotting
         self.rewards_history = []
         self.value_history = []
-        self.state_history = []
+        self.observations_history = []
         self.net_load_history = []
+        if self.actor_type == 'GRU':
+            self.actor_states_history = []
+        if self.critic_type == 'GRU':
+            self.critis_states_history = []
+
         self.actions_history = {}
         self.pdf_history = {}
         for action in self.actions:
@@ -177,56 +187,6 @@ class Trader:
         self.metrics.add('next_settle_generation', sqlalchemy.Integer)
         if 'storage' in self.__participant:
             self.metrics.add('storage_soc', sqlalchemy.Float)
-
-    # def __build_actor(self, distribution='Beta'):
-    #     num_inputs = 4 if 'storage' not in self.actions else 5
-    #     num_hidden = 32 if 'storage' not in self.actions else 64
-    #     num_hidden_layers = 3 #lets see how far we get with this first
-    #     num_actions = len(self.actions)
-    #
-    #     initializer = k.initializers.HeNormal()
-    #
-    #     inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
-    #
-    #     internal_signal = inputs
-    #     for hidden_layer_number in range(num_hidden_layers): #hidden layers
-    #         internal_signal = k.layers.Dense(num_hidden,
-    #                                        activation="elu",
-    #                                        kernel_initializer=initializer,
-    #                                        name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
-    #
-    #
-    #     concentrations = k.layers.Dense(2*len(self.actions),
-    #                                     activation=None,
-    #                                     kernel_initializer=initializer,
-    #                                     name='concentrations')(internal_signal)
-    #     concentrations = huber(concentrations)
-    #     ppo_actor_dist = tfp.distributions.Beta
-    #
-    #
-    #     return ppo_actor_dist, k.Model(inputs=inputs, outputs=concentrations)
-
-    # def __build_critic(self):
-    #     num_inputs = 4 if 'storage' not in self.actions else 5
-    #     num_hidden = 32 if 'storage' not in self.actions else 64
-    #     num_hidden_layers = 2 #lets see how far we get with this first
-    #
-    #     initializer = k.initializers.HeNormal()
-    #     inputs = k.layers.Input(shape=(num_inputs,), name='Actor_Input')
-    #
-    #     internal_signal = inputs
-    #     for hidden_layer_number in range(num_hidden_layers): #hidden layers
-    #         internal_signal = k.layers.Dense(num_hidden,
-    #                                        activation="elu",
-    #                                        kernel_initializer=initializer,
-    #                                        name='Actor_Hidden' + str(hidden_layer_number))(internal_signal)
-    #
-    #     value = k.layers.Dense(1,
-    #                          activation=None,
-    #                          kernel_initializer=initializer,
-    #                          name='ValueHead')(internal_signal)
-    #
-    #     return k.Model(inputs=inputs, outputs=value)
 
     def anneal(self, parameter:str, adjustment, mode:str='multiply', limit=None):
         if not hasattr(self, parameter):
@@ -272,9 +232,9 @@ class Trader:
         await self.metrics.track('rewards', reward)
         self.rewards_history.append(reward)
 
-        if reward_timestamp in self.state_buffer and reward_timestamp in self.actions_buffer:  # we found matching ones, buffer and pop
+        if reward_timestamp in self.observations_buffer and reward_timestamp in self.actions_buffer:  # we found matching ones, buffer and pop
 
-            self.experience_replay_buffer.add_entry(observations=self.state_buffer[reward_timestamp],
+            self.experience_replay_buffer.add_entry(observations=self.observations_buffer[reward_timestamp],
                                                     actions_taken=self.actions_buffer[reward_timestamp],
                                                     log_probs=self.log_prob_buffer[reward_timestamp],
                                                     values=self.value_buffer[reward_timestamp],
@@ -284,14 +244,13 @@ class Trader:
             self.actions_buffer.pop(reward_timestamp) #ToDo: check if we can pop into the above function, would look nicer
             self.log_prob_buffer.pop(reward_timestamp)
             self.value_buffer.pop(reward_timestamp)
-            self.state_buffer.pop(reward_timestamp)
+            self.observations_buffer.pop(reward_timestamp)
 
             if self.experience_replay_buffer.should_we_learn():
                 advantage_calulated = await self.experience_replay_buffer.calculate_advantage(gamma=self.gamma,
                                                                                               gae_lambda=self.gae_lambda,
                                                                                               normalize=self.normalize_advantages,
-                                                                                              entropy_reg=self.entropy_reg
-                                                                                              )  # ToDo: check once more on a different immplementation if this is right
+                                                                                              )
                 buffer_indexed = await self.experience_replay_buffer.generate_availale_indices()  # so we can caluclate the batches faster
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, func=self.train_RL_agent)
@@ -412,7 +371,7 @@ class Trader:
 
     def train_RL_agent(self):
 
-        stop_critic_training = False #ToDo: implement these
+        stop_critic_training = False
         stop_actor_training = False
         max_train_steps = self.train_step + self.max_train_steps
 
@@ -447,8 +406,7 @@ class Trader:
         self.experience_replay_buffer.clear_buffer()
         self.train_step = max_train_steps #to make sure we log all the algorithms that might be running in parallel at the same scales
 
-    async def __sample_pi(self, pi_dict): #ToDo: check how this behaves for batches of actions and for single actions, we want this to be consisten!
-
+    async def __sample_pi(self, pi_dict):
         dist = build_multivar(pi_dict, self.ppo_actor_dist, self.actions)
 
         a_dist = dist.sample(1)
@@ -500,44 +458,53 @@ class Trader:
         current_round_end = utils.timestamp_to_local(current_round[1], timezone)
         # next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
 
-        minutes = int(current_round[0]/60)
-        sin_24 = np.sin(2*np.pi*minutes/24) #ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
-        cos_24 = np.cos(2 * np.pi * minutes / 24)  # ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
-        pseudohour = minutes%24
-        state = [
-                 # np.sin(2 * np.pi * current_round_end.hour / 24),
-                 # np.cos(2 * np.pi * current_round_end.hour / 24),
-                 # np.sin(2 * np.pi * current_round_end.minute / 60),
-                 # np.cos(2 * np.pi * current_round_end.minute / 60),
-                # sin_24, cos_24,
-                 float(next_generation/17),
-                 float(next_load/17)]
+
+        observations_t = []
+        if 'generation' in self.observations:
+            observations_t.append(next_generation/17)
+        if 'load' in self.observations:
+            observations_t.append(next_load/17)
+        if 'time_sin' or 'time_cos' in self.observations:
+            minutes = int(current_round[0]/60)
+            if 'time_sin' in self.observations:
+                observations_t.append(np.sin(2*np.pi*minutes/24)) #ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
+            if 'time_cos' in self.observations:
+                observations_t.append(np.cos(2 * np.pi * minutes / 24))  # ToDo: ATM THIS IS ONLY FOR THE FAKE 24H synth profile!!
+
+
         # print('gen', next_generation, 'load', next_load, 'time', current_round[0])
-        if 'storage' in self.__participant:
+        if 'soc' in self.observations:
             storage_schedule = await self.__participant['storage']['check_schedule'](current_round)
             soc = storage_schedule[current_round]['projected_soc_end']
-            battery_out_current = storage_schedule[current_round]['energy_scheduled']
-            state.append(soc)
+            # battery_out_current = storage_schedule[current_round]['energy_scheduled']
+            observations_t.append(soc)
 
-        state = np.array(state)
-        pi_dict = self.ppo_actor(tf.expand_dims(state, axis=0))
+        observations_t = np.array(observations_t)
+        obs_t = tf.expand_dims(observations_t, axis=0)
+        if self.actor_type == 'FFNN':
+            pi_dict = self.ppo_actor(obs_t)
+        elif self.actor_type == 'GRU':
+            pi_dict, states_actor_t = self.ppo_actor(obs_t)
+            self.actor_states_history.append(states_actor_t)
 
+        if self.critic_type == 'FFNN':
+            V_t = self.ppo_critic(obs_t)
+
+        elif self.critic_type == 'GRU':
+            V_t, states_critic_t = self.ppo_critic(obs_t)
+            self.critis_states_history.append(states_critic_t)
+
+        V_t = tf.squeeze(V_t, axis=0).numpy().tolist()[0]
         taken_action, log_prob, dist_action = await self.__sample_pi(pi_dict)
 
-        value = self.ppo_critic(tf.expand_dims(state, axis=0))
-        value = tf.squeeze(value, axis=0).numpy().tolist()[0]
-
         # lets log the stuff needed for the replay buffer
-        self.state_buffer[current_round[1]] = state
+        self.observations_buffer[current_round[1]] = observations_t
         self.actions_buffer[current_round[1]] = dist_action
         self.log_prob_buffer[current_round[1]] = log_prob
-        self.value_buffer[current_round[1]] = value
-        self.value_history.append(value)
-        # for action in self.actions:
-        #     for param in pi_actions:
-        #         self.pdf_history[action][param].append(pi_actions[param])
+        self.value_buffer[current_round[1]] = V_t
+        self.value_history.append(V_t)
 
-        self.state_history.append(state)
+        self.observations_history.append(observations_t)
 
         current_generation, current_load = await self.__participant['read_profile'](current_round)
         if 'storage' in self.__participant:
@@ -625,7 +592,7 @@ class Trader:
 
 
         #day_length = 8
-        #socs = np.array(self.state_history)[:,-1]*100
+        #socs = np.array(self.observations_history)[:,-1]*100
         #data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
 
         #net_load_history = self.net_load_history - np.amin(self.net_load_history)
@@ -639,20 +606,20 @@ class Trader:
         self.gen = self.gen + 1
 
     async def reset(self, **kwargs):
-        self.state_buffer.clear()
+        self.observations_buffer.clear()
         self.value_buffer.clear()
         self.actions_buffer.clear()
         self.log_prob_buffer.clear()
 
 
-        # states = np.array(self.state_history)
+        # states = np.array(self.observations_history)
         # for row in range(states.shape[-1]):
         #     plt.plot(states[:,row])
         #     plt.show()
 
         self.rewards_history.clear()
         self.value_history.clear()
-        self.state_history.clear()
+        self.observations_history.clear()
         self.net_load_history.clear()
         for action in self.actions:
             self.actions_history[action].clear()
