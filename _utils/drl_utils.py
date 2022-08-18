@@ -11,7 +11,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow_probability as tfp
 
-def build_hidden(signal, type='FFNN', num_hidden=32, name='Actor', initializer=k.initializers.HeNormal()):
+def build_hidden_layer(signal, type='FFNN', num_hidden=32, name='Actor', initial_state=None, initializer=k.initializers.HeNormal()):
 
     if type == 'FFNN':
         signal = k.layers.Dense(num_hidden,
@@ -24,71 +24,82 @@ def build_hidden(signal, type='FFNN', num_hidden=32, name='Actor', initializer=k
                               # activation="elu",
                               kernel_initializer=initializer,
                               return_sequences=True, return_state=True,
-                              name=name)(signal)
+                              name=name)(signal, initial_state=initial_state)
         return signal, last_state
 
     else:
         print('requested layer type (', type, ') not recognized, failed to build ', name)
         return False, False
 
-def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32, 32, 32], actor_type='FFNN'):
+def build_hidden(internal_signal, inputs, outputs, hidden_actor=[32,32,32], type='FFNN'):
+    hidden_layer = 0
+    initial_states_dummy = {}
+    for num_hidden_neurons in hidden_actor:
+        if type == 'GRU':
+            initial_state = k.layers.Input(shape=num_hidden_neurons, name='GRU_' + str(hidden_layer) + '_initial_state')
+            inputs['GRU_'+str(hidden_layer)+'_state'] = initial_state
+            initial_states_dummy['GRU_'+str(hidden_layer)+'_state'] = tf.zeros((1,num_hidden_neurons))
+
+        else:
+            initial_state = None
+        internal_signal, last_state = build_hidden_layer(internal_signal,
+                                       type=type,
+                                       num_hidden=num_hidden_neurons,
+                                       initial_state=initial_state,
+                                       name='Actor_hidden_' + str(hidden_layer))
+        if type == 'GRU':
+            outputs['GRU_'+str(hidden_layer)+'_state'] = last_state
+        hidden_layer += 1
+
+    return internal_signal, inputs, outputs, initial_states_dummy
+
+def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32], actor_type='FFNN'):
     initializer = k.initializers.HeNormal()
+    inputs = {}
+    outputs = {}
 
     shape = (num_inputs,) if actor_type != 'GRU' else (None, num_inputs,)
-    inputs = k.layers.Input(shape=shape, name='Actor_Input')
-    internal_signal = inputs
+    internal_signal = k.layers.Input(shape=shape, name='Actor_Input')
+    inputs['observations'] = internal_signal
 
-    hidden_layer = 0
-    states = []
-    for num_hidden_neurons in hidden_actor:
-        internal_signal, state = build_hidden(internal_signal,
-                                       type=actor_type,
-                                       num_hidden=num_hidden_neurons,
-                                       name='Actor_hidden_' + str(hidden_layer))
-        states.append(state)
-        hidden_layer += 1
+    internal_signal,  inputs, outputs, initial_states_dummy = build_hidden(internal_signal, inputs, outputs, hidden_actor, actor_type)
 
     concentrations = k.layers.Dense(2 * num_actions,
                                     activation=None,
                                     kernel_initializer=initializer,
                                     name='concentrations')(internal_signal)
     concentrations = huber(concentrations)
-    if actor_type == 'GRU':
-        actor_model = k.Model(inputs=inputs, outputs=[concentrations, states])
-    else:
-        actor_model = k.Model(inputs=inputs, outputs=concentrations)
+    outputs['pi'] = concentrations
+    actor_model = k.Model(inputs=inputs, outputs=outputs)
 
     actor_distrib = tfp.distributions.Beta
 
-    return actor_model, actor_distrib
+    out_dict={'model': actor_model,
+              'distribution': actor_distrib,
+              'initial_states_dummy': initial_states_dummy}
+
+    return out_dict
 
 def build_critic(num_inputs=4, hidden_critic=[32, 32, 32], critic_type='FFNN'):
     initializer = k.initializers.HeNormal()
-
+    inputs = {}
+    outputs = {}
     shape = (num_inputs,) if critic_type != 'GRU' else (None, num_inputs,)
-    inputs = k.layers.Input(shape=shape, name='Critic_Input')
+    internal_signal = k.layers.Input(shape=shape, name='Critic_Input')
+    inputs['observations'] = internal_signal
 
-    internal_signal = inputs
-    hidden_layer = 0
-    states = []
-    for num_hidden_neurons in hidden_critic:
-        internal_signal, state = build_hidden(internal_signal,
-                                       type=critic_type,
-                                       num_hidden=num_hidden_neurons,
-                                       name='Critic_hidden' + str(hidden_layer))
-        states.append(state)
-        hidden_layer += 1
+    internal_signal, inputs, outputs, initial_states_dummy = build_hidden(internal_signal, inputs, outputs, hidden_critic, critic_type)
+
     value = k.layers.Dense(1,
                            activation=None,
                            kernel_initializer=initializer,
                            name='ValueHead')(internal_signal)
+    outputs['value'] = value
+    critic_model = k.Model(inputs=inputs, outputs=outputs)
 
-    if critic_type == 'GRU':
-        critic_model = k.Model(inputs=inputs, outputs=[value, states])
-    else:
-        critic_model = k.Model(inputs=inputs, outputs=value)
-
-    return critic_model
+    critic_dict = {'model': critic_model,
+                   'initial_states_dummy': initial_states_dummy}
+    return critic_dict
 
 def build_actor_critic_models(num_inputs=4,
                               hidden_actor=[32, 32, 32],
@@ -98,15 +109,15 @@ def build_actor_critic_models(num_inputs=4,
                               num_actions=4):
     # needs to return a suitable actor ANN, ctor PDF function and critic ANN
     initializer = tf.keras.initializers.HeNormal()
-    actor_model, actor_distrib = build_actor(num_inputs=num_inputs,
+    actor_dict = build_actor(num_inputs=num_inputs,
                               num_actions=num_actions,
                               hidden_actor=hidden_actor,
                               actor_type=actor_type)
-    critic_model = build_critic(num_inputs=num_inputs,
+    critic_dict = build_critic(num_inputs=num_inputs,
                               hidden_critic=hidden_critic,
                               critic_type=critic_type)
 
-    return actor_model, critic_model, actor_distrib
+    return actor_dict, critic_dict
 
 def tb_plotter(data_list, summary_writer):
     with summary_writer.as_default():
@@ -224,6 +235,38 @@ def normalize_buffer_entry(buffer, key):
             buffer[episode][t][key] = (buffer[episode][t][key] - mean) / (std + 1e-10)
 
     return buffer
+
+def build_multivar(concentrations, dist, actions):
+    # independent_dists = []
+    # for action in args:
+    #     c0 = args[action]['c0']
+    #     c1 = args[action]['c1']
+    #     dist_action = dist(c0, c1)
+    args = {}
+    c0s, c1s  = tf.split(concentrations, 2, -1)
+    c0s = tf.split(c0s, len(actions), -1)
+    #c0s = tf.concat(c0s, axis=-2)
+    c1s = tf.split(c1s, len(actions), -1)
+    #c1s = tf.concat(c1s, axis=-2)
+    args['concentration0'] = tf.concat(c0s, axis=-1)
+    args['concentration1'] = tf.concat(c1s, axis=-1)
+    betas = dist(**args)
+    # sample = betas.sample(1)
+    multivar_dist = tfp.distributions.Independent(betas, reinterpreted_batch_ndims=1)
+    # sample_dis = multivar_dist.sample(1)
+    return multivar_dist
+
+def assemble_subdict_batch(list_of_dicts, entries=None): #entries being a list of entries to include
+    dict_of_lists = {}
+    if entries is not None:
+        list_of_dicts = [list_of_dicts[entry] for entry in entries]
+    for dict in list_of_dicts:
+        for key in dict:
+            if key not in dict_of_lists:
+                dict_of_lists[key] = [dict[key]]
+            else:
+                dict_of_lists[key].append(dict[key])
+    return dict_of_lists
 
 class ExperienceReplayBuffer:
     def __init__(self, max_length=1e4, learn_wait=100, n_steps=1):
@@ -346,15 +389,22 @@ class PPO_ExperienceReplay:
         self.trajectory_length = trajectory_length  # trajectory length
         self.multivariate = multivariate
 
-    def add_entry(self, actions_taken, log_probs, values, observations, rewards, episode=0):
+    def add_entry(self, actions_taken, log_probs, values, observations, rewards, critic_states=None, actor_states=None, episode=0):
         entry = {}
-
-        entry = {'observations': observations,
-                 'log_probs': log_probs,
-                 'values': values,
-                 'a_taken': actions_taken,
-                 'rewards': rewards,
-                 }
+        if actions_taken is not None:
+            entry['actions_taken'] = actions_taken
+        if log_probs is not None:
+            entry['log_probs'] = log_probs
+        if values is not None:
+            entry['values'] = values
+        if observations is not None:
+            entry['observations'] = observations
+        if rewards is not None:
+            entry['rewards'] = rewards
+        if critic_states is not None:
+            entry['critic_states'] = critic_states
+        if actor_states is not None:
+            entry['actor_states'] = actor_states
 
         if episode not in self.buffer: #ToDo: we might need to change this for asynch stuff
             self.buffer[episode] = []
@@ -392,11 +442,11 @@ class PPO_ExperienceReplay:
 
             r_episode = [step['rewards'] for step in self.buffer[episode]]
             r_episode.append(V_pseudo_terminal)
-            r_episode = np.array(r_episode)
+            r_episode_array = np.array(r_episode)
 
-            G_episode = discount_cumsum(r_episode, gamma)[:-1]
+            G_episode = discount_cumsum(r_episode_array, gamma)[:-1]
             for t in range(len(G_episode)):
-                self.buffer[episode][t]['Return'] = G_episode[t]
+                self.buffer[episode][t]['returns'] = G_episode[t]
 
         A = []
         self.buffer = normalize_buffer_entry(self.buffer, key='rewards')
@@ -416,16 +466,16 @@ class PPO_ExperienceReplay:
             A_eisode = A_eisode.tolist()
             A.extend(A_eisode)
             for t in range(len(A_eisode)):
-                self.buffer[episode][t]['advantage'] = A_eisode[t]
+                self.buffer[episode][t]['advantages'] = A_eisode[t]
 
         #normalize advantage:
         if normalize:
-            self.buffer = normalize_buffer_entry(self.buffer, key='advantage')
+            self.buffer = normalize_buffer_entry(self.buffer, key='advantages')
         #ToDo: do some research if normalizing rewards here is useful
 
         return True
 
-    def _fetch_buffer_entry(self, batch_indices, key, subkeys=None):
+    def _fetch_buffer_entry(self, batch_indices, key, subkeys=False, only_first_entry=False):
         #godl: trajectory_start:trajectory_start+self.trajectory_length
         # if subkeys: #for nested buffer entries
         #     fetched_entry = {}
@@ -434,7 +484,7 @@ class PPO_ExperienceReplay:
         #                                       for [sample_episode, trajectory_start] in batch_indices]
         #
         # else:
-        if self.trajectory_length <=1:
+        if self.trajectory_length <=1 or only_first_entry:
             fetched_entry = [self.buffer[sample_episode][trajectory_start][key]
                                           for [sample_episode, trajectory_start] in batch_indices]
         else:
@@ -445,26 +495,20 @@ class PPO_ExperienceReplay:
 
         return fetched_entry
 
-    def fetch_batch(self, batchsize=32, indices=None):
+    def fetch_batch(self, batchsize=32, indices=None,
+                    keys=['actions_taken', 'log_probs', 'observations', 'advantages', 'returns'],
+
+                    ):
 
         np.random.shuffle(self.available_indices)
         batch_indices = self.available_indices[:batchsize]
 
         #ToDo: implement trajectories longer than 1, might be base on same code as DQN buffer
 
-        # if not self.multivariate: #Deprecated since all will be multivariate
-        #     actions_batch = self._fetch_buffer_entry(batch_indices, 'a_taken', self.action_types)
-        #     log_probs_batch = self._fetch_buffer_entry(batch_indices, 'logprob', self.action_types)
-        actions_batch = self._fetch_buffer_entry(batch_indices, 'a_taken')
-        log_probs_batch = self._fetch_buffer_entry(batch_indices, 'log_probs')
-        states_batch = self._fetch_buffer_entry(batch_indices, 'observations')
-        advantages_batch = self._fetch_buffer_entry(batch_indices, 'advantage')
-        returns_batch = self._fetch_buffer_entry(batch_indices, 'Return')
+        batch = {}
+        for key in keys:
+            batch[key] = self._fetch_buffer_entry(batch_indices,
+                                                  key,
+                                                  only_first_entry= True if key == 'actor_states' or key == 'critic_states' else False)
 
-        batch = {'actions_taken': actions_batch, #dictionary with a batch f
-                 'log_probs': log_probs_batch,
-                 'observations': states_batch,
-                 'Return': returns_batch,
-                 'advantages': advantages_batch
-                 }
         return batch

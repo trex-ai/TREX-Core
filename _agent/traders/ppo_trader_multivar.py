@@ -9,7 +9,7 @@ import numpy as np
 from _agent._utils.metrics import Metrics
 from _utils import utils
 from _utils.drl_utils import robust_argmax
-from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber, tb_plotter,build_actor_critic_models
+from _utils.drl_utils import PPO_ExperienceReplay, EarlyStopper, huber, tb_plotter,build_actor_critic_models, build_multivar, assemble_subdict_batch
 import asyncio
 from matplotlib import pyplot as plt
 import sqlalchemy
@@ -24,25 +24,6 @@ from tensorflow import keras as k
 import tensorflow_probability as tfp
 tf.get_logger().setLevel(3)
 
-def build_multivar(concentrations, dist, actions):
-    # independent_dists = []
-    # for action in args:
-    #     c0 = args[action]['c0']
-    #     c1 = args[action]['c1']
-    #     dist_action = dist(c0, c1)
-    args = {}
-    c0s, c1s  = tf.split(concentrations, 2, -1)
-    c0s = tf.split(c0s, len(actions), -1)
-    #c0s = tf.concat(c0s, axis=-2)
-    c1s = tf.split(c1s, len(actions), -1)
-    #c1s = tf.concat(c1s, axis=-2)
-    args['concentration0'] = tf.concat(c0s, axis=-1)
-    args['concentration1'] = tf.concat(c1s, axis=-1)
-    betas = dist(**args)
-    # sample = betas.sample(1)
-    multivar_dist = tfp.distributions.Independent(betas, reinterpreted_batch_ndims=1)
-    # sample_dis = multivar_dist.sample(1)
-    return multivar_dist
 
 class Trader:
     """This trader uses the proximal policy optimization algorithm (PPO) as proposed in https://arxiv.org/abs/1707.06347.
@@ -79,7 +60,6 @@ class Trader:
             if action == 'storage':
                 self.actions['storage'] = {'min': -p_max, 'max': p_max}
 
-
         # initialize all the counters we need
         self.train_step = 0
         self.total_step = 0
@@ -89,7 +69,6 @@ class Trader:
         cwd = os.getcwd()
         experiment_path = os.path.join(cwd, self.study_name)
         trader_path = os.path.join(experiment_path, self.__participant['id'])
-
         self.summary_writer = tf.summary.create_file_writer(trader_path)
 
         # Initialize learning parameters
@@ -100,8 +79,6 @@ class Trader:
                 self.__participant['timing'],
                 self.__participant['ledger'],
                 self.__participant['market_info'])
-
-        #ToDo: test if having parameter sharing helps here?
 
         # Hyperparameters
         self.alpha_critic = kwargs['alpha_critic']
@@ -133,15 +110,25 @@ class Trader:
         self.experience_replay_buffer = PPO_ExperienceReplay(max_length=self.replay_buffer_length,
                                                             action_types=self.actions,
                                                              multivariate=True,
-                                                             trajectory_length=self.burn_in+self.trajectory_length
-                                                            )
-        self.ppo_actor, self.ppo_critic, self.ppo_actor_dist = build_actor_critic_models(num_inputs=len(kwargs['observations']),
+                                                             trajectory_length=self.burn_in+self.trajectory_length)
+
+
+        actor_dict, critic_dict = build_actor_critic_models(num_inputs=len(kwargs['observations']),
                                                                                          hidden_actor=kwargs['actor_hidden'],
                                                                                          actor_type=self.actor_type,
                                                                                          hidden_critic=kwargs['critic_hidden'],
                                                                                          critic_type=self.critic_type,
                                                                                          num_actions=len(self.actions))
-        self.distribution_type = 'Beta'
+
+        self.ppo_actor = actor_dict['model']
+        self.ppo_actor_dist = actor_dict['distribution']
+        if self.actor_type == 'GRU':
+            self.actor_states_dummy = actor_dict['initial_states_dummy']
+
+        self.ppo_critic = critic_dict['model']
+        if self.critic_type == 'GRU':
+            self.critic_states_dummy = critic_dict['initial_states_dummy']
+
         self.ppo_actor.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_actor,),)
         if self.warmup_actor:
             self.ppo_actor_warmup_loss = k.losses.MeanSquaredError()
@@ -149,23 +136,22 @@ class Trader:
         self.ppo_critic.compile(optimizer=k.optimizers.Adam(learning_rate=self.alpha_critic,),)
         self.ppo_critic_loss = k.losses.MeanSquaredError()
 
-
         # Buffers we need for logging stuff before putting into the PPo Memory
         self.actions_buffer = {}
         # self.pi_history = {}
         self.log_prob_buffer = {}
         self.value_buffer = {}
         self.observations_buffer = {}
+        if self.actor_type == 'GRU':
+            self.actor_states_buffer = {}
+        if self.critic_type == 'GRU':
+            self.critic_states_buffer = {}
 
         #logs we need for plotting
         self.rewards_history = []
         self.value_history = []
         self.observations_history = []
         self.net_load_history = []
-        if self.actor_type == 'GRU':
-            self.actor_states_history = []
-        if self.critic_type == 'GRU':
-            self.critis_states_history = []
 
         self.actions_history = {}
         self.pdf_history = {}
@@ -231,13 +217,14 @@ class Trader:
 
         await self.metrics.track('rewards', reward)
         self.rewards_history.append(reward)
-
         if reward_timestamp in self.observations_buffer and reward_timestamp in self.actions_buffer:  # we found matching ones, buffer and pop
 
             self.experience_replay_buffer.add_entry(observations=self.observations_buffer[reward_timestamp],
                                                     actions_taken=self.actions_buffer[reward_timestamp],
                                                     log_probs=self.log_prob_buffer[reward_timestamp],
                                                     values=self.value_buffer[reward_timestamp],
+                                                    critic_states= self.critic_states_buffer[reward_timestamp] if self.critic_type == 'GRU' else None,
+                                                    actor_states = self.actor_states_buffer[reward_timestamp] if self.actor_type == 'GRU' else None,
                                                     rewards=reward,
                                                     episode=self.gen)
 
@@ -245,6 +232,10 @@ class Trader:
             self.log_prob_buffer.pop(reward_timestamp)
             self.value_buffer.pop(reward_timestamp)
             self.observations_buffer.pop(reward_timestamp)
+            if self.actor_type == 'GRU':
+                self.actor_states_buffer.pop(reward_timestamp)
+            if self.critic_type == 'GRU':
+                self.critic_states_buffer.pop(reward_timestamp)
 
             if self.experience_replay_buffer.should_we_learn():
                 advantage_calulated = await self.experience_replay_buffer.calculate_advantage(gamma=self.gamma,
@@ -255,9 +246,13 @@ class Trader:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, func=self.train_RL_agent)
 
-    def pretrain_actor(self, observations, actor_stopper, max_train_steps):
+    def pretrain_actor(self, actor_inputs, actor_stopper, max_train_steps):
+
         with tf.GradientTape() as tape_warmup:
-            pi_new = self.ppo_actor(observations)
+            actor_outputs = self.ppo_actor(actor_inputs)
+            pi_new = actor_outputs.pop('pi')
+            if self.burn_in > 0:
+                pi_new = pi_new[:, self.burn_in:, :]
 
             targets = tf.ones(shape=pi_new.shape)
             losses_warmup = self.ppo_actor_warmup_loss(targets, pi_new)
@@ -285,11 +280,18 @@ class Trader:
 
         return stop_actor_training
 
-    def train_actor(self, observations, a_taken, log_probs_old, advantages):
+    def train_actor(self, actor_inputs, a_taken, log_probs_old, advantages):
         stop_actor_training = False
         with tf.GradientTape() as tape_actor:
-            pi_batch = self.ppo_actor(observations)
-            dist = build_multivar(pi_batch, self.ppo_actor_dist, self.actions)
+            actor_outputs = self.ppo_actor(actor_inputs)
+            pi = actor_outputs.pop('pi')
+            if self.burn_in > 0:
+                pi = pi[:, self.burn_in:, :]
+                a_taken = a_taken[:, self.burn_in:, :]
+                log_probs_old = log_probs_old[:, self.burn_in:, :]
+                advantages = advantages[:, self.burn_in:]
+
+            dist = build_multivar(pi, self.ppo_actor_dist, self.actions)
 
             log_probs_new = dist.log_prob(a_taken)
             # check = tf.reduce_sum(log_probs_new).numpy()
@@ -342,14 +344,18 @@ class Trader:
 
         return stop_actor_training
 
-    def train_critic(self, observations, Return,  critic_stopper):
+    def train_critic(self, critic_inputs, returns,  critic_stopper):
         with tf.GradientTape() as tape_critic:
             # calculate critic loss and backpropagate
 
-            critic_Vs = self.ppo_critic(observations)
-            critic_Vs = tf.squeeze(critic_Vs, axis=-1)
-            G = tf.convert_to_tensor(Return, dtype=tf.float32)
-            losses_critic = self.ppo_critic_loss(critic_Vs, G)
+            critic_outputs = self.ppo_critic(critic_inputs)
+            Vs = critic_outputs.pop('value')
+            Vs = tf.squeeze(Vs, axis=-1)
+
+            if self.burn_in > 0: #discard unwanted stages
+                Vs = Vs[:, self.burn_in:]
+                returns = returns[:, self.burn_in:]
+            losses_critic = self.ppo_critic_loss(Vs, returns)
 
             # calculate the stopping crtierions
             if self.use_early_stop_critic:
@@ -380,25 +386,46 @@ class Trader:
             actor_stopper = EarlyStopper(patience=self.critic_patience)
 
         while self.train_step <= max_train_steps and not (stop_actor_training and stop_critic_training):
-
-            batch = self.experience_replay_buffer.fetch_batch(batchsize=self.batch_size) #to see the batch data structure check this method
+            keys_to_fetch = ['returns', 'observations', 'advantages', 'actions_taken', 'log_probs', 'critic_states', 'actor_states']
+            batch = self.experience_replay_buffer.fetch_batch(batchsize=self.batch_size, keys=keys_to_fetch) #to see the batch data structure check this method
             observations = tf.convert_to_tensor(batch['observations'], dtype=tf.float32)
-            Return = tf.convert_to_tensor(batch['Return'], dtype=tf.float32)
+
 
             if not stop_critic_training:
-                stop_critic_training = self.train_critic(observations, Return, critic_stopper)
+                # manage the inputs
+                returns = tf.convert_to_tensor(batch['returns'], dtype=tf.float32)
+
+                critic_inputs = {'observations': observations}
+                if self.critic_type == 'GRU':                                                       # this still seems somewhat unclean
+                    critic_states = assemble_subdict_batch(batch['critic_states'])
+                    for key in self.critic_states_dummy:
+                        states = tf.convert_to_tensor(critic_states[key])
+                        states = tf.squeeze(states, axis=1) #ToDo: this should not be necessary really ....
+                        critic_inputs[key] = states
+
+                stop_critic_training = self.train_critic(critic_inputs, returns, critic_stopper)
 
             if not stop_actor_training:
-                advantages = tf.convert_to_tensor(batch['advantages'], dtype=tf.float32)
-                log_probs_old = tf.convert_to_tensor(batch['log_probs'], dtype=tf.float32)
-                a_taken = tf.convert_to_tensor(batch['actions_taken'], dtype=tf.float32)
+
+                actor_inputs = {'observations': observations}
+                if self.actor_type == 'GRU':
+                    actor_states = assemble_subdict_batch(batch['actor_states'])
+                    for key in self.actor_states_dummy:
+                        states = tf.convert_to_tensor(actor_states[key])
+                        states = tf.squeeze(states, axis=1) #ToDo: this should not be necessary really ....
+                        actor_inputs[key] = states
+
                 if not self.warmup_actor:
-                    stop_actor_training = self.train_actor(observations=observations,
+                    advantages = tf.convert_to_tensor(batch['advantages'], dtype=tf.float32)
+                    log_probs_old = tf.convert_to_tensor(batch['log_probs'], dtype=tf.float32)
+                    a_taken = tf.convert_to_tensor(batch['actions_taken'], dtype=tf.float32)
+
+                    stop_actor_training = self.train_actor(actor_inputs=actor_inputs,
                                                         a_taken=a_taken,
                                                         log_probs_old=log_probs_old,
                                                         advantages=advantages)
                 else:
-                    stop_actor_training = self.pretrain_actor(observations, actor_stopper, max_train_steps)
+                    stop_actor_training = self.pretrain_actor(actor_inputs, actor_stopper, max_train_steps)
 
             self.train_step = self.train_step + 1
 
@@ -435,13 +462,9 @@ class Trader:
         return a_scaled, log_prob, a_dist
 
     async def act(self, **kwargs):
-        # Generate state (inputs to model):
-        # - time(s)
-        # - next generation
-        # - next load
-        # - battery stats (if available)
 
         current_round = self.__participant['timing']['current_round']
+        previous_round = self.__participant['timing']['last_round']
         next_settle = self.__participant['timing']['next_settle']
         next_generation, next_load = await self.__participant['read_profile'](next_settle)
         self.net_load = next_load - next_generation
@@ -456,8 +479,6 @@ class Trader:
 
         timezone = self.__participant['timing']['timezone']
         current_round_end = utils.timestamp_to_local(current_round[1], timezone)
-        # next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
-
 
         observations_t = []
         if 'generation' in self.observations:
@@ -481,20 +502,45 @@ class Trader:
 
         observations_t = np.array(observations_t)
         obs_t = tf.expand_dims(observations_t, axis=0)
-        if self.actor_type == 'FFNN':
-            pi_dict = self.ppo_actor(obs_t)
-        elif self.actor_type == 'GRU':
-            pi_dict, states_actor_t = self.ppo_actor(obs_t)
-            self.actor_states_history.append(states_actor_t)
+        if self.actor_type == 'GRU' and self.critic_type == 'GRU':
+            obs_t = tf.expand_dims(obs_t, axis=0)
 
-        if self.critic_type == 'FFNN':
-            V_t = self.ppo_critic(obs_t)
+        model_inputs = {}
+        model_inputs['observations'] = obs_t
 
-        elif self.critic_type == 'GRU':
-            V_t, states_critic_t = self.ppo_critic(obs_t)
-            self.critis_states_history.append(states_critic_t)
+        if self.actor_type == 'GRU':
+            actor_inputs = model_inputs
+            if previous_round[1] in self.actor_states_buffer:
+                last_states = self.actor_states_buffer[previous_round[1]]
+            else:
+                last_states = self.actor_states_dummy
+            for key in last_states:
+                actor_inputs[key] = last_states[key]
+            actor_outputs = self.ppo_actor(actor_inputs)
+            pi_dict = actor_outputs.pop('pi')
+            states_actor_t = actor_outputs
+            self.actor_states_buffer[current_round[1]] = states_actor_t
+        else:
+            actor_outputs = self.ppo_actor(model_inputs)
+            pi_dict = actor_outputs.pop('pi')
 
-        V_t = tf.squeeze(V_t, axis=0).numpy().tolist()[0]
+        if self.critic_type == 'GRU':
+            critic_inputs = model_inputs
+            if previous_round[1] in self.critic_states_buffer:
+                last_states = self.critic_states_buffer[previous_round[1]]
+            else:
+                last_states = self.critic_states_dummy
+            for key in last_states:
+                critic_inputs[key] = last_states[key]
+            critic_outputs = self.ppo_critic(critic_inputs)
+            V_t = critic_outputs.pop('value')
+            states_critic_t = critic_outputs
+            self.critic_states_buffer[current_round[1]] = states_critic_t
+        else:
+            critic_outputs = self.ppo_critic(model_inputs)
+            V_t = critic_outputs.pop('value')
+
+        V_t = tf.squeeze(V_t).numpy().tolist()
         taken_action, log_prob, dist_action = await self.__sample_pi(pi_dict)
 
         # lets log the stuff needed for the replay buffer
@@ -590,18 +636,15 @@ class Trader:
         for action in self.actions:
             data_for_tb.append({'name':action, 'data':self.actions_history[action], 'type':'histogram', 'step':self.gen})
 
+        day_length = 8 #ToDo: find a way to make this auto adjust....
+        socs = np.array(self.observations_history)[:,-1]*100
+        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
 
-        #day_length = 8
-        #socs = np.array(self.observations_history)[:,-1]*100
-        #data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
-
-        #net_load_history = self.net_load_history - np.amin(self.net_load_history)
-        #data_for_tb.append(
-        #    {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
-
+        net_load_history = self.net_load_history - np.amin(self.net_load_history)
+        data_for_tb.append(
+           {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
         tb_plotter(data_for_tb, self.summary_writer)
-
 
         self.gen = self.gen + 1
 
@@ -611,19 +654,11 @@ class Trader:
         self.actions_buffer.clear()
         self.log_prob_buffer.clear()
 
-
-        # states = np.array(self.observations_history)
-        # for row in range(states.shape[-1]):
-        #     plt.plot(states[:,row])
-        #     plt.show()
-
         self.rewards_history.clear()
         self.value_history.clear()
         self.observations_history.clear()
         self.net_load_history.clear()
         for action in self.actions:
             self.actions_history[action].clear()
-        #     for param in ['loc', 'scale']:
-        #         self.pdf_history[action][param].clear()
 
         return True
