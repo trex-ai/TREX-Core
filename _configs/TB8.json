@@ -17,7 +17,7 @@
     },
     "server": {
       "host": "",
-      "port": "3500"
+      "port": 3500
     },
     "market": {
       "id": "",

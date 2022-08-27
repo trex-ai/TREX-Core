@@ -100,6 +100,7 @@ class Trader:
 
         self.max_train_steps = kwargs['max_train_steps']
         self.replay_buffer_length = kwargs['experience_replay_buffer_length']
+        self.g_grad_norm = kwargs['g_grad_norm']
 
         self.warmup_actor = kwargs['warmup_actor']
         self.observations = kwargs['observations']
@@ -116,7 +117,7 @@ class Trader:
         actor_dict, critic_dict = build_actor_critic_models(num_inputs=len(kwargs['observations']),
                                                                                          hidden_actor=kwargs['actor_hidden'],
                                                                                          actor_type=self.actor_type,
-                                                                                         hidden_critic=kwargs['critic_hidden'],
+                                                                                         hidden_critic=kwargs['actor_hidden'],
                                                                                          critic_type=self.critic_type,
                                                                                          num_actions=len(self.actions))
 
@@ -276,7 +277,8 @@ class Trader:
             actor_grads = tape_warmup.gradient(losses_warmup, actor_vars)
             self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
         else:
-            print('stopping warmup ', max_train_steps - self.train_step, 'steps early')
+            # print('stopping warmup ', max_train_steps - self.train_step, 'steps early')
+            pass
 
         return stop_actor_training
 
@@ -329,6 +331,7 @@ class Trader:
                 # Backpropagation
                 actor_vars = self.ppo_actor.trainable_variables
                 actor_grads = tape_actor.gradient(loss_actor, actor_vars)
+                actor_grads, _ = tf.clip_by_global_norm(actor_grads, self.g_grad_norm)
                 self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
 
             # log
@@ -371,6 +374,7 @@ class Trader:
             else:
                 critic_vars = self.ppo_critic.trainable_variables
                 critic_grads = tape_critic.gradient(losses_critic, critic_vars)
+                critic_grads, _ = tf.clip_by_global_norm(critic_grads, self.g_grad_norm)
                 self.ppo_critic.optimizer.apply_gradients(zip(critic_grads, critic_vars))
 
         return stop_critic_training
@@ -628,7 +632,7 @@ class Trader:
     async def end_of_generation_tasks(self):
         # self.episode_reward_history.append(self.episode_reward)
         episode_G = sum(self.rewards_history)
-        print(self.__participant['id'], 'episode reward:', episode_G)
+        # print(self.__participant['id'], 'episode reward:', episode_G)
 
         data_for_tb = [{'name':'Return', 'data':episode_G, 'type':'scalar', 'step':self.gen},
                        {'name': 'Episode Rewards', 'data': self.rewards_history, 'type': 'histogram', 'step':self.gen},

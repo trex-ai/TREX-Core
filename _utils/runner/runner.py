@@ -249,7 +249,7 @@ class Runner:
                     # overwrite default hyperparameter with one to be searched
                     for hyperparameter in config['training']['hyperparameters']:
                         if hyperparameter in config['participants'][participant]['trader']:
-                            config['participants'][participant]['trader'][hyperparameter] = hyperparameter
+                            config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -282,6 +282,8 @@ class Runner:
             if isinstance(parameters, dict):
                 # round hyperparameter to 4 decimal places
                 hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
+            # elif isinstance(parameters, list):
+            #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
             elif isinstance(parameters, int) or isinstance(parameters, float):
                 hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
         hp_keys, hp_values = zip(*hyperparameters.items())
@@ -295,10 +297,9 @@ class Runner:
 
         exclude = {'sim_controller', 'participants'}
         exclude.update(skip)
-
+        print(config)
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
-
         for module_n in dynamic:
             try:
                 module = import_module('_utils.runner.make.' + module_n)
@@ -352,8 +353,8 @@ class Runner:
                     simulations_list.append({'simulation_type': sim_type,
                                              'hyperparameters': permutation})
 
-            for simulation in simulations:
-                simulations_list.append({'simulation_type': simulation})
+        for simulation in simulations:
+            simulations_list.append({'simulation_type': simulation})
 
         for sim_param in simulations_list:
             config = self.modify_config(**sim_param, seq=seq)
