@@ -21,7 +21,8 @@ def build_hidden_layer(signal, type='FFNN', num_hidden=32, name='Actor', initial
         return signal, None
     elif type == 'GRU':
         signal, last_state = k.layers.GRU(num_hidden,
-                              # activation="elu",
+                              activation='tanh',
+                                recurrent_activation='sigmoid',
                               kernel_initializer=initializer,
                               return_sequences=True, return_state=True,
                               name=name)(signal, initial_state=initial_state)
@@ -65,7 +66,7 @@ def build_actor(num_inputs=4, num_actions=3, hidden_actor=[32], actor_type='FFNN
     internal_signal,  inputs, outputs, initial_states_dummy = build_hidden(internal_signal, inputs, outputs, hidden_actor, actor_type)
 
     concentrations = k.layers.Dense(2 * num_actions,
-                                    activation=None,
+                                    activation='tanh', #ToDo: test tanh vs None
                                     kernel_initializer=initializer,
                                     name='concentrations')(internal_signal)
     concentrations = huber(concentrations)
@@ -91,7 +92,7 @@ def build_critic(num_inputs=4, hidden_critic=[32, 32, 32], critic_type='FFNN'):
     internal_signal, inputs, outputs, initial_states_dummy = build_hidden(internal_signal, inputs, outputs, hidden_critic, critic_type)
 
     value = k.layers.Dense(1,
-                           activation=None,
+                           activation='tanh', #ToDo: test tanh vs None
                            kernel_initializer=initializer,
                            name='ValueHead')(internal_signal)
     outputs['value'] = value

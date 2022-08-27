@@ -234,7 +234,7 @@ class Trader:
     async def end_of_generation_tasks(self):
         # self.episode_reward_history.append(self.episode_reward)
         episode_G = sum(self.rewards_history)
-        print(self.__participant['id'], 'episode reward:', episode_G)
+        # print(self.__participant['id'], 'episode reward:', episode_G)
 
         data_for_tb = [{'name':'Return', 'data':episode_G, 'type':'scalar', 'step':self.gen},
                        {'name': 'Episode Rewards', 'data': self.rewards_history, 'type': 'histogram', 'step':self.gen},
