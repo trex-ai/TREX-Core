@@ -42,10 +42,10 @@ class Runner:
         else:
             study_name = config_name
 
-        if credentials or 'profiles_db_location' not in config['study']:
+        if credentials and ('profiles_db_location' not in config['study']):
             config['study']['profiles_db_location'] = credentials['profiles_db_location']
 
-        if credentials or 'output_db_location' not in config['study']:
+        if credentials and ('output_db_location' not in config['study']):
             config['study']['output_db_location'] = credentials['output_db_location']
 
 
