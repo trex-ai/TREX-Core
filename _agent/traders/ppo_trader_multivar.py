@@ -335,11 +335,12 @@ class Trader:
                 self.ppo_actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
 
             # log
-            data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step},
-                           {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar',
-                            'step': self.train_step},
-                           {'name': 'entropy', 'data': entropy, 'type': 'scalar',
-                            'step': self.train_step},
+            data_for_tb = [{'name': 'actor_loss', 'data': loss_actor, 'type': 'scalar', 'step': self.train_step}, #Main loss, if too spiky we want to see where it comes from
+                           {'name': 'ratio', 'data': tf.reduce_mean(ratio), 'type': 'scalar', 'step': self.train_step}, #Ratio of old and new policy probabilities .... Loss component
+                           {'name': 'weighted_ratio', 'data': tf.reduce_mean(weighted_ratio), 'type': 'scalar', 'step': self.train_step}, #Loss componens
+                           {'name': 'ratio x SoftAdv', 'data': tf.reduce_mean(ratio * soft_advantages), 'type': 'scalar', 'step': self.train_step}, #Loss componens
+                           {'name': 'approx_KLD', 'data': approx_kl, 'type': 'scalar', 'step': self.train_step}, #Distance pseudometric between old and new policy, we want this to decrease over training as this would indicate convergence
+                           {'name': 'entropy', 'data': entropy, 'type': 'scalar', 'step': self.train_step}, #Randomness of policy, we want the differential entropy to keep dropping slowly over the course of training
                            {'name': 'early_stop_actor', 'data': stop_actor_training, 'type': 'scalar',
                             'step': self.train_step},
                            ]
@@ -365,7 +366,7 @@ class Trader:
                 stop_critic_training, self.ppo_critic = critic_stopper.check_iteration(losses_critic.numpy(),
                                                                                     self.ppo_critic)
             # log
-            data_for_tb = [{'name': 'critic_loss', 'data': losses_critic, 'type': 'scalar', 'step': self.train_step}]
+            data_for_tb = [{'name': 'critic_loss', 'data': losses_critic, 'type': 'scalar', 'step': self.train_step},]
             tb_plotter(data_for_tb, self.summary_writer)
             # early stop or learn
             if stop_critic_training:
@@ -543,6 +544,14 @@ class Trader:
         else:
             critic_outputs = self.ppo_critic(model_inputs)
             V_t = critic_outputs.pop('value')
+
+        # log
+        #ToDo: add calculation for explained variance once Lab is back online, see https://github.com/ray-project/ray/blob/7f03368fc0f56fee478e9ac15576b626fb1103a9/rllib/utils/tf_utils.py
+        data_for_tb = [{'name': 'actor_loss', 'data': V_t, 'type': 'scalar', 'step': self.total_step}, #This we want to increase during training, as that would indicate our agent thinks is going to do better
+                       {'name': 'obs_mean', 'data': np.mean(observations_t), 'type': 'scalar', 'step': self.total_step}, #These should be consistent-ish wrt to each other and not super spiky (think orders of magnitude)
+                       {'name': 'obs_median', 'data': np.median(observations_t), 'type': 'scalar', 'step': self.total_step},
+                      ]
+        tb_plotter(data_for_tb, self.summary_writer)
 
         V_t = tf.squeeze(V_t).numpy().tolist()
         taken_action, log_prob, dist_action = await self.__sample_pi(pi_dict)
