@@ -1,3 +1,4 @@
+import random
 import sys
 import os
 import asyncio
@@ -20,7 +21,7 @@ class Client:
         self.sio_client = socketio.AsyncClient(reconnection=True,
                                                reconnection_attempts=100,
                                                reconnection_delay=1,
-                                               reconnection_delay_max=5,
+                                               reconnection_delay_max=30,
                                                randomization_factor=0.5,
                                                json=jkson)
 
@@ -35,9 +36,15 @@ class Client:
         await self.sio_client.connect(self.server_address)
         await self.sio_client.wait()
 
+    async def keep_alive(self):
+        while True:
+            await self.sio_client.sleep(10)
+            await self.sio_client.emit("ping")
+
     async def run(self):
         tasks = [
             asyncio.create_task(self.start_client()),
+            # asyncio.create_task(self.keep_alive()),
             asyncio.create_task(self.controller.monitor())
         ]
 
