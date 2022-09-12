@@ -21,8 +21,8 @@ class Participant:
         self.participant_id = str(participant_id)
         self.__client = sio_client
         self.client = sio_client
-        self.__profile_db = {
-            'path': db_path
+        self.__profile = {
+            'db_path': db_path
         }
 
         # Initialize market variables
@@ -41,6 +41,7 @@ class Participant:
             'extra_transactions': self.__extra_transactions,
             'market_info': self.__market_info,
             'read_profile': self.__read_profile,
+            'get_profile_stats': self.__get_profile_stats,
             'meter': self.__meter
         }
 
@@ -93,16 +94,30 @@ class Participant:
         Args:
             db_path ([type]): [description]
         """
-        self.__profile_db['path'] = db_path
-        self.__profile_db['db'] = databases.Database(db_path)
+        self.__profile['db_path'] = db_path
+        self.__profile['db'] = databases.Database(db_path)
         profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
             else self.participant_id
-        self.__profile_db['table'] = db_utils.get_table(db_path, profile_name)
-        if 'table' in self.__profile_db or self.__profile_db['table'] is not None:
-            await self.__profile_db['db'].connect()
+        self.__profile['name'] = profile_name
+        self.__profile['db_table'] = db_utils.get_table(db_path, profile_name)
+        if 'db_table' in self.__profile or self.__profile['db_table'] is not None:
+            await self.__profile['db'].connect()
+
+    async def __get_profile_stats(self):
+        """reads and returns pre-calculated profile statistics for calculating Z scores, if available.
+        """
+        db = self.__profile['db']
+        table = db_utils.get_table(self.__profile['db_path'], "_statistics")
+        query = table.select().where(table.c.name == self.__profile['name'])
+        # async with db.transaction():
+        row = await db.fetch_one(query)
+        if row is not None:
+            return dict(row)
+        return None
 
     async def open_profile_db(self):
-        await self.open_db(self.__profile_db['path'])
+        await self.open_db(self.__profile['db_path'])
+        # await self.get_profile_stats(self.__profile['db_path'])
 
     async def join_market(self):
         """Emits event to join a Market
@@ -235,9 +250,10 @@ class Participant:
         Returns:
             [type]: [description]
         """
-        db = self.__profile_db['db']
-        table = self.__profile_db['table']
-        query = table.select().where(table.c.tstamp == time_interval[1])
+        db = self.__profile['db']
+        table = self.__profile['db_table']
+        # query = table.select().where(table.c.tstamp == time_interval[1])
+        query = table.select().where(table.c.time == time_interval[1])
         async with db.transaction():
             row = await db.fetch_one(query)
         return utils.process_profile(row=row,

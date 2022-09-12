@@ -38,11 +38,13 @@ class Market:
             'round_settled': [],
             'round_settle_delivered': []
         }
+
+        self.__time_step_s = kwargs['time_step_size'] if 'time_step_size' in kwargs else 60
         self.__timing = {
             'mode': 'sim',
             'timezone': kwargs['timezone'],
-            'current_round': (0, 60),
-            'duration': 60,
+            'current_round': (0, self.__time_step_s),
+            'duration': self.__time_step_s,
             'last_round': (0, 0),
             'close_steps': kwargs['close_steps'] if 'close_steps' in kwargs else 2
             # close steps = 2 for 1 step-ahead market agent debugging
@@ -423,6 +425,7 @@ class Market:
 
         # remove zero-quantity bid and ask entries
         # sort bids by decreasing price and asks by increasing price
+        # def filter_bids_asks():
         self.__open[time_delivery]['ask'][:] = \
             sorted([ask for ask in self.__open[time_delivery]['ask'] if ask['quantity'] > 0],
                    key=itemgetter('price'), reverse=False)
@@ -430,8 +433,12 @@ class Market:
             sorted([bid for bid in self.__open[time_delivery]['bid'] if bid['quantity'] > 0],
                    key=itemgetter('price'), reverse=True)
 
+        # await asyncio.get_event_loop().run_in_executor(filter_bids_asks)
+
         bids = self.__open[time_delivery]['bid']
         asks = self.__open[time_delivery]['ask']
+
+        # await asyncio.get_event_loop().run_in_executor(send_request)
 
         for bid, ask, in itertools.product(bids, asks):
             if ask['price'] > bid['price']:
@@ -1033,7 +1040,9 @@ class Market:
                             start_time + duration * self.__timing['close_steps']),
             'next_settle': (start_time + duration * self.__timing['close_steps'],
                             start_time + duration * (self.__timing['close_steps'] + 1))
+            # 'next_settle': (1433152800, 1433149200)
         })
+        # print(self.__timing)
 
     # Make sure time interval provided is valid
     async def __time_interval_is_valid(self, time_interval: tuple):

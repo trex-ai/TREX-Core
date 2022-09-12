@@ -57,10 +57,16 @@ class Controller:
         self.__start_time = self.get_start_time()
         self.__time = self.__start_time
 
-        self.__current_step = 0
-        self.__end_step = int(self.__config['study']['days'] * 1440) + 1
+        # TODO: temporarily add method to manually define profile step size until auto detection works
+        if 'time_step_size' in configs['study']:
+            self.__time_step_s = configs['study']['time_step_size']
+        else:
+            self.__time_step_s = 60
+        self.__day_steps = int(1440 / (self.__time_step_s / 60))
 
-        self.__time_step_s = 60
+        self.__current_step = 0
+        self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
+
         self.make_participant_tracker()
 
         self.timer_start = datetime.datetime.now().timestamp()
@@ -332,14 +338,14 @@ class Controller:
         # if not self.__current_step:
         #     print('starting generation', self.__generation)
 
-        if self.__current_step % 1440 == 0 and self.__current_step:
+        if self.__current_step % self.__day_steps == 0 and self.__current_step:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start
-            eta_s = round((self.__end_step - self.__current_step) / 1440 * step_time)
+            eta_s = round((self.__end_step - self.__current_step) / self.__day_steps * step_time)
             print(self.__config['market']['id'],
                   ', generation', self.__generation, '/', self.__generations,
-                  ', day', int(self.__current_step / 1440), '/', int((self.__end_step - 1) / 1440))
+                  ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 0), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
             self.timer_start = datetime.datetime.now().timestamp()
 
@@ -369,7 +375,7 @@ class Controller:
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-#            await self.__print_step_time()
+            await self.__print_step_time()
             self.__current_step += 1
 
             message = {
