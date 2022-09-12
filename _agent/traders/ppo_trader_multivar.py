@@ -271,6 +271,9 @@ class Trader:
                             'data': losses_warmup,
                             'type': 'scalar',
                             'step': self.train_step}]
+
+            # loop = asyncio.get_running_loop()
+            # await loop.run_in_executor(None, tb_plotter, [data_for_tb, self.summary_writer])
             tb_plotter(data_for_tb, self.summary_writer)
 
             actor_vars = self.ppo_actor.trainable_variables
@@ -343,6 +346,9 @@ class Trader:
                            {'name': 'early_stop_actor', 'data': stop_actor_training, 'type': 'scalar',
                             'step': self.train_step},
                            ]
+
+            # loop = asyncio.get_running_loop()
+            # await loop.run_in_executor(None, tb_plotter, [data_for_tb, self.summary_writer])
             tb_plotter(data_for_tb, self.summary_writer)
 
         return stop_actor_training
@@ -366,6 +372,9 @@ class Trader:
                                                                                     self.ppo_critic)
             # log
             data_for_tb = [{'name': 'critic_loss', 'data': losses_critic, 'type': 'scalar', 'step': self.train_step}]
+
+            # loop = asyncio.get_running_loop()
+            # await loop.run_in_executor(None, tb_plotter, [data_for_tb, self.summary_writer])
             tb_plotter(data_for_tb, self.summary_writer)
             # early stop or learn
             if stop_critic_training:
@@ -485,10 +494,26 @@ class Trader:
         current_round_end = utils.timestamp_to_local(current_round[1], timezone)
 
         observations_t = []
-        if 'generation' in self.observations:
-            observations_t.append(next_generation/17)
-        if 'load' in self.observations:
-            observations_t.append(next_load/17)
+        if not hasattr(self, 'profile_stats'):
+            self.profile_stats = await self.__participant['get_profile_stats']()
+
+        if self.profile_stats:
+            if 'generation' in self.observations:
+                avg_generation = self.profile_stats['avg_generation']
+                stddev_generation = self.profile_stats['stddev_generation']
+                z_next_generation = (next_generation - avg_generation) / stddev_generation
+                observations_t.append(z_next_generation)
+            if 'load' in self.observations:
+                avg_load = self.profile_stats['avg_consumption']
+                stddev_load = self.profile_stats['stddev_consumption']
+                z_next_load = (next_load - avg_load) / stddev_load
+                observations_t.append(z_next_load)
+        else:
+            if 'generation' in self.observations:
+                observations_t.append(next_generation)
+            if 'load' in self.observations:
+                observations_t.append(next_load)
+
         if 'time_sin' or 'time_cos' in self.observations:
             minutes = int(current_round[0]/60)
             if 'time_sin' in self.observations:
@@ -640,14 +665,16 @@ class Trader:
         for action in self.actions:
             data_for_tb.append({'name':action, 'data':self.actions_history[action], 'type':'histogram', 'step':self.gen})
 
-        day_length = 8 #ToDo: find a way to make this auto adjust....
+        day_length = 24 #ToDo: find a way to make this auto adjust....
         socs = np.array(self.observations_history)[:,-1]*100
-        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step':self.gen, 'buckets': day_length})
+        data_for_tb.append({'name': 'SoC_during_day', 'data': socs, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
         net_load_history = self.net_load_history - np.amin(self.net_load_history)
         data_for_tb.append(
            {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
+        # loop = asyncio.get_running_loop()
+        # await loop.run_in_executor(None, tb_plotter, [data_for_tb, self.summary_writer])
         tb_plotter(data_for_tb, self.summary_writer)
 
         self.gen = self.gen + 1
