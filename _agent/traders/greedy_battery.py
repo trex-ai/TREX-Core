@@ -266,9 +266,9 @@ class Trader:
         data_for_tb.append(
             {'name': 'Effective_Ned_load_during_day', 'data': net_load_history, 'type': 'pseudo3D', 'step': self.gen, 'buckets': day_length})
 
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, tb_plotter, data_for_tb, self.summary_writer)
-        # tb_plotter(data_for_tb, self.summary_writer)
+        # loop = asyncio.get_running_loop()
+        # await loop.run_in_executor(None, tb_plotter, data_for_tb, self.summary_writer)
+        tb_plotter(data_for_tb, self.summary_writer)
 
 
         self.gen = self.gen + 1
