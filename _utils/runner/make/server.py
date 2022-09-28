@@ -5,8 +5,8 @@ def cli(configs):
         print('server not in configs')
         return None, None
 
-    host = configs['server']['host'] if 'host' in configs['server'] else None
-    port = str(configs['server']['port']) if 'port' in configs['server'] else None
+    host = configs['server']['host']
+    port = str(configs['server']['port'])
 
     args = []
     if host:
