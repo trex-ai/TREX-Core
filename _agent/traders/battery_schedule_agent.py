@@ -1,7 +1,6 @@
-import asyncio
-# import tenacity
+import tenacity
 from _agent._utils.metrics import Metrics
-
+from _utils import utils
 
 class Trader:
     """The baseline trader that emulates behaviour under net-metering/net-billing with a focus on self-sufficiency
@@ -9,23 +8,6 @@ class Trader:
     def __init__(self, **kwargs):
         self.__participant = kwargs['trader_fns']
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-
-        if self.track_metrics:
-            self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
-            self.__init_metrics()
-
-    def __init_metrics(self):
-        import sqlalchemy
-        '''
-        Initializes metrics to record into database
-        '''
-        self.metrics.add('timestamp', sqlalchemy.Integer)
-        self.metrics.add('actions_dict', sqlalchemy.JSON)
-        # self.metrics.add('rewards', sqlalchemy.Float)
-        self.metrics.add('next_settle_load', sqlalchemy.Integer)
-        self.metrics.add('next_settle_generation', sqlalchemy.Integer)
-        if 'storage' in self.__participant:
-            self.metrics.add('storage_soc', sqlalchemy.Float)
 
     async def act(self, **kwargs):
         actions = {}
@@ -36,6 +18,8 @@ class Trader:
             return actions
 
         next_settle = self.__participant['timing']['next_settle']
+        timezone = self.__participant['timing']['timezone']
+        next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
 
         # amount of energy that the agent has to play with.
         generation, load = await self.__participant['read_profile'](next_settle)
@@ -49,23 +33,17 @@ class Trader:
         max_discharge = storage_schedule[next_settle]['energy_potential'][0]
 
         # if were lacking energy, get as much as possible out of battery
+
         if residual_load > 0:
             effective_discharge = -min(residual_load, abs(max_discharge))
-            actions['bess'] = {str(next_settle): effective_discharge}
+            if next_settle_end.hour not in (8, 9, 10, 11, 12, 13, 14, 15, 16):
+                # only allow discharge from 5PM to 7AM
+                actions['bess'] = {str(next_settle): effective_discharge}
 
         # if we have too much generation, charge the battery as much as possible
         elif residual_gen > 0:
             effective_charge = min(residual_gen, max_charge)
             actions['bess'] = {str(next_settle): effective_charge}
-
-        if self.track_metrics:
-            await asyncio.gather(
-                self.metrics.track('timestamp', self.__participant['timing']['current_round'][1]),
-                self.metrics.track('actions_dict', actions),
-                self.metrics.track('next_settle_load', load),
-                self.metrics.track('next_settle_generation', generation))
-            if 'bess' in actions:
-                await self.metrics.track('storage_soc', self.__participant['storage']['info']()['state_of_charge'])
         return actions
 
     async def step(self):
