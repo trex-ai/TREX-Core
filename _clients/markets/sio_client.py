@@ -8,7 +8,7 @@ import tenacity
 import json
 from _utils import jkson
 
-from _clients.markets.ns_common import NSDefault, NSSimulation
+from _clients.markets.ns_common import NSDefault
 
 if os.name == 'posix':
     import uvloop
@@ -31,7 +31,7 @@ class Client:
 
         # Initialize market information
         Market = importlib.import_module('_clients.markets.' + market_configs['type']).Market
-        NSMarket = importlib.import_module('_clients.markets.' + market_configs['type']).NSMarket
+        # NSMarket = importlib.import_module('_clients.markets.' + market_configs['type']).NSMarket
 
         self.market = Market(sio_client=self.sio_client,
                              **market_configs,
@@ -39,8 +39,8 @@ class Client:
 
         # register client in server rooms
         self.sio_client.register_namespace(NSDefault(self.market))
-        self.sio_client.register_namespace(NSMarket(self.market))
-        self.sio_client.register_namespace(NSSimulation(self.market))
+        # self.sio_client.register_namespace(NSMarket(self.market))
+        # self.sio_client.register_namespace(NSSimulation(self.market))
 
         self.data_recorded = False
         self.recording_complete = False

@@ -4,7 +4,7 @@ import importlib
 import socketio
 import tenacity
 from _utils import jkson
-from _clients.participants.ns_common import NSDefault, NSSimulation
+from _clients.participants.ns_common import NSDefault
 
 if os.name == 'posix':
     import uvloop
@@ -24,28 +24,28 @@ class Client:
                                                json=jkson)
 
         Participant = importlib.import_module('_clients.participants.' + participant_type).Participant
-        NSMarket = importlib.import_module('_clients.participants.' + participant_type).NSMarket
+        # NSMarket = importlib.import_module('_clients.participants.' + participant_type).NSMarket
 
         self.participant = Participant(sio_client=self.sio_client,
-                                       participant_id = participant_id,
-                                       market_id = market_id,
+                                       participant_id=participant_id,
+                                       market_id=market_id,
                                        db_path=db_path,
                                        trader_params=trader_params,
                                        storage_params=storage_params,
-                                       market_ns='_clients.participants.' + participant_type,
+                                       # market_ns='_clients.participants.' + participant_type,
                                        **kwargs)
 
 
         self.sio_client.register_namespace(NSDefault(participant=self.participant))
-        self.sio_client.register_namespace(NSMarket(participant=self.participant))
-        self.sio_client.register_namespace(NSSimulation(participant=self.participant))
+        # self.sio_client.register_namespace(NSMarket(participant=self.participant))
+        # self.sio_client.register_namespace(NSSimulation(participant=self.participant))
             
     # Continuously attempt to connect client
     @tenacity.retry(wait=tenacity.wait_fixed(1) + tenacity.wait_random(0, 2))
     async def start_client(self):
         """Function to connect client to server.
         """
-        await self.sio_client.connect(self.server_address, namespaces=['/market', '/simulation'])
+        await self.sio_client.connect(self.server_address)
         await self.sio_client.wait()
 
     async def run(self):

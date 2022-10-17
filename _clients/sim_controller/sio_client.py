@@ -8,7 +8,7 @@ import tenacity
 from _utils import jkson
 from _clients.sim_controller.sim_controller import Controller
 from _clients.sim_controller.ns_common import NSDefault
-from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
+# from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
 
 if os.name == 'posix':
     import uvloop
@@ -28,8 +28,8 @@ class Client:
         # Set client to controller class
         self.controller = Controller(self.sio_client, configs)
         self.sio_client.register_namespace(NSDefault(controller=self.controller))
-        self.sio_client.register_namespace(NSMarket(controller=self.controller))
-        self.sio_client.register_namespace(NSSimulation(controller=self.controller))
+        # self.sio_client.register_namespace(NSMarket(controller=self.controller))
+        # self.sio_client.register_namespace(NSSimulation(controller=self.controller))
 
     @tenacity.retry(wait=tenacity.wait_fixed(1) + tenacity.wait_random(0, 2))
     async def start_client(self):
