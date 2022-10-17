@@ -190,9 +190,6 @@ class Runner:
         if 'server' not in self.configs or 'port' not in self.configs['server'] or not self.configs['server']['port']:
             config['server']['port'] = 42069
 
-        seq = kwargs['seq'] if 'seq' in kwargs else 0
-        config['server']['port'] += seq
-
         # iterate ports until an available one is found, starting from the default or the preferred port
         while True:
             if utils.port_is_open(config['server']['host'], config['server']['port']):
@@ -201,7 +198,10 @@ class Runner:
                 break
 
         # config['server']['port'] = default_port + seq
+        seq = kwargs['seq'] if 'seq' in kwargs else 0
+        config['server']['port'] += seq
         config['study']['type'] = simulation_type
+        # print(simulation_type, seq, config['server']['port'])
 
         # if resume is False, then drop all tables relevant to the study type
         # if not config['study']['resume']:
