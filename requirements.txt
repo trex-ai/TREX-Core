@@ -8,7 +8,7 @@ numpy
 packaging
 psycopg2-binary
 python-dateutil
-python-socketio<=4.6.1
+python-socketio
 pytz
 python-rapidjson
 sqlalchemy-utils

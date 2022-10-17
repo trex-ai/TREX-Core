@@ -167,11 +167,10 @@ class Controller:
     # Register client in server
     async def register(self):
         client_data = {
-            'type': ('sim_controller', ''),
             'id': '',
             'market_id': self.__config['market']['id']
         }
-        await self.__client.emit('register', client_data, namespace='/simulation', callback=self.register_success)
+        await self.__client.emit('register_sim_controller', client_data, callback=self.register_success)
 
     # If client has not connected, retry registration
     async def register_success(self, success):
@@ -262,17 +261,17 @@ class Controller:
                     'duration': self.__time_step_s,
                     'update': False
                 }
-                await self.__client.emit('start_round', message, namespace='/simulation')
+                await self.__client.emit('start_round_simulation', message)
 
             if self.status['sim_started']:
                 continue
 
             if not self.status['market_online']:
-                await self.__client.emit('is_market_online', namespace='/simulation')
+                await self.__client.emit('is_market_online')
                 continue
 
             if not self.status['participants_online']:
-                await self.__client.emit('re_register_participant', namespace='/simulation')
+                await self.__client.emit('re_register_participant')
                 continue
 
             if not self.status['market_ready']:
@@ -289,7 +288,7 @@ class Controller:
             if self.__config['study']['type'] == 'training':
                 curriculum = self.training_controller.load_curriculum(str(self.__generation))
                 if curriculum:
-                    await self.__client.emit('update_curriculum', curriculum, namespace='/simulation')
+                    await self.__client.emit('update_curriculum', curriculum)
 
             if not self.status['participants_ready']:
                 continue
@@ -308,7 +307,7 @@ class Controller:
                 if self.__turn_control['total'] - self.__turn_control['online'] > 1:
                     self.__current_step = 0
                 else:
-                    await self.__client.emit('re_register_participant', namespace='/simulation')
+                    await self.__client.emit('re_register_participant')
                 self.status['sim_interrupted'] = False
                 continue
 
@@ -332,7 +331,7 @@ class Controller:
             'market_id': market_id,
             'generation': generation
         }
-        await self.__client.emit('load_weights', message, namespace='/simulation')
+        await self.__client.emit('load_weights', message)
 
     async def __print_step_time(self):
         # if not self.__current_step:
@@ -370,7 +369,7 @@ class Controller:
                 # 'output_path': self.status['output_path'],
                 'market_id': self.__config['market']['id'],
             }
-            await self.__client.emit('start_generation', message, namespace='/simulation')
+            await self.__client.emit('start_generation', message)
             self.status['generation_ended'] = False
 
         # Beginning new time step
@@ -383,7 +382,8 @@ class Controller:
                 'duration': self.__time_step_s,
                 'update': True
             }
-            await self.__client.emit('start_round', message, namespace='/simulation')
+            # print("start simulation round")
+            await self.__client.emit('start_round_simulation', message)
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -423,85 +423,12 @@ class Controller:
                 'generation': self.__generation - 1,
                 'market_id': self.__config['market']['id']
             }
-            await self.__client.emit('end_generation', message, namespace='/simulation')
+            await self.__client.emit('end_generation', message)
 
             if self.__generation > self.__generations:
                 self.status['sim_ended'] = True
                 # if self.status['sim_ended']:
                 print('end_simulation', self.__generation-1, self.__generations)
-                await self.__client.emit('end_simulation', namespace='/simulation')
+                await self.__client.emit('end_simulation')
                 await self.delay(1)
                 sys.exit()
-
-class NSMarket(socketio.AsyncClientNamespace):
-
-    def __init__(self, controller):
-        super().__init__(namespace='/market')
-        self.controller = controller
-
-    # async def on_connect(self):
-    #     print('connected to market')
-    #     # await self.controller.register()
-
-    # async def on_disconnect(self):
-    #     print('disconnected from market')
-
-    # async def on_register(self):
-    #     print('participant registered')
-
-    # # async def on_end_round(self, message):
-    # #     await self.controller.step()
-
-class NSSimulation(socketio.AsyncClientNamespace):
-    def __init__(self, controller):
-        super().__init__(namespace='/simulation')
-        self.controller = controller
-
-    async def on_connect(self):
-        await self.controller.register()
-
-    # async def on_disconnect(self):
-    #   print('disconnected from simulation')
-
-
-    #
-    # async def on_participant_weights_saved(self, message):
-    #     for participant_id in message:
-    #         await self.controller.participant_status(participant_id, 'weights_saved', message[participant_id])
-
-
-    async def on_participant_joined(self, message):
-        participant_id = message
-        await self.controller.participant_online(participant_id, True)
-
-    async def on_participant_disconnected(self, message):
-        print(message, 'PARTICIPANT LOST')
-        participant_id = message
-        await self.controller.participant_online(participant_id, False)
-
-    async def on_participant_ready(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'ready', message[participant_id])
-
-    async def on_participant_weights_loaded(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'weights_loaded', message[participant_id])
-
-    # send by individual participants
-    async def on_end_turn(self, message):
-        await self.controller.update_turn_status(message)
-
-    # sent by the market
-    async def on_end_round(self, message):
-        await self.controller.market_turn_end()
-        await self.controller.update_turn_status(message)
-
-    async def on_market_online(self, message):
-        self.controller.status['market_online'] = True
-
-    async def on_market_ready(self, message):
-        self.controller.status['market_ready'] = True
-
-    # async def on_end_simulation(self, message):
-    #     raise SystemExit
-
