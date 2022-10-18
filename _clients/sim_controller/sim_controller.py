@@ -98,20 +98,20 @@ class Controller:
         '''
         await self.__client.sleep(s)
 
-    def __get_metadata(self, generation):
-        if generation > self.__generations:
-            return None
-
-        db_string = self.__config['study']['output_database']
-        db = dataset.connect(db_string)
-        md_table = db['metadata']
-        metadata = md_table.find_one(generation=generation)
-        return metadata['data']
+    # def __get_metadata(self, generation):
+    #     if generation > self.__generations:
+    #         return None
+    #
+    #     db_string = self.__config['study']['output_database']
+    #     db = dataset.connect(db_string)
+    #     md_table = db['metadata']
+    #     metadata = md_table.find_one(generation=generation)
+    #     return metadata['data']
 
     def get_start_time(self):
-        metadata = self.__get_metadata(self.__generation)
-        if metadata:
-            return metadata['start_timestamp']
+        # metadata = self.__get_metadata(self.__generation)
+        # if metadata:
+        #     return metadata['start_timestamp']
 
         import pytz
         from dateutil.parser import parse as timeparse

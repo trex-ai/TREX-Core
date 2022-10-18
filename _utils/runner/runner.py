@@ -26,7 +26,7 @@ class Runner:
             config_file = '_configs/' + config + '.json'
             configs = self.__load_json_file(config_file)
             self.__create_sim_db(db_string, configs)
-        self.__create_sim_metadata(self.configs)
+            # self.__create_sim_metadata(self.configs)
 
 
 
