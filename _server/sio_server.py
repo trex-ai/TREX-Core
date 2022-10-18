@@ -74,13 +74,7 @@ class Default(socketio.AsyncNamespace):
                         data=client_id,
                         to=clients[market_id]['sim_controller']['sid'])
 
-# class ETXMarket(socketio.AsyncNamespace):
-#     async def on_connect(self, sid, environ):
-#         self.settle_buf = {}
-        # print(sessions)
-        # pass
-    # Register market in server
-
+# Market related events:
     async def on_register_market(self, sid, client_data):
         """Event emitted by market module to register itself as a client
 
@@ -331,52 +325,6 @@ class Default(socketio.AsyncNamespace):
                           to=participant_sid)
 
 ## SIMULATION RELATED EVENTS ##
-# class Simulation(socketio.AsyncNamespace):
-    # def __init__(self):
-    #     super().__init__(namespace='/simulation')
-    #         self.market = market
-    #     pass
-
-    # async def on_connect(self, sid, environ):
-    # #     # print('connect to sim')
-    #     pass
-
-    # async def on_get_remote_actions(self, sid, observations):
-    #     """Event emitted by the thin remote agent to get next actions from a centralized learning agent
-    #     Args:
-    #         sid ([type]): [description]
-    #         observations ([type]): [description]
-    #     """
-    #     # await server.sleep(random.randint(1, 3))
-    #     if not 'remote_agent' in clients:
-    #         await server.emit(
-    #             event='got_remote_actions',
-    #             data={},
-    #             to=sid,
-    #             namespace='/simulation')
-    #     else:
-    #         await server.emit(
-    #             event='get_remote_actions',
-    #             data=observations,
-    #             to=clients['remote_agent']['sid'],
-    #             namespace='/simulation')
-    #
-    # async def on_got_remote_actions(self, sid, actions):
-    #     """Event emitted by the centralized learning agent to get return actions to the thin remote agent
-    #     Args:
-    #         sid ([type]): [description]
-    #         actions ([type]): [description]
-    #     """
-    #     participant_id = actions.pop('participant_id')
-    #     market_id = actions.pop('market_id')
-    #     participant_sid = clients[market_id]['participant'][participant_id]['sid']
-    #     if participant_sid not in sessions:
-    #         return
-    #
-    #     await server.emit(event='got_remote_actions',
-    #                       data=actions,
-    #                       room=participant_sid,
-    #                       namespace='/simulation')
 
     async def on_register_sim_controller(self, sid, client_data):
         """Event emitted by the simulation controller to register itself on the server
