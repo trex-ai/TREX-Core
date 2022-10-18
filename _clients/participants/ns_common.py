@@ -58,18 +58,24 @@ class NSDefault(socketio.AsyncClientNamespace):
     #     await self.participant.join_market()
 
     async def on_update_curriculum(self, message):
-        if 'learning' in message:
-            if hasattr(self.participant.trader, 'learning'):
-                self.participant.trader.learning = message['learning']
-
-        if 'exploration_factor' in message:
-            if hasattr(self.participant.trader, 'exploration_factor'):
-                self.participant.trader.exploration_factor = message['exploration_factor']
+        # if 'learning' in message:
+        #     if hasattr(self.participant.trader, 'learning'):
+        #         self.participant.trader.learning = message['learning']
+        #
+        # if 'exploration_factor' in message:
+        #     if hasattr(self.participant.trader, 'exploration_factor'):
+        #         self.participant.trader.exploration_factor = message['exploration_factor']
 
         if 'anneal' in message:
             if hasattr(self.participant.trader, 'anneal'):
-                for parameter in message['anneal']:
-                    self.participant.trader.anneal(parameter, *message['anneal'][parameter])
+                anneal = message.pop('anneal')
+                for parameter in anneal:
+                    self.participant.trader.anneal(parameter, *anneal[parameter])
+
+        # set parameters
+        for parameter in message:
+            if hasattr(self.participant.trader, parameter):
+                setattr(self.participant.trader, parameter, message[parameter])
 
     async def on_load_weights(self, message):
         """Event triggers loading weights for trader
