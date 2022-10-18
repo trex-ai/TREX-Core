@@ -1,17 +1,11 @@
-import asyncio
 import datetime
-import sys
-import json
-import os
 import time
-import asyncio
 
-import socketio
-from sqlalchemy_utils import database_exists
-import databases
 import dataset
+from sqlalchemy_utils import database_exists
+
 from _clients.sim_controller.training_controller import TrainingController
-from _utils import utils, db_utils
+from _utils import utils
 
 
 class Controller:
@@ -286,9 +280,23 @@ class Controller:
             #     continue
 
             if self.__config['study']['type'] == 'training':
+                if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
+                        ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
+                    # update gen 0 curriculum with new hyperparams to load
+                    # a = self.training_controller.update_hps_curriculum()
+                    hyperparameters = self.__config['training']['hyperparameters'].pop(0)
+                    self.hyperparameters_idx = hyperparameters.pop('idx')
+                    if "0" not in self.__config['training']['curriculum']:
+                        self.__config['training']['curriculum']["0"] = hyperparameters
+                    else:
+                        self.__config['training']['curriculum']["0"].update(hyperparameters)
+                    # make everyone update database path
+                    # pass
+                    self.status["hyperparameters_loaded"] = True
                 curriculum = self.training_controller.load_curriculum(str(self.__generation))
                 if curriculum:
                     await self.__client.emit('update_curriculum', curriculum)
+                    # print(self.__generation, curriculum)
 
             if not self.status['participants_ready']:
                 continue
@@ -369,6 +377,8 @@ class Controller:
                 # 'output_path': self.status['output_path'],
                 'market_id': self.__config['market']['id'],
             }
+            if hasattr(self, 'hyperparameters_idx'):
+                message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             await self.__client.emit('start_generation', message)
             self.status['generation_ended'] = False
 
@@ -426,9 +436,19 @@ class Controller:
             await self.__client.emit('end_generation', message)
 
             if self.__generation > self.__generations:
-                self.status['sim_ended'] = True
-                # if self.status['sim_ended']:
-                print('end_simulation', self.__generation-1, self.__generations)
-                await self.__client.emit('end_simulation')
-                await self.delay(1)
-                sys.exit()
+                if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
+                    self.__generation = self.set_initial_generation()
+                    self.__current_step = 0
+                    self.__start_time = self.get_start_time()
+                    self.__time = self.__start_time
+                    self.status['sim_started'] = False
+                    self.status['market_ready'] = False
+                    self.status["hyperparameters_loaded"] = False
+                else:
+                    self.status['sim_ended'] = True
+                    # TODO: add function to reset sim for next hyperparameter set
+                    # if self.status['sim_ended']:
+                    print('end_simulation', self.__generation-1, self.__generations)
+                    await self.__client.emit('end_simulation')
+                    await self.delay(1)
+                    await self.__client.disconnect()
