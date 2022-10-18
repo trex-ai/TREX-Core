@@ -1,5 +1,5 @@
 {
-  "version": "3.6.1",
+  "version": "3.7.2",
   "study": {
     "name": "sim_name", // the simulation name defines the database name as well as local storage paths.
     "description": "",  // (optional) a description the simulation
@@ -14,6 +14,7 @@
 
     "start_datetime_sequence": "sequential", // the start times can be sequencial as defined above, or shuffled.
     "timezone": "America/Vancouver",
+    "time_step_size": 60,
     "days": 30,
     "generations": 100,
     "profiles_db_location": "", //database string to where the profiles are located, i.e.: 
@@ -26,13 +27,25 @@
   // training defines special parameters for certain generations.
   // currently used for some experimental agents to "warm up" at the beginning
   "training": {
-    "0": {
-      "warm_up": false
+    "hyperparameters": {
+      // hyperparameters to search should be iterables with length > 1
+      // these are starting values
+      // curriculum "0" will be updated with hyperparameters to be searched at run time
+      "parameter_1": {"start": 0.1, "stop": 0.01, "num": 3}, //example of setting hyperparameters using numpy keywords
+      "parameter_2": [[64,64], [128,128],[256, 256]] //example of setting hyperparameters directly using a list
     },
-    "default": {
-      "warm_up": false
-    }
-  },
+    "curriculum": {
+      "0": {
+        "set_parameter": true //example of setting hyperparameter directly
+      },
+      "2": {
+        "set_parameter": false, //example of setting hyperparameter directly
+        "anneal": { //example of annealing hyperparameter
+          "anneal_parameter": [0.95,"multiply", 0.05]
+          }
+        }
+      }
+    },
 
   // parameters for the socketio server
   "server": {
