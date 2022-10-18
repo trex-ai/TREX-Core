@@ -478,7 +478,8 @@ class Participant:
                 await self.__client.emit('ping')
             continue
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        # raise SystemExit
 
 
 # import socketio

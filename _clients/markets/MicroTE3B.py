@@ -1094,7 +1094,8 @@ class Market:
             await self.__client.sleep(0.001)
 
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        # raise SystemExit
 
     async def reset_market(self):
         self.__db.clear()

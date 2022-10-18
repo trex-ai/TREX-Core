@@ -1,14 +1,13 @@
-import os
 import asyncio
 import importlib
-import random
+import json
+import os
 
 import socketio
 import tenacity
-import json
-from _utils import jkson
 
 from _clients.markets.ns_common import NSDefault
+from _utils import jkson
 
 if os.name == 'posix':
     import uvloop
@@ -60,16 +59,33 @@ class Client:
             asyncio.create_task(self.start_client()),
             # asyncio.create_task(self.keep_alive()),
             asyncio.create_task(self.market.loop())]
-        try:
-            await asyncio.gather(*tasks)
-        except SystemExit:
-            for t in tasks:
-                t.cancel()
-            raise SystemExit
+        # try:
+        await asyncio.gather(*tasks)
+        # except SystemExit:
+        #     for t in tasks:
+        #         t.cancel()
+        #     await self.sio_client.disconnect()
+            # raise SystemExit
 
-def __main():
+# def __main():
+#     import socket
+#     import argparse
+#     parser = argparse.ArgumentParser(description='')
+#     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+#     parser.add_argument('--port', default=42069, help='')
+#     parser.add_argument('--configs')
+#     args = parser.parse_args()
+#
+#     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
+#                     market_configs=json.loads(args.configs))
+#
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(client.run())
+
+if __name__ == '__main__':
     import socket
     import argparse
+
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
     parser.add_argument('--port', default=42069, help='')
@@ -81,7 +97,5 @@ def __main():
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(client.run())
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(__main())
+    # import sys
+    # sys.exit(__main())

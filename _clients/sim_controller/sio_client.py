@@ -1,13 +1,13 @@
-import random
-import sys
-import os
 import asyncio
-import socket
+import os
+
 import socketio
 import tenacity
-from _utils import jkson
-from _clients.sim_controller.sim_controller import Controller
+
 from _clients.sim_controller.ns_common import NSDefault
+from _clients.sim_controller.sim_controller import Controller
+from _utils import jkson
+
 # from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
 
 if os.name == 'posix':
@@ -48,17 +48,37 @@ class Client:
             asyncio.create_task(self.controller.monitor())
         ]
 
-        try:
-            await asyncio.gather(*tasks)
-        except SystemExit:
-            for t in tasks:
-                t.cancel()
-            raise SystemExit
+        # try:
+        await asyncio.gather(*tasks)
+        # except SystemExit:
+        #     for t in tasks:
+        #         t.cancel()
+        #     raise SystemExit
 
-def __main():
+# def __main():
+#     import socket
+#     import argparse
+#     import json
+#     parser = argparse.ArgumentParser(description='')
+#     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+#     parser.add_argument('--port', default=42069, help='')
+#     parser.add_argument('--config', default='', help='')
+#     args = parser.parse_args()
+#
+#     configs = json.loads(args.config)
+#     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
+#                     configs=configs)
+#
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(client.run())
+
+if __name__ == '__main__':
+    # import sys
+    # sys.exit(__main())
     import socket
     import argparse
     import json
+
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
     parser.add_argument('--port', default=42069, help='')
@@ -71,7 +91,3 @@ def __main():
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(client.run())
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(__main())

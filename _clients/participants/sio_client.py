@@ -1,10 +1,11 @@
-import os
 import asyncio
-import importlib
+import os
+
 import socketio
 import tenacity
-from _utils import jkson
+
 from _clients.participants.ns_common import NSDefault
+from _utils import jkson
 
 if os.name == 'posix':
     import uvloop
@@ -58,14 +59,48 @@ class Client:
             asyncio.create_task(self.start_client()),
             asyncio.create_task(self.participant.ping())]
 
-        try:
-            await asyncio.gather(*tasks)
-        except SystemExit:
-            for t in tasks:
-                t.cancel()
-            raise SystemExit
+        # try:
+        await asyncio.gather(*tasks)
+        # except SystemExit:
+        #     for t in tasks:
+        #         t.cancel()
+        #     raise SystemExit
 
-def __main():
+# def __main():
+#     import socket
+#     import argparse
+#     import importlib
+#
+#     parser = argparse.ArgumentParser(description='')
+#     parser.add_argument('type', help='')
+#     parser.add_argument('--id', help='')
+#     parser.add_argument('--market_id', help='')
+#     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+#     parser.add_argument('--port', default=42069, help='')
+#     parser.add_argument('--db_path', default=None, help='')
+#     parser.add_argument('--trader', default=None, help='')
+#     parser.add_argument('--storage', default=None, help='')
+#     parser.add_argument('--generation_scale', default=1, help='')
+#     parser.add_argument('--load_scale', default=1, help='')
+#     args = parser.parse_args()
+#
+#     client = Client(''.join(['http://', args.host, ':', str(args.port)]),
+#                     participant_type=args.type,
+#                     participant_id=args.id,
+#                     market_id=args.market_id,
+#                     db_path=args.db_path,
+#                     trader_params=args.trader,
+#                     storage_params=args.storage,
+#                     generation_scale=float(args.generation_scale),
+#                     load_scale=float(args.load_scale),
+#                     )
+#
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(client.run())
+
+if __name__ == '__main__':
+    # import sys
+    # sys.exit(__main())
     import socket
     import argparse
     import importlib
@@ -96,7 +131,3 @@ def __main():
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(client.run())
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(__main())
