@@ -34,18 +34,19 @@ async def send_market_info(market_id, client_sid):
         client_sid: client session ID
     """
     if client_sid and client_sid in sessions:
-        server.enter_room(sid=client_sid, room=market_id, namespace='/market')
+        server.enter_room(sid=client_sid, room=market_id)
 
         market_id = sessions[client_sid]['market_id']
+
+
         await server.emit(event='update_market_info',
                           data=market_id,
-                          to=client_sid,
-                          namespace='/market')
+                          to=client_sid)
 
-        await server.emit(event='participant_joined',
-                          data=sessions[client_sid]['client_id'],
-                          namespace='/simulation',
-                          room=market_id)
+        if 'sim_controller' in clients[market_id]:
+            await server.emit(event='participant_joined',
+                  data=sessions[client_sid]['client_id'],
+                  to=clients[market_id]['sim_controller']['sid'])
 
 class Default(socketio.AsyncNamespace):
     async def on_connect(self, sid, environ):
@@ -71,17 +72,10 @@ class Default(socketio.AsyncNamespace):
                     await server.emit(
                         event='participant_disconnected',
                         data=client_id,
-                        to=clients[market_id]['sim_controller']['sid'],
-                        namespace='/simulation')
+                        to=clients[market_id]['sim_controller']['sid'])
 
-class ETXMarket(socketio.AsyncNamespace):
-    async def on_connect(self, sid, environ):
-        self.settle_buf = {}
-        # print(sessions)
-        pass
-    # Register market in server
-
-    async def on_register(self, sid, client_data):
+# Market related events:
+    async def on_register_market(self, sid, client_data):
         """Event emitted by market module to register itself as a client
 
         Args:
@@ -91,27 +85,27 @@ class ETXMarket(socketio.AsyncNamespace):
         Returns:
             [type]: [description]
         """
-        if client_data['type'][0] == 'market':
-            # create a market_id group if one does not exist in clients
-            market_id = client_data['id']
-            if market_id not in clients:
-                clients[market_id] = {}
-
-            server.enter_room(sid=sid, room=market_id, namespace='/market')
-
+        # if client_data['type'][0] == 'market':
+        # create a market_id group if one does not exist in clients
+        market_id = client_data['id']
+        if market_id not in clients:
             clients[market_id] = {}
-            clients[market_id]['market'] = {
-                'type': client_data['type'][1],
-                'id': client_data['id'],
-                'sid': sid
-            }
-            sessions[sid] = {'client_id': market_id,
-                             'client_type': 'market',
-                             'market_id': market_id}
+            self.settle_buf = {}
 
-            return True
+        server.enter_room(sid=sid, room=market_id)
 
-    async def on_join(self, sid, client_data):
+        clients[market_id] = {}
+        clients[market_id]['market'] = {
+            'type': client_data['type'],
+            'id': client_data['id'],
+            'sid': sid
+        }
+        sessions[sid] = {'client_id': market_id,
+                         'client_type': 'market',
+                         'market_id': market_id}
+        return True
+
+    async def on_join_market(self, sid, client_data):
         """Event emitted by participant to join a market
 
         Args:
@@ -151,12 +145,11 @@ class ETXMarket(socketio.AsyncNamespace):
                 'sid': sid
             }
             # Register client in server
-            server.enter_room(sid=sid, room=market_id, namespace='/simulation')
-            server.enter_room(sid=clients[market_id]['market']['sid'], room=market_id, namespace='/simulation')
+            server.enter_room(sid=sid, room=market_id)
+            # server.enter_room(sid=clients[market_id]['market']['sid'], room=market_id, namespace='/simulation')
 
             await server.emit(event='participant_connected',
                               data=c_data,
-                              namespace='/market',
                               to=clients[market_id]['market']['sid'],
                               callback=send_market_info)
             return True
@@ -173,7 +166,7 @@ class ETXMarket(socketio.AsyncNamespace):
             event='start_round',
             data=message,
             room=sessions[sid]['market_id'],
-            namespace='/market')
+            skip_sid=sid)
 
     async def on_bid(self, sid, bid):
         """Event emitted by participant to submit a bid
@@ -191,7 +184,7 @@ class ETXMarket(socketio.AsyncNamespace):
                 message ([type]): [description]
             """
             if message['uuid'] is not None:
-                await server.emit('bid_success', message, namespace='/market', room=buyer_sid)
+                await server.emit('bid_success', message, to=buyer_sid)
 
         bid['session_id'] = sid
         market_id = sessions[sid]['market_id']
@@ -200,7 +193,6 @@ class ETXMarket(socketio.AsyncNamespace):
             event='bid',
             data=bid,
             to=market_sid,
-            namespace='/market',
             callback=bid_cb)
 
     async def on_ask(self, sid, ask):
@@ -218,7 +210,7 @@ class ETXMarket(socketio.AsyncNamespace):
                 message ([type]): [description]
             """
             if message['uuid'] is not None:
-                await server.emit('ask_success', message, namespace='/market', room=seller_sid)
+                await server.emit('ask_success', message, to=seller_sid)
 
         ask['session_id'] = sid
         market_id = sessions[sid]['market_id']
@@ -227,7 +219,6 @@ class ETXMarket(socketio.AsyncNamespace):
             event='ask',
             data=ask,
             to=market_sid,
-            namespace='/market',
             callback=ask_cb)
 
     # Process successful settlements
@@ -248,7 +239,7 @@ class ETXMarket(socketio.AsyncNamespace):
             self.settle_buf[commit_id] ^= True
             if self.settle_buf[commit_id]:
                 self.settle_buf.pop(message['commit_id'], None)
-                await server.emit(event='settlement_delivered', data=commit_id, to=market_sid, namespace='/market')
+                await server.emit(event='settlement_delivered', data=commit_id, to=market_sid)
 
         buyer = message['buyer_id']
         seller = message['seller_id']
@@ -278,17 +269,17 @@ class ETXMarket(socketio.AsyncNamespace):
                 buyer_message['price'] = buy_price
                 seller_message['price'] = sell_price
 
-                await server.emit(event='settled', data=buyer_message, to=buyer_sid, namespace='/market',
+                await server.emit(event='settled', data=buyer_message, to=buyer_sid,
                                   callback=settled_cb)
-                await server.emit(event='settled', data=seller_message, to=seller_sid, namespace='/market',
+                await server.emit(event='settled', data=seller_message, to=seller_sid,
                                   callback=settled_cb)
             # for MicroTE and MicroTE2, message can stay as normal
             # expect to phase out support as MicroTE3 takes over
             else:
-                await server.emit(event='settled', data=message, to=buyer_sid, namespace='/market', callback=settled_cb)
-                await server.emit(event='settled', data=message, to=seller_sid, namespace='/market', callback=settled_cb)
+                await server.emit(event='settled', data=message, to=buyer_sid, callback=settled_cb)
+                await server.emit(event='settled', data=message, to=seller_sid, callback=settled_cb)
         else:
-            await server.emit(event='settlement_delivered', data=message['commit_id'], to=market_sid, namespace='/market')
+            await server.emit(event='settlement_delivered', data=message['commit_id'], to=market_sid)
 
     async def on_meter_data(self, sid, meter):
         """Event emitted by participant to provide the Market with the submetering data for the round that just ended.
@@ -308,8 +299,7 @@ class ETXMarket(socketio.AsyncNamespace):
         market_sid = clients[market_id]['market']['sid']
         await server.emit(event='meter_data',
                           data=message,
-                          to=market_sid,
-                          namespace='/market')
+                          to=market_sid)
 
     # event emitted by market
     async def on_return_extra_transactions(self, sid, transactions):
@@ -332,57 +322,11 @@ class ETXMarket(socketio.AsyncNamespace):
 
         await server.emit(event='return_extra_transactions',
                           data=message,
-                          room=participant_sid,
-                          namespace='/market')
-import random
-class Simulation(socketio.AsyncNamespace):
-    # def __init__(self):
-    #     super().__init__(namespace='/simulation')
-    #         self.market = market
-    #     pass
+                          to=participant_sid)
 
-    # async def on_connect(self, sid, environ):
-    # #     # print('connect to sim')
-    #     pass
+## SIMULATION RELATED EVENTS ##
 
-    async def on_get_remote_actions(self, sid, observations):
-        """Event emitted by the thin remote agent to get next actions from a centralized learning agent
-        Args:
-            sid ([type]): [description]
-            observations ([type]): [description]
-        """
-        # await server.sleep(random.randint(1, 3))
-        if not 'remote_agent' in clients:
-            await server.emit(
-                event='got_remote_actions',
-                data={},
-                to=sid,
-                namespace='/simulation')
-        else:
-            await server.emit(
-                event='get_remote_actions',
-                data=observations,
-                to=clients['remote_agent']['sid'],
-                namespace='/simulation')
-
-    async def on_got_remote_actions(self, sid, actions):
-        """Event emitted by the centralized learning agent to get return actions to the thin remote agent
-        Args:
-            sid ([type]): [description]
-            actions ([type]): [description]
-        """
-        participant_id = actions.pop('participant_id')
-        market_id = actions.pop('market_id')
-        participant_sid = clients[market_id]['participant'][participant_id]['sid']
-        if participant_sid not in sessions:
-            return
-
-        await server.emit(event='got_remote_actions',
-                          data=actions,
-                          room=participant_sid,
-                          namespace='/simulation')
-
-    async def on_register(self, sid, client_data):
+    async def on_register_sim_controller(self, sid, client_data):
         """Event emitted by the simulation controller to register itself on the server
 
         Args:
@@ -392,38 +336,25 @@ class Simulation(socketio.AsyncNamespace):
         Returns:
             [type]: [description]
         """
-        if client_data['type'][0] == 'sim_controller':
-            market_id = client_data['market_id']
+        market_id = client_data['market_id']
 
-            # Confirm target market exists
-            if market_id not in clients:
-                return False
-            else:
-                # register sim controller in session and client lists
-                sessions[sid] = {'client_id': client_data['id'],
-                                 'client_type': 'sim_controller',
-                                 'market_id': market_id}
-
-                clients[market_id]['sim_controller'] = {
-                    'type': client_data['type'][1],
-                    'id': client_data['id'],
-                    'sid': sid
-                }
-                # register sim controller in server
-                server.enter_room(sid=sid, room=market_id, namespace='/market')
-                server.enter_room(sid=sid, room=market_id, namespace='/simulation')
-                return True
-
-        elif client_data['type'][0] == 'remote_agent':
+        # Confirm target market exists
+        if market_id not in clients:
+            return False
+        else:
             # register sim controller in session and client lists
-            # sessions[sid] = {'client_id': client_data['id'],
-            #                  'client_type': 'remote_agent'}
+            sessions[sid] = {'client_id': client_data['id'],
+                             'client_type': 'sim_controller',
+                             'market_id': market_id}
 
-            clients['remote_agent'] = {
+            clients[market_id]['sim_controller'] = {
+                'id': client_data['id'],
                 'sid': sid
             }
-
-        return False
+            # register sim controller in server
+            server.enter_room(sid=sid, room=market_id)
+            server.enter_room(sid=sid, room='simulation')
+            return True
 
     async def on_re_register_participant(self, sid):
         """Event emitted by simulation controller to re-register all participants, in case some were missed during initialization
@@ -432,15 +363,17 @@ class Simulation(socketio.AsyncNamespace):
             sid ([type]): [description]
         """
         market_id = sessions[sid]['market_id']
-        if not 'sim_controller' in clients[market_id]:
+        if 'sim_controller' not in clients[market_id]:
             return
 
         if clients[market_id]['sim_controller']['sid'] == sid:
+            market_sid = clients[market_id]['market']['sid']
             await server.emit(
                 event='re_register_participant',
                 data='',
                 room=market_id,
-                namespace='/market')
+                skip_sid=[sid, market_sid]
+            )
 
     async def on_participant_weights_loaded(self, sid, message):
         """Event emitted by participant traders to notify the simulation controller that the weights have been loaded.
@@ -455,8 +388,7 @@ class Simulation(socketio.AsyncNamespace):
         await server.emit(
             event='participant_weights_loaded',
             data=message,
-            to=sim_controller_sid,
-            namespace='/simulation')
+            to=sim_controller_sid)
 
     # event emitted by participant
     async def on_participant_ready(self, sid, message):
@@ -471,8 +403,7 @@ class Simulation(socketio.AsyncNamespace):
         await server.emit(
             event='participant_ready',
             data=message,
-            to=sim_controller_sid,
-            namespace='/simulation')
+            to=sim_controller_sid)
 
     # event emitted by sim controller
     async def on_update_curriculum(self, sid, message):
@@ -486,11 +417,12 @@ class Simulation(socketio.AsyncNamespace):
         sim_controller_sid = clients[market_id]['sim_controller']['sid']
 
         if sim_controller_sid == sid:
+            market_sid = clients[market_id]['market']['sid']
             await server.emit(
                 event='update_curriculum',
                 data=message,
                 to=market_id,
-                namespace='/simulation')
+                skip_sid=[sid, market_sid])
 
     # event emitted by sim controller
     async def on_load_weights(self, sid, message):
@@ -514,18 +446,17 @@ class Simulation(socketio.AsyncNamespace):
                 await server.emit(
                     event='load_weights',
                     data=message,
-                    to=participant_sid,
-                    namespace='/simulation'
+                    to=participant_sid
                 )
 
-    async def on_start_round(self, sid, message):
+    async def on_start_round_simulation(self, sid, message):
         """Event emitted by simulation controller to start the next round. Event is redirected to Market to trigger the start of the next round.
 
         Args:
             sid ([type]): [description]
             message ([type]): [description]
         """
-
+        # print("start round sim srvr")
         market_id = sessions[sid]['market_id']
         sim_controller_sid = clients[market_id]['sim_controller']['sid']
         market_sid = clients[market_id]['market']['sid']
@@ -534,8 +465,7 @@ class Simulation(socketio.AsyncNamespace):
             await server.emit(
                 event='start_round',
                 data=message,
-                to=market_sid,
-                namespace='/simulation')
+                to=market_sid)
 
     async def on_end_round(self, sid, message):
         """Event emitted by market to notify sim controller that all market functions for the current round are complete.
@@ -554,8 +484,7 @@ class Simulation(socketio.AsyncNamespace):
             await server.emit(
                 event='end_round',
                 data=message,
-                to=sim_controller_sid,
-                namespace='/simulation')
+                to=sim_controller_sid)
 
     async def on_end_turn(self, sid):
         """Event emitted by participant to notify sim controller that it has performed all of its actions for the current round.
@@ -573,8 +502,7 @@ class Simulation(socketio.AsyncNamespace):
 
         await server.emit(event='end_turn',
                           data=sessions[sid]['client_id'],
-                          to=sim_controller_sid,
-                          namespace='/simulation')
+                          to=sim_controller_sid)
 
 
     async def on_start_generation(self, sid, message):
@@ -594,7 +522,7 @@ class Simulation(socketio.AsyncNamespace):
                 event='start_generation',
                 data=message,
                 to=market_id,
-                namespace='/simulation')
+                skip_sid=sid)
 
     async def on_end_generation(self, sid, message):
         """Event emitted by sim controller to notify all clients in the market of the end of the current generation.
@@ -610,7 +538,7 @@ class Simulation(socketio.AsyncNamespace):
                 event='end_generation',
                 data=message,
                 to=market_id,
-                namespace='/simulation')
+                skip_sid=sid)
 
     # event emitted by sim controller
     # redirected to all participants
@@ -627,7 +555,7 @@ class Simulation(socketio.AsyncNamespace):
                 event='end_simulation',
                 data='',
                 to=market_id,
-                namespace='/simulation')
+                skip_sid=sid)
 
     async def on_is_market_online(self, sid):
         """Event emitted by sim controller to ask server if a Market has been registered
@@ -640,11 +568,10 @@ class Simulation(socketio.AsyncNamespace):
             await server.emit(
                 event='market_online',
                 data='',
-                to=sid,
-                namespace='/simulation')
+                to=sid)
 
     async def on_market_ready(self, sid):
-        """Event emitted by the Markeet to notify the sim controller that it is ready to operate
+        """Event emitted by the Market to notify the sim controller that it is ready to operate
 
         Args:
             sid ([type]): [description]
@@ -656,13 +583,12 @@ class Simulation(socketio.AsyncNamespace):
             await server.emit(
                 event='market_ready',
                 data='',
-                to=sim_controller_sid,
-                namespace='/simulation')
+                to=sim_controller_sid)
 
 # register namespaces
 server.register_namespace(Default(''))
-server.register_namespace(ETXMarket('/market'))
-server.register_namespace(Simulation('/simulation'))
+# server.register_namespace(ETXMarket('/market'))
+# server.register_namespace(Simulation('/simulation'))
 
 if __name__ == '__main__':
     import argparse

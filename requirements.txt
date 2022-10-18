@@ -9,7 +9,7 @@ dss
 numpy
 packaging
 python-dateutil
-python-socketio<=4.6.1
+python-socketio
 pytz
 python-rapidjson
 sqlalchemy-utils
