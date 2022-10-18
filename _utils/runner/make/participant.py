@@ -18,8 +18,8 @@ def cli(configs, participant_id):
     if 'type' not in participant_configs:
         return None, None
 
-    host = configs['server']['host'] if 'host' in configs['server'] else None
-    port = str(configs['server']['port']) if 'port' in configs['server'] else None
+    host = configs['server']['host']
+    port = str(configs['server']['port'])
 
     args = []
     args.append(participant_configs['type'])

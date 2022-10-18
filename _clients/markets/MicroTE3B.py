@@ -38,11 +38,13 @@ class Market:
             'round_settled': [],
             'round_settle_delivered': []
         }
+
+        self.__time_step_s = kwargs['time_step_size'] if 'time_step_size' in kwargs else 60
         self.__timing = {
             'mode': 'sim',
             'timezone': kwargs['timezone'],
-            'current_round': (0, 60),
-            'duration': 60,
+            'current_round': (0, self.__time_step_s),
+            'duration': self.__time_step_s,
             'last_round': (0, 0),
             'close_steps': kwargs['close_steps'] if 'close_steps' in kwargs else 2
             # close steps = 2 for 1 step-ahead market agent debugging
@@ -116,10 +118,10 @@ class Market:
                 self.server_online = True
 
         client_data = {
-            'type': ('market', 'MicroTE'),
+            'type': 'MicroTE',
             'id': self.market_id
         }
-        await self.__client.emit('register', client_data, namespace='/market', callback=register_cb)
+        await self.__client.emit('register_market', client_data, callback=register_cb)
 
     async def participant_connected(self, client_data):
         if client_data['id'] not in self.__participants:
@@ -148,7 +150,7 @@ class Market:
         self.__status['active_participants'] -= 1
 
     async def __classify_source(self, source):
-        return await source_classifier.classify(source)
+        return source_classifier.classify(source)
 
     # Initialize variables for new time step
     def __reset_status(self):
@@ -197,7 +199,7 @@ class Market:
             'next_settle': self.__timing['next_settle'],
             'market_info': market_info,
         }
-        await self.__client.emit('start_round', start_msg, namespace='/market')
+        await self.__client.emit('start_round', start_msg)
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -423,6 +425,7 @@ class Market:
 
         # remove zero-quantity bid and ask entries
         # sort bids by decreasing price and asks by increasing price
+        # def filter_bids_asks():
         self.__open[time_delivery]['ask'][:] = \
             sorted([ask for ask in self.__open[time_delivery]['ask'] if ask['quantity'] > 0],
                    key=itemgetter('price'), reverse=False)
@@ -430,8 +433,12 @@ class Market:
             sorted([bid for bid in self.__open[time_delivery]['bid'] if bid['quantity'] > 0],
                    key=itemgetter('price'), reverse=True)
 
+        # await asyncio.get_event_loop().run_in_executor(filter_bids_asks)
+
         bids = self.__open[time_delivery]['bid']
         asks = self.__open[time_delivery]['ask']
+
+        # await asyncio.get_event_loop().run_in_executor(send_request)
 
         for bid, ask, in itertools.product(bids, asks):
             if ask['price'] > bid['price']:
@@ -545,10 +552,10 @@ class Market:
         }
 
         if locking:
-            await self.__client.emit('send_settlement', message, namespace='/market',
+            await self.__client.emit('send_settlement', message,
                                      callback=self.__settle_confirm_lock)
         else:
-            await self.__client.emit('send_settlement', message, namespace='/market')
+            await self.__client.emit('send_settlement', message)
             bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
             ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)
@@ -818,8 +825,7 @@ class Market:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]
 
             await self.__client.emit(event='return_extra_transactions',
-                                     data=extra_transactions,
-                                     namespace='/market')
+                                     data=extra_transactions)
         if self.save_transactions:
             self.__transactions.extend(transactions)
             await self.record_transactions(10000)
@@ -842,11 +848,11 @@ class Market:
 
         # extra purchase by buyer
         # buyer settled for more than consumed
-        if extra_purchase:
-            print('-extra---------')
-            print(buyer_id, extra_purchase)
-            print(settlement)
-            print(self.__participants[buyer_id]['meter'][time_delivery])
+        # if extra_purchase:
+        #     print('-extra---------')
+        #     print(buyer_id, extra_purchase)
+        #     print(settlement)
+        #     print(self.__participants[buyer_id]['meter'][time_delivery])
 
         # extra_purchase and deficit_generation SHOULD be mutually exclusive
 
@@ -973,7 +979,9 @@ class Market:
 
     @tenacity.retry(wait=tenacity.wait_fixed(5))
     async def __ensure_transactions_complete(self):
+        print('checking transactions completion')
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
+        print(table_len, self.transactions_count)
         if table_len < self.transactions_count:
             raise Exception
         return True
@@ -982,7 +990,6 @@ class Market:
         """This function records the transaction records into the ledger
 
         """
-
         if check_table_len:
             table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
             if table_len < self.transactions_count:
@@ -999,8 +1006,10 @@ class Market:
             return False
 
         transactions = self.__transactions[:transactions_len]
-        asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
-
+        if delay:
+            asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
+        else:
+            await db_utils.dump_data(transactions, self.__db['path'], self.__db['table'])
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
         del self.__transactions[:transactions_len]
         self.transactions_count += transactions_len
@@ -1030,7 +1039,9 @@ class Market:
                             start_time + duration * self.__timing['close_steps']),
             'next_settle': (start_time + duration * self.__timing['close_steps'],
                             start_time + duration * (self.__timing['close_steps'] + 1))
+            # 'next_settle': (1433152800, 1433149200)
         })
+        # print(self.__timing)
 
     # Make sure time interval provided is valid
     async def __time_interval_is_valid(self, time_interval: tuple):
@@ -1072,7 +1083,7 @@ class Market:
             await self.__ensure_round_complete()
             await self.__process_energy_exchange(self.__timing['current_round'])
             await self.__clean_market(self.__timing['last_round'])
-            await self.__client.emit('end_round', data='', namespace='/simulation')
+            await self.__client.emit('end_round', data='')
 
     async def loop(self):
         # change loop depending on sim mode or RT mode
@@ -1083,7 +1094,8 @@ class Market:
             await self.__client.sleep(0.001)
 
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        # raise SystemExit
 
     async def reset_market(self):
         self.__db.clear()
@@ -1094,44 +1106,9 @@ class Market:
             self.__participants[participant]['meter'].clear()
 
     async def end_sim_generation(self):
+        # print('recording transactions')
         await self.record_transactions(delay=False)
-        await self.__ensure_transactions_complete()
+        # print('transactions recorded')
+        # await self.__ensure_transactions_complete()
         await self.reset_market()
-        await self.__client.emit('market_ready', namespace='/simulation')
-
-
-import socketio
-
-
-class NSMarket(socketio.AsyncClientNamespace):
-    """socket.io events for the market namespace
-
-    """
-
-    def __init__(self, market):
-        super().__init__(namespace='/market')
-        self.market = market
-
-    async def on_connect(self):
-        await self.market.register()
-
-    async def on_disconnect(self):
-        self.market.server_online = False
-
-    async def on_participant_connected(self, client_data):
-        return await self.market.participant_connected(client_data)
-
-    async def on_participant_disconnected(self, client_id):
-        return await self.market.participant_disconnected(client_id)
-
-    async def on_bid(self, bid):
-        return await self.market.submit_bid(bid)
-
-    async def on_ask(self, ask):
-        return await self.market.submit_ask(ask)
-
-    async def on_settlement_delivered(self, commit_id):
-        await self.market.settlement_delivered(commit_id)
-
-    async def on_meter_data(self, message):
-        await self.market.meter_data(message)
+        await self.__client.emit('market_ready')
