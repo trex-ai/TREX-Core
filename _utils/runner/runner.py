@@ -20,6 +20,16 @@ class Runner:
         if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
             self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
+        db_string = self.configs['study']['output_database']
+        if self.purge_db and database_exists(db_string):
+            drop_database(db_string)
+            config_file = '_configs/' + config + '.json'
+            configs = self.__load_json_file(config_file)
+            self.__create_sim_db(db_string, configs)
+        self.__create_sim_metadata(self.configs)
+
+
+
         # if not resume:
         #     r = tenacity.Retrying(
         #         wait=tenacity.wait_fixed(1))
@@ -349,14 +359,9 @@ class Runner:
         launch_list = []
         seq = 0
 
-        db_string = self.configs['study']['output_database']
-        if self.purge_db and database_exists(db_string):
-            drop_database(db_string)
-        self.__create_sim_db(db_string, self.configs)
-        self.__create_sim_metadata(self.configs)
-
         if hasattr(self, 'hyperparameters_permutations'):
             # write HPS list to database
+            db_string = self.configs['study']['output_database']
             db = dataset.connect(db_string)
             if "hyperparameters" not in db.tables:
                 table = db.create_table("hyperparameters", primary_id='idx', primary_type=db.types.integer)
