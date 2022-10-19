@@ -1,4 +1,5 @@
 import socket
+import multiprocessing
 import commentjson
 import os
 import random
@@ -23,9 +24,9 @@ class Runner:
         db_string = self.configs['study']['output_database']
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
-            config_file = '_configs/' + config + '.json'
-            configs = self.__load_json_file(config_file)
-            self.__create_sim_db(db_string, configs)
+        config_file = '_configs/' + config + '.json'
+        configs = self.__load_json_file(config_file)
+        self.__create_sim_db(db_string, configs)
             # self.__create_sim_metadata(self.configs)
 
 
@@ -370,17 +371,28 @@ class Runner:
             table.upsert_many(self.hyperparameters_permutations, ['idx'])
 
 
-            # hp_search_types = set()
-
-            # multiprocessing.cpu_count()
 
             # if training or validation needed to be done, then their parameters have to be modified
             if 'training' in simulations:
                 simulations.remove('training')
-                simulations_list.append({
-                    'simulation_type': "training",
-                    'hyperparameters': self.hyperparameters_permutations})
 
+                # autochunker to parallelize hyperparam search based on number of cpu cores available
+                cpu_cores = multiprocessing.cpu_count()
+                subprocesses = len(self.configs["participants"]) + 2
+                # parallel_sims = cpu_cores // subprocesses
+                parallel_sims = 1
+                hps_permutations = [self.hyperparameters_permutations[i::parallel_sims] for i in range(parallel_sims)]
+                # [L[i::n] for i in range(n)]
+
+                for permutation in hps_permutations:
+                    simulations_list.append({
+                        'simulation_type': "training",
+                        'hyperparameters': permutation})
+                        # 'hyperparameters': self.hyperparameters_permutations})
+
+                # simulations_list.append({
+                #     'simulation_type': "training",
+                #     'hyperparameters': self.hyperparameters_permutations[10:]})
             # if 'validation' in simulations:
             #     simulations.remove('validation')
 
