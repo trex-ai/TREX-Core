@@ -370,8 +370,6 @@ class Runner:
                 table = db["hyperparameters"]
             table.upsert_many(self.hyperparameters_permutations, ['idx'])
 
-
-
             # if training or validation needed to be done, then their parameters have to be modified
             if 'training' in simulations:
                 simulations.remove('training')
@@ -389,10 +387,6 @@ class Runner:
                         'simulation_type': "training",
                         'hyperparameters': permutation})
                         # 'hyperparameters': self.hyperparameters_permutations})
-
-                # simulations_list.append({
-                #     'simulation_type': "training",
-                #     'hyperparameters': self.hyperparameters_permutations[10:]})
             # if 'validation' in simulations:
             #     simulations.remove('validation')
 

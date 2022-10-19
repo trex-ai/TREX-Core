@@ -95,7 +95,7 @@ class Client:
 #                     load_scale=float(args.load_scale),
 #                     )
 #
-#     loop = asyncio.get_event_loop()
+#     loop = asyncio.get_running_loop()
 #     loop.run_until_complete(client.run())
 
 if __name__ == '__main__':
@@ -129,5 +129,4 @@ if __name__ == '__main__':
                     load_scale=float(args.load_scale),
                     )
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(client.run())
+    asyncio.run(client.run())
