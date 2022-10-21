@@ -12,6 +12,7 @@ from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
 import numpy as np
 from packaging import version
+import sys
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
@@ -340,12 +341,12 @@ class Runner:
         import time
 
         time.sleep(delay)
-        try:
-            subprocess.run(['venv/bin/python', args[0], *args[1]])
-        except:
-            subprocess.run(['venv/Scripts/python', args[0], *args[1]])
-        finally:
-            subprocess.run(['python', args[0], *args[1]])
+        # try:
+        #     subprocess.run(['venv/bin/python', args[0], *args[1]])
+        # except:
+        #     subprocess.run(['venv/Scripts/python', args[0], *args[1]])
+        # finally:
+        subprocess.run([sys.executable, args[0], *args[1]])
 
     def run(self, simulations, **kwargs):
         if not self.__config_version_valid:
