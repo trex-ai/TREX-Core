@@ -6,9 +6,12 @@ Main functions are client management and message relay
 import sys
 sys.path.append("C:/source/TREX-Core")
 import os
+import signal
 import asyncio
 import socket
 import socketio
+import multiprocessing
+import tenacity
 from _utils import jkson as json
 
 if os.name == 'posix':
@@ -47,6 +50,14 @@ async def send_market_info(market_id, client_sid):
             await server.emit(event='participant_joined',
                   data=sessions[client_sid]['client_id'],
                   to=clients[market_id]['sim_controller']['sid'])
+
+@tenacity.retry(wait=tenacity.wait_fixed(5)+tenacity.wait_random(0, 5))
+async def kill_server():
+    # print(sessions)
+    if sessions:
+        raise tenacity.TryAgain
+    else:
+        os.kill(os.getpid(), signal.SIGINT)
 
 class Default(socketio.AsyncNamespace):
     async def on_connect(self, sid, environ):
@@ -556,6 +567,10 @@ class Default(socketio.AsyncNamespace):
                 data='',
                 to=market_id,
                 skip_sid=sid)
+        await kill_server()
+        # print(multiprocessing.parent_process())
+        # import os, signal
+        # os.kill(os.getpid(), signal.SIGINT)
 
     async def on_is_market_online(self, sid):
         """Event emitted by sim controller to ask server if a Market has been registered

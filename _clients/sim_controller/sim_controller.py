@@ -1,6 +1,7 @@
 import datetime
 import time
-
+import os
+import signal
 import dataset
 from sqlalchemy_utils import database_exists
 
@@ -452,3 +453,4 @@ class Controller:
                     await self.__client.emit('end_simulation')
                     await self.delay(1)
                     await self.__client.disconnect()
+                    os.kill(os.getpid(), signal.SIGINT)
