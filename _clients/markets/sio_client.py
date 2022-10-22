@@ -79,7 +79,7 @@ class Client:
 #     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
 #                     market_configs=json.loads(args.configs))
 #
-#     loop = asyncio.get_event_loop()
+#     loop = asyncio.get_running_loop()
 #     loop.run_until_complete(client.run())
 
 if __name__ == '__main__':
@@ -95,7 +95,4 @@ if __name__ == '__main__':
     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
                     market_configs=json.loads(args.configs))
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(client.run())
-    # import sys
-    # sys.exit(__main())
+    asyncio.run(client.run())

@@ -6,6 +6,8 @@ from operator import itemgetter
 import itertools
 from cuid import cuid
 import tenacity
+import os
+import signal
 
 import asyncio
 from _clients.markets.Grid import Market as Grid
@@ -1092,6 +1094,8 @@ class Market:
 
         await self.__client.sleep(5)
         await self.__client.disconnect()
+        os.kill(os.getpid(), signal.SIGINT)
+
         # raise SystemExit
 
     async def reset_market(self):

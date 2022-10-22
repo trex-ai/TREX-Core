@@ -7,6 +7,8 @@ import tenacity
 
 from _clients.participants import ledger
 from _utils import db_utils, utils
+import os
+import signal
 
 
 class Participant:
@@ -479,6 +481,7 @@ class Participant:
             continue
         await self.__client.sleep(5)
         await self.__client.disconnect()
+        os.kill(os.getpid(), signal.SIGINT)
         # raise SystemExit
 
 
