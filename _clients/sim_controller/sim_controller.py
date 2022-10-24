@@ -1,14 +1,7 @@
-import asyncio
 import datetime
-import sys
-import json
-import os
 import time
-import asyncio
-
-import socketio
-from sqlalchemy_utils import database_exists
-import databases
+import os
+import signal
 import dataset
 from TREX_Core._clients.sim_controller.training_controller import TrainingController
 from TREX_Core._utils import utils, db_utils
@@ -104,20 +97,20 @@ class Controller:
         '''
         await self.__client.sleep(s)
 
-    def __get_metadata(self, generation):
-        if generation > self.__generations:
-            return None
-
-        db_string = self.__config['study']['output_database']
-        db = dataset.connect(db_string)
-        md_table = db['metadata']
-        metadata = md_table.find_one(generation=generation)
-        return metadata['data']
+    # def __get_metadata(self, generation):
+    #     if generation > self.__generations:
+    #         return None
+    #
+    #     db_string = self.__config['study']['output_database']
+    #     db = dataset.connect(db_string)
+    #     md_table = db['metadata']
+    #     metadata = md_table.find_one(generation=generation)
+    #     return metadata['data']
 
     def get_start_time(self):
-        metadata = self.__get_metadata(self.__generation)
-        if metadata:
-            return metadata['start_timestamp']
+        # metadata = self.__get_metadata(self.__generation)
+        # if metadata:
+        #     return metadata['start_timestamp']
 
         import pytz
         from dateutil.parser import parse as timeparse
@@ -167,11 +160,10 @@ class Controller:
     # Register client in server
     async def register(self):
         client_data = {
-            'type': ('sim_controller', ''),
             'id': '',
             'market_id': self.__config['market']['id']
         }
-        await self.__client.emit('register', client_data, namespace='/simulation', callback=self.register_success)
+        await self.__client.emit('register_sim_controller', client_data, callback=self.register_success)
 
     # If client has not connected, retry registration
     async def register_success(self, success):
@@ -262,17 +254,17 @@ class Controller:
                     'duration': self.__time_step_s,
                     'update': False
                 }
-                await self.__client.emit('start_round', message, namespace='/simulation')
+                await self.__client.emit('start_round_simulation', message)
 
             if self.status['sim_started']:
                 continue
 
             if not self.status['market_online']:
-                await self.__client.emit('is_market_online', namespace='/simulation')
+                await self.__client.emit('is_market_online')
                 continue
 
             if not self.status['participants_online']:
-                await self.__client.emit('re_register_participant', namespace='/simulation')
+                await self.__client.emit('re_register_participant')
                 continue
 
             if not self.status['market_ready']:
@@ -287,9 +279,23 @@ class Controller:
             #     continue
 
             if self.__config['study']['type'] == 'training':
+                if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
+                        ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
+                    # update gen 0 curriculum with new hyperparams to load
+                    # a = self.training_controller.update_hps_curriculum()
+                    hyperparameters = self.__config['training']['hyperparameters'].pop(0)
+                    self.hyperparameters_idx = hyperparameters.pop('idx')
+                    if "0" not in self.__config['training']['curriculum']:
+                        self.__config['training']['curriculum']["0"] = hyperparameters
+                    else:
+                        self.__config['training']['curriculum']["0"].update(hyperparameters)
+                    # make everyone update database path
+                    # pass
+                    self.status["hyperparameters_loaded"] = True
                 curriculum = self.training_controller.load_curriculum(str(self.__generation))
                 if curriculum:
-                    await self.__client.emit('update_curriculum', curriculum, namespace='/simulation')
+                    await self.__client.emit('update_curriculum', curriculum)
+                    # print(self.__generation, curriculum)
 
             if not self.status['participants_ready']:
                 continue
@@ -308,7 +314,7 @@ class Controller:
                 if self.__turn_control['total'] - self.__turn_control['online'] > 1:
                     self.__current_step = 0
                 else:
-                    await self.__client.emit('re_register_participant', namespace='/simulation')
+                    await self.__client.emit('re_register_participant')
                 self.status['sim_interrupted'] = False
                 continue
 
@@ -332,7 +338,7 @@ class Controller:
             'market_id': market_id,
             'generation': generation
         }
-        await self.__client.emit('load_weights', message, namespace='/simulation')
+        await self.__client.emit('load_weights', message)
 
     async def __print_step_time(self):
         # if not self.__current_step:
@@ -370,7 +376,9 @@ class Controller:
                 # 'output_path': self.status['output_path'],
                 'market_id': self.__config['market']['id'],
             }
-            await self.__client.emit('start_generation', message, namespace='/simulation')
+            if hasattr(self, 'hyperparameters_idx'):
+                message["market_id"] += "-hps" + str(self.hyperparameters_idx)
+            await self.__client.emit('start_generation', message)
             self.status['generation_ended'] = False
 
         # Beginning new time step
@@ -383,7 +391,8 @@ class Controller:
                 'duration': self.__time_step_s,
                 'update': True
             }
-            await self.__client.emit('start_round', message, namespace='/simulation')
+            # print("start simulation round")
+            await self.__client.emit('start_round_simulation', message)
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -423,85 +432,23 @@ class Controller:
                 'generation': self.__generation - 1,
                 'market_id': self.__config['market']['id']
             }
-            await self.__client.emit('end_generation', message, namespace='/simulation')
+            await self.__client.emit('end_generation', message)
 
             if self.__generation > self.__generations:
-                self.status['sim_ended'] = True
-                # if self.status['sim_ended']:
-                print('end_simulation', self.__generation-1, self.__generations)
-                await self.__client.emit('end_simulation', namespace='/simulation')
-                await self.delay(1)
-                sys.exit()
-
-class NSMarket(socketio.AsyncClientNamespace):
-
-    def __init__(self, controller):
-        super().__init__(namespace='/market')
-        self.controller = controller
-
-    # async def on_connect(self):
-    #     print('connected to market')
-    #     # await self.controller.register()
-
-    # async def on_disconnect(self):
-    #     print('disconnected from market')
-
-    # async def on_register(self):
-    #     print('participant registered')
-
-    # # async def on_end_round(self, message):
-    # #     await self.controller.step()
-
-class NSSimulation(socketio.AsyncClientNamespace):
-    def __init__(self, controller):
-        super().__init__(namespace='/simulation')
-        self.controller = controller
-
-    async def on_connect(self):
-        await self.controller.register()
-
-    # async def on_disconnect(self):
-    #   print('disconnected from simulation')
-
-
-    #
-    # async def on_participant_weights_saved(self, message):
-    #     for participant_id in message:
-    #         await self.controller.participant_status(participant_id, 'weights_saved', message[participant_id])
-
-
-    async def on_participant_joined(self, message):
-        participant_id = message
-        await self.controller.participant_online(participant_id, True)
-
-    async def on_participant_disconnected(self, message):
-        print(message, 'PARTICIPANT LOST')
-        participant_id = message
-        await self.controller.participant_online(participant_id, False)
-
-    async def on_participant_ready(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'ready', message[participant_id])
-
-    async def on_participant_weights_loaded(self, message):
-        for participant_id in message:
-            await self.controller.participant_status(participant_id, 'weights_loaded', message[participant_id])
-
-    # send by individual participants
-    async def on_end_turn(self, message):
-        await self.controller.update_turn_status(message)
-
-    # sent by the market
-    async def on_end_round(self, message):
-        await self.controller.market_turn_end()
-        await self.controller.update_turn_status(message)
-
-    async def on_market_online(self, message):
-        self.controller.status['market_online'] = True
-
-    async def on_market_ready(self, message):
-        self.controller.status['market_ready'] = True
-
-    # async def on_end_simulation(self, message):
-    #     raise SystemExit
-
+                if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
+                    self.__generation = self.set_initial_generation()
+                    self.__current_step = 0
+                    self.__start_time = self.get_start_time()
+                    self.__time = self.__start_time
+                    self.status['sim_started'] = False
+                    self.status['market_ready'] = False
+                    self.status["hyperparameters_loaded"] = False
+                else:
+                    self.status['sim_ended'] = True
+                    # TODO: add function to reset sim for next hyperparameter set
+                    # if self.status['sim_ended']:
+                    print('end_simulation', self.__generation-1, self.__generations)
+                    await self.__client.emit('end_simulation')
+                    await self.delay(1)
+                    await self.__client.disconnect()
+                    os.kill(os.getpid(), signal.SIGINT)

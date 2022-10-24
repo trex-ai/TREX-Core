@@ -1,14 +1,14 @@
-import os
 import asyncio
 import importlib
-import random
+import json
+import os
 
 import socketio
 import tenacity
 import json
-from TREX_Core._utils import jkson
+from _utils import jkson
 
-from TREX_Core._clients.markets.ns_common import NSDefault, NSSimulation
+from _clients.markets.ns_common import NSDefault, NSSimulation
 
 if os.name == 'posix':
     import uvloop
@@ -31,7 +31,6 @@ class Client:
 
         # Initialize market information
         Market = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).Market
-        NSMarket = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).NSMarket
 
         self.market = Market(sio_client=self.sio_client,
                              **market_configs,
@@ -39,8 +38,8 @@ class Client:
 
         # register client in server rooms
         self.sio_client.register_namespace(NSDefault(self.market))
-        self.sio_client.register_namespace(NSMarket(self.market))
-        self.sio_client.register_namespace(NSSimulation(self.market))
+        # self.sio_client.register_namespace(NSMarket(self.market))
+        # self.sio_client.register_namespace(NSSimulation(self.market))
 
         self.data_recorded = False
         self.recording_complete = False
@@ -60,16 +59,33 @@ class Client:
             asyncio.create_task(self.start_client()),
             # asyncio.create_task(self.keep_alive()),
             asyncio.create_task(self.market.loop())]
-        try:
-            await asyncio.gather(*tasks)
-        except SystemExit:
-            for t in tasks:
-                t.cancel()
-            raise SystemExit
+        # try:
+        await asyncio.gather(*tasks)
+        # except SystemExit:
+        #     for t in tasks:
+        #         t.cancel()
+        #     await self.sio_client.disconnect()
+            # raise SystemExit
 
-def __main():
+# def __main():
+#     import socket
+#     import argparse
+#     parser = argparse.ArgumentParser(description='')
+#     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+#     parser.add_argument('--port', default=42069, help='')
+#     parser.add_argument('--configs')
+#     args = parser.parse_args()
+#
+#     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
+#                     market_configs=json.loads(args.configs))
+#
+#     loop = asyncio.get_running_loop()
+#     loop.run_until_complete(client.run())
+
+if __name__ == '__main__':
     import socket
     import argparse
+
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
     parser.add_argument('--port', default=42069, help='')
@@ -79,9 +95,4 @@ def __main():
     client = Client(server_address=''.join(['http://', args.host, ':', str(args.port)]),
                     market_configs=json.loads(args.configs))
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(client.run())
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(__main())
+    asyncio.run(client.run())

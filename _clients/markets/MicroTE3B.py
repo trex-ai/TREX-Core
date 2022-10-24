@@ -6,6 +6,8 @@ from operator import itemgetter
 import itertools
 from cuid import cuid
 import tenacity
+import os
+import signal
 
 import asyncio
 from TREX_Core._clients.markets.Grid import Market as Grid
@@ -118,10 +120,10 @@ class Market:
                 self.server_online = True
 
         client_data = {
-            'type': ('market', 'MicroTE'),
+            'type': 'MicroTE',
             'id': self.market_id
         }
-        await self.__client.emit('register', client_data, namespace='/market', callback=register_cb)
+        await self.__client.emit('register_market', client_data, callback=register_cb)
 
     async def participant_connected(self, client_data):
         if client_data['id'] not in self.__participants:
@@ -199,7 +201,7 @@ class Market:
             'next_settle': self.__timing['next_settle'],
             'market_info': market_info,
         }
-        await self.__client.emit('start_round', start_msg, namespace='/market')
+        await self.__client.emit('start_round', start_msg)
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -552,10 +554,10 @@ class Market:
         }
 
         if locking:
-            await self.__client.emit('send_settlement', message, namespace='/market',
+            await self.__client.emit('send_settlement', message,
                                      callback=self.__settle_confirm_lock)
         else:
-            await self.__client.emit('send_settlement', message, namespace='/market')
+            await self.__client.emit('send_settlement', message)
             bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
             ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)
@@ -825,8 +827,7 @@ class Market:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]
 
             await self.__client.emit(event='return_extra_transactions',
-                                     data=extra_transactions,
-                                     namespace='/market')
+                                     data=extra_transactions)
         if self.save_transactions:
             self.__transactions.extend(transactions)
             await self.record_transactions(10000)
@@ -1084,7 +1085,7 @@ class Market:
             await self.__ensure_round_complete()
             await self.__process_energy_exchange(self.__timing['current_round'])
             await self.__clean_market(self.__timing['last_round'])
-            await self.__client.emit('end_round', data='', namespace='/simulation')
+            await self.__client.emit('end_round', data='')
 
     async def loop(self):
         # change loop depending on sim mode or RT mode
@@ -1095,7 +1096,10 @@ class Market:
             await self.__client.sleep(0.001)
 
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        os.kill(os.getpid(), signal.SIGINT)
+
+        # raise SystemExit
 
     async def reset_market(self):
         self.__db.clear()
@@ -1111,41 +1115,4 @@ class Market:
         # print('transactions recorded')
         # await self.__ensure_transactions_complete()
         await self.reset_market()
-        await self.__client.emit('market_ready', namespace='/simulation')
-
-
-import socketio
-
-
-class NSMarket(socketio.AsyncClientNamespace):
-    """socket.io events for the market namespace
-
-    """
-
-    def __init__(self, market):
-        super().__init__(namespace='/market')
-        self.market = market
-
-    async def on_connect(self):
-        await self.market.register()
-
-    async def on_disconnect(self):
-        self.market.server_online = False
-
-    async def on_participant_connected(self, client_data):
-        return await self.market.participant_connected(client_data)
-
-    async def on_participant_disconnected(self, client_id):
-        return await self.market.participant_disconnected(client_id)
-
-    async def on_bid(self, bid):
-        return await self.market.submit_bid(bid)
-
-    async def on_ask(self, ask):
-        return await self.market.submit_ask(ask)
-
-    async def on_settlement_delivered(self, commit_id):
-        await self.market.settlement_delivered(commit_id)
-
-    async def on_meter_data(self, message):
-        await self.market.meter_data(message)
+        await self.__client.emit('market_ready')

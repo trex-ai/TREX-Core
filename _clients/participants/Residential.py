@@ -1,12 +1,14 @@
+import ast
 import importlib
 import json
-import asyncio
-import ast
+
 import databases
-import sqlalchemy
 import tenacity
+import os
+import signal
 from TREX_Core._clients.participants import ledger
 from TREX_Core._utils import db_utils, utils
+
 
 class Participant:
     """
@@ -74,9 +76,9 @@ class Participant:
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
 
-        if 'market_ns' in kwargs:
-            NSMarket = importlib.import_module("TREX_Core."+kwargs['market_ns']).NSMarket
-            self.__client.register_namespace(NSMarket(self))
+        # if 'market_ns' in kwargs:
+        #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
+            # self.__client.register_namespace(NSMarket(self))
 
     async def delay(self, s):
         await self.__client.sleep(s)
@@ -127,13 +129,13 @@ class Participant:
             'id': self.participant_id,
             'market_id': self.market_id
         }
-        await self.__client.emit('join', client_data, namespace='/market', callback=self.register_success)
+        await self.__client.emit('join_market', client_data, callback=self.register_success)
 
     # Continuously attempt to join server
     async def register_success(self, success):
         if not success:
             # self.__profiles_available()
-            # await self.delay(5)
+            await self.delay(3)
             await self.join_market()
         self.busy = False
 
@@ -163,7 +165,7 @@ class Participant:
             'time_delivery': time_delivery
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
-        await self.__client.emit('bid', bid_entry, namespace='/market')
+        await self.__client.emit('bid', bid_entry)
 
     @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -184,7 +186,7 @@ class Participant:
             'source': kwargs['source'],
             'time_delivery': time_delivery
         }
-        await self.__client.emit('ask', ask_entry, namespace='/market')
+        await self.__client.emit('ask', ask_entry)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -238,8 +240,8 @@ class Participant:
         # in real-time mode there would have to be a timeout function
         # this is currently OK for simulation mode
         await self.__meter_energy(self.__timing['current_round'])
-        await self.__client.emit('end_turn', namespace='/market')
-        await self.__client.emit('end_turn', namespace='/simulation')
+        # await self.__client.emit('end_turn', namespace='/market')
+        await self.__client.emit('end_turn')
 
     async def __read_profile(self, time_interval):
         """Fetches energy profile for one timestamp from database
@@ -299,7 +301,7 @@ class Participant:
             return False
 
         self.__meter = await self.__allocate_energy(time_interval)
-        await self.__client.emit('meter_data', self.__meter, namespace='/market')
+        await self.__client.emit('meter_data', self.__meter)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -477,42 +479,44 @@ class Participant:
                 await self.__client.emit('ping')
             continue
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        os.kill(os.getpid(), signal.SIGINT)
+        # raise SystemExit
 
 
-import socketio
-class NSMarket(socketio.AsyncClientNamespace):
-    def __init__(self, participant):
-        super().__init__(namespace='/market')
-        self.participant = participant
-
-    async def on_connect(self):
-        await self.participant.join_market()
-
-    # async def on_disconnect(self):
-    #     pass
-
-    async def on_re_register_participant(self, message):
-        await self.participant.join_market()
-
-    async def on_update_market_info(self, market_id):
-        if market_id == self.participant.market_id:
-            self.participant.market_connected = True
-
-    async def on_start_round(self, message):
-        await self.participant.start_round(message)
-
-    async def on_ask_success(self, message):
-        await self.participant.ask_success(message)
-
-    async def on_bid_success(self, message):
-        await self.participant.bid_success(message)
-
-    async def on_settled(self, message):
-        return await self.participant.settle_success(message)
-
-    async def on_return_extra_transactions(self, message):
-        await self.participant.update_extra_transactions(message)
-
-if __name__ == '__main__':
-    pass
+# import socketio
+# class NSMarket(socketio.AsyncClientNamespace):
+#     def __init__(self, participant):
+#         super().__init__(namespace='/market')
+#         self.participant = participant
+#
+#     # async def on_connect(self):
+#     #     await self.participant.join_market()
+#
+#     # async def on_disconnect(self):
+#     #     pass
+#
+#     async def on_re_register_participant(self, message):
+#         await self.participant.join_market()
+#
+#     async def on_update_market_info(self, market_id):
+#         if market_id == self.participant.market_id:
+#             self.participant.market_connected = True
+#
+#     async def on_start_round(self, message):
+#         await self.participant.start_round(message)
+#
+#     async def on_ask_success(self, message):
+#         await self.participant.ask_success(message)
+#
+#     async def on_bid_success(self, message):
+#         await self.participant.bid_success(message)
+#
+#     async def on_settled(self, message):
+#         return await self.participant.settle_success(message)
+#
+#     async def on_return_extra_transactions(self, message):
+#         await self.participant.update_extra_transactions(message)
+#
+# if __name__ == '__main__':
+#     pass
