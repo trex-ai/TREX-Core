@@ -5,7 +5,7 @@ import signal
 import dataset
 from TREX_Core._clients.sim_controller.training_controller import TrainingController
 from TREX_Core._utils import utils, db_utils
-
+import sqlalchemy_utils
 
 class Controller:
     '''
@@ -137,7 +137,7 @@ class Controller:
     #TODO: update this to check all dbs
     def set_initial_generation(self):
         db_string = self.__config['study']['output_database']
-        if not database_exists(db_string):
+        if not sqlalchemy_utils.database_exists(db_string):
             return 0
 
         # TODO: rewrite generation detection for resume

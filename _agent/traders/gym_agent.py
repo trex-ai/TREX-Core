@@ -84,7 +84,8 @@ class Trader:
             'residual_get': residual_gen
         }
         # TODO: send out pre transition information to the envController
-        await self.__participant['emit']('pre_transition_data', message_data, namespace='/simulation')
+        # await self.__participant['emit']('pre_transition_data', message_data, namespace='/simulation')
+        actions = input("Actions")
 
         if self.track_metrics:
             await asyncio.gather(

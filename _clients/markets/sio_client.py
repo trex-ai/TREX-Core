@@ -6,9 +6,9 @@ import os
 import socketio
 import tenacity
 import json
-from _utils import jkson
+from TREX_Core._utils import jkson
 
-from _clients.markets.ns_common import NSDefault, NSSimulation
+from TREX_Core._clients.markets.ns_common import NSDefault
 
 if os.name == 'posix':
     import uvloop
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+    parser.add_argument('--host', default="localhost", help='')
     parser.add_argument('--port', default=42069, help='')
     parser.add_argument('--configs')
     args = parser.parse_args()

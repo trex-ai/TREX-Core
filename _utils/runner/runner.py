@@ -4,7 +4,7 @@ import commentjson
 import os
 import random
 import itertools
-from TREX_Core._utils import db_utils
+import TREX_Core._utils
 from TREX_Core._utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
@@ -164,7 +164,8 @@ class Runner:
 
     def __create_sim_db(self, db_string, config):
         if not database_exists(db_string):
-            db_utils.create_db(db_string)
+            #TODO: OCT 24 2022; double check this works as intended
+            TREX_Core._utils.db_utils.create_db(db_string)
             self.__create_configs_table(db_string)
             db = dataset.connect(db_string)
             configs_table = db['configs']
@@ -209,7 +210,7 @@ class Runner:
 
         # iterate ports until an available one is found, starting from the default or the preferred port
         while True:
-            if utils.port_is_open(config['server']['host'], config['server']['port']):
+            if TREX_Core._utils.utils.port_is_open(config['server']['host'], config['server']['port']):
                 config['server']['port'] += 1
             else:
                 break
@@ -352,7 +353,7 @@ class Runner:
         # finally:
         subprocess.run([sys.executable, args[0], *args[1]])
 
-    def run(self, simulations):
+    def run(self, simulations,  **kwargs):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return

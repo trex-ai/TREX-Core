@@ -6,7 +6,7 @@ import tenacity
 from TREX_Core._utils import jkson
 from TREX_Core._clients.sim_controller.sim_controller import Controller
 from TREX_Core._clients.sim_controller.ns_common import NSDefault
-from TREX_Core._clients.sim_controller.sim_controller import NSMarket, NSSimulation
+# from TREX_Core._clients.sim_controller.sim_controller import NSMarket, NSSimulation
 
 # from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
 
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     import json
 
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+    parser.add_argument('--host', default="localhost", help='')
     parser.add_argument('--port', default=42069, help='')
     parser.add_argument('--config', default='', help='')
     args = parser.parse_args()

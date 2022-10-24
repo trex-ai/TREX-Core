@@ -8,8 +8,8 @@
       "timezone": "America/Vancouver",
       "days": 2,
       "time_step_size": 3600,
-      "generations": 1,
-      "profiles_db_location": "postgresql://postgres:postgres@localhost/SunDance"
+      "generations": 1
+//      "profiles_db_location": "postgresql://postgres:postgres@localhost/SunDance"
 //      "sim_root": "/home/trex/sim/"
     },
   "server": {
@@ -57,7 +57,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_1001230"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -88,7 +88,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_1001974"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -119,7 +119,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_100500"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -150,7 +150,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_10068"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -181,7 +181,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_10011"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -212,7 +212,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_10063"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -243,7 +243,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_100124"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -274,7 +274,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_1007"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -305,7 +305,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_1003842"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {
@@ -336,7 +336,7 @@
           "learning": true,
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "SunDance_1002705"
+          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
 
         },
         "load": {

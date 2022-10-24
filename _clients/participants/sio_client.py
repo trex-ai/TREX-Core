@@ -4,7 +4,7 @@ import os
 import socketio
 import tenacity
 from TREX_Core._utils import jkson
-from TREX_Core._clients.participants.ns_common import NSDefault, NSSimulation
+from TREX_Core._clients.participants.ns_common import NSDefault
 
 if os.name == 'posix':
     import uvloop
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('type', help='')
     parser.add_argument('--id', help='')
     parser.add_argument('--market_id', help='')
-    parser.add_argument('--host', default=socket.gethostbyname(socket.getfqdn()), help='')
+    parser.add_argument('--host', default="localhost", help='')
     parser.add_argument('--port', default=42069, help='')
     parser.add_argument('--db_path', default=None, help='')
     parser.add_argument('--trader', default=None, help='')
