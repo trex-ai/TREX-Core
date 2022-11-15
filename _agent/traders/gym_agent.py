@@ -5,6 +5,7 @@ from TREX_Core._agent._utils.metrics import Metrics
 import asyncio
 from TREX_Core._utils import jkson as json
 # import serialize
+from multiprocessing import shared_memory
 
 
 class Trader:
@@ -17,6 +18,13 @@ class Trader:
             'weights_saving': False,
             'weights_saved': True
         }
+        # Set up the shared lists for data transfer
+        self.name = self.__participant.participant_id
+        action_list_name = self.name + "_actions"
+        observation_list_name = self.name + "_observations"
+        self.shared_list_action = shared_memory.ShareableList(name= action_list_name)
+        self.shared_list_observation = shared_memory.ShareableList(name = observation_list_name)
+
 
         # TODO: Find out where the action space will be defined: I suspect its not here
         # Initialize the agent learning parameters for the agent (your choice)
@@ -68,6 +76,7 @@ class Trader:
         #              }
         #          }
         #     }
+        # sources inclued: 'solar', 'bess'
         # }
 
         actions = {}
@@ -76,16 +85,34 @@ class Trader:
         generation, load = await self.__participant['read_profile'](next_settle)
         residual_load = load - generation
         residual_gen = -residual_load
-        message_data = {
-            'next_settle' : next_settle,
-            'generation': generation,
-            'load' : load,
-            'residual_load': residual_load,
-            'residual_get': residual_gen
-        }
-        # TODO: send out pre transition information to the envController
-        # await self.__participant['emit']('pre_transition_data', message_data, namespace='/simulation')
-        actions = input("Actions")
+        # message_data = {
+        #     'next_settle' : next_settle,
+        #     'generation': generation,
+        #     'load' : load,
+        #     'residual_load': residual_load,
+        #     'residual_get': residual_gen
+        # }
+        # TODO: write the pre_transition data to obs buffer
+        obs = [next_settle, generation, load, residual_load, residual_gen]
+        self.write_observation_values(obs)
+
+        # wait for the actions to come from EPYMARL
+        self.read_action_values()
+        # actions come in with a set order, they will need to be split up
+        # TODO: these need to be set and coded
+        # gen_price = self.actions[]
+        # gen_quantity = self.actions[]
+
+
+        if generation:
+
+            actions ={
+                "asks":{next_settle:{
+                    'quantity':quantity,
+                    'price': user_actions
+                }
+                }
+            }
 
         if self.track_metrics:
             await asyncio.gather(
@@ -97,7 +124,28 @@ class Trader:
             await self.metrics.save(10000)
         return actions
 
+
     async def step(self):
+        # actions must come in the following format:
+        # actions = {
+        #     'bess': {
+        #         time_interval: scheduled_qty
+        #     },
+        #     'bids': {
+        #         time_interval: {
+        #             'quantity': qty,
+        #             'price': dollar_per_kWh
+        #         }
+        #     },
+        #     'asks' {
+        #         source: {
+        #             time_interval: {
+        #                 'quantity': qty,
+        #                 'price': dollar_per_kWh?
+        #             }
+        #         }
+        #     }
+        #
         next_actions = await self.act()
         return next_actions
 
@@ -140,3 +188,65 @@ class Trader:
         for action in self.actions:
             self.episode_actions[action].append(self.actions[action][action_indices[action]])
         return actions
+
+    def check_read_flag(self, shared_list):
+        """
+        This method checks the read flag in a shared list.
+        Parameters:
+            Shared_list -> shared list object to check, assumes that element 0 is the flag and that flag can be
+                            intepreted as boolean
+            returns ->  Boolean
+        """
+        if shared_list[0]:
+            return True
+        else:
+            return False
+
+    def read_action_values(self):
+        """
+        This method checks the action buffer flag and if the read flag is set, it reads the value in the buffer and stores
+        them in self.actions
+
+        """
+
+        # check the action flag
+        while True:
+            flag = self.check_read_flag(self.shared_list_action)
+            if flag:
+                #read the buffer
+                self.actions = self.shared_list_action[1:]
+                #reset the flag
+                write_flag(self.shared_list_action, True)
+                break
+
+    def write_flag(self, shared_list, flag):
+        """
+        This method sets the flag
+        Parameters:
+            shared_list ->  shared list object to be modified
+            flag -> boolean that indicates write 0 or 1. True sets 1
+        """
+        if flag:
+            shared_list[0] = 1
+        else:
+            shared_list[0] = 0
+
+    def write_observation_values(self, obs):
+        """
+        This method writes the values in the observations array to the observation buffer and then sets the flag for it
+
+        """
+
+        # obs will be an array
+        # pack the values of the obs array into the shares list
+        for e, item in enumerate(obs):
+            self.shared_list_observation[e+1] = item
+
+        #set the observation flat to written
+        write_flag(self.shared_list_observation,True)
+
+
+
+
+
+
