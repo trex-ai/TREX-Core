@@ -5,7 +5,7 @@ from TREX_Core._agent._utils.metrics import Metrics
 import asyncio
 from TREX_Core._utils import jkson as json
 # import serialize
-
+import TREX_Core._utils as utils
 
 class Trader:
     def __init__(self, **kwargs):

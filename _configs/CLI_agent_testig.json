@@ -43,11 +43,12 @@
       }
     },
     "participants": {
-      "R5": { //serves as baseline for evaluation for battery tests
+      "R5": {
+        //serves as baseline for evaluation for battery tests
         "type": "Residential",
         "trader": {
           "track_metrics": true,
-          "type": "greedy_battery",
+          "type": "gym_agent",
           "bid_price": 0.14,
           "ask_price": 0.07,
           "P_max": 3000,
@@ -55,30 +56,27 @@
             "storage"
           ],
           "learning": true,
+          "observations" : [
+            "generation",
+            'load'
+          ],
           "limit_actions": true,
           "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
+          "use_synthetic_profile": "test_profile_1kw_square_p2"
         },
         "load": {
           "scale": 1
         },
         "generation": {
           "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
         }
       },
-      "R6": { //serves as baseline for evaluation for battery tests
+      "R6": {
+        //serves as baseline for evaluation for battery tests
         "type": "Residential",
         "trader": {
           "track_metrics": true,
-          "type": "greedy_battery",
+          "type": "basic_trader",
           "bid_price": 0.14,
           "ask_price": 0.07,
           "P_max": 3000,
@@ -89,268 +87,12 @@
           "limit_actions": true,
           "reward_function": "net_profit",
           "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
         },
         "load": {
           "scale": 1
         },
         "generation": {
           "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R7": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R8": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R9": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R10": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R11": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R12": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R13": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
-        }
-      },
-      "R14": { //serves as baseline for evaluation for battery tests
-        "type": "Residential",
-        "trader": {
-          "track_metrics": true,
-          "type": "greedy_battery",
-          "bid_price": 0.14,
-          "ask_price": 0.07,
-          "P_max": 3000,
-          "actions": [
-            "storage"
-          ],
-          "learning": true,
-          "limit_actions": true,
-          "reward_function": "net_profit",
-          "use_synthetic_profile": "test_profile_1kw_square_p2+1"
-
-        },
-        "load": {
-          "scale": 1
-        },
-        "generation": {
-          "scale": 1
-        },
-        "storage": {
-          "type": "Bess",
-          "capacity": 6000,
-          "power": 3000,
-          "efficiency": 1,
-          "monthly_sdr": 0
         }
       }
     }

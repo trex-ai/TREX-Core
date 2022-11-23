@@ -435,7 +435,7 @@ class Participant:
         #         source: {
         #             time_interval: {
         #                 'quantity': qty,
-        #                 'price': dollar_per_kWh?
+        #                 'price': dollar_per_kWh
         #             }
         #         }
         #     }

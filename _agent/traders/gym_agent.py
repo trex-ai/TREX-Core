@@ -19,9 +19,16 @@ class Trader:
             'weights_saved': True
         }
         # Set up the shared lists for data transfer
-        self.name = self.__participant.participant_id
+        print(self.__participant)
+        self.name = self.__participant['id']
         action_list_name = self.name + "_actions"
-        observation_list_name = self.name + "_observations"
+        observation_list_name = self.name + "_obs"
+
+        '''
+        Shared lists get initialized on TREXENV side, so all that the agents have to do is connect to their respective 
+        observation and action lists. Agents dont have to worry about making the actions pretty, they just have to send
+        them into the buffer. 
+        '''
         self.shared_list_action = shared_memory.ShareableList(name= action_list_name)
         self.shared_list_observation = shared_memory.ShareableList(name = observation_list_name)
 
@@ -55,36 +62,53 @@ class Trader:
     # Core Functions, learn and act, called from outside
 
     async def act(self, **kwargs):
-        # actions are none so far
-        # ACTIONS ARE FOR THE NEXT settle!!!!!
+        """
 
-        # actions = {
-        #     'bess': {
-        #         time_interval: scheduled_qty
-        #     },
-        #     'bids': {
-        #         time_interval: {
-        #             'quantity': qty,
-        #             'price': dollar_per_kWh
-        #         }
-        #     },
-        #     'asks': {
-        #         source:{
-        #              time_interval: {
-        #                 'quantity': qty,
-        #                 'price': dollar_per_kWh?
-        #              }
-        #          }
-        #     }
-        # sources inclued: 'solar', 'bess'
-        # }
+
+        """
+
+        '''
+        actions are none so far
+        ACTIONS ARE FOR THE NEXT settle!!!!!
+
+        actions = {
+            'bess': {
+                time_interval: scheduled_qty
+            },
+            'bids': {
+                time_interval: {
+                    'quantity': qty,
+                    'price': dollar_per_kWh
+                }
+            },
+            'asks': {
+                source:{
+                     time_interval: {
+                        'quantity': qty,
+                        'price': dollar_per_kWh?
+                     }
+                 }
+            }
+        sources inclued: 'solar', 'bess'
+        Actions in the shared list 
+        [bid price, bid quantity, solar ask price, solar ask quantity, bess ask price, bess ask quantity]
+        }
+        '''
 
         actions = {}
-        # Pre transition information.
+        bid_price = 0.0
+        bid_quantity = 0.0
+        solar_ask_price = 0.0
+        solar_ask_quantity = 0.0
+        bess_ask_price = 0.0
+        bees_ask_quantity = 0.0
+
+        # Observation information
         next_settle = self.__participant['timing']['next_settle']
         generation, load = await self.__participant['read_profile'](next_settle)
         residual_load = load - generation
         residual_gen = -residual_load
+        # Artifact from single agent
         # message_data = {
         #     'next_settle' : next_settle,
         #     'generation': generation,
@@ -93,26 +117,37 @@ class Trader:
         #     'residual_get': residual_gen
         # }
         # TODO: write the pre_transition data to obs buffer
-        obs = [next_settle, generation, load, residual_load, residual_gen]
-        self.write_observation_values(obs)
+        obs = [next_settle[1], generation, load, residual_load, residual_gen]
+        print('Observations', obs)
+        await self.write_observation_values(obs)
 
         # wait for the actions to come from EPYMARL
-        self.read_action_values()
+        await self.read_action_values()
         # actions come in with a set order, they will need to be split up
+
         # TODO: these need to be set and coded
-        # gen_price = self.actions[]
-        # gen_quantity = self.actions[]
+        # Bid related asks
+        bid_price = self.actions[0]
+        bid_quantity = self.actions[1]
 
+        # Solar related asks
+        solar_ask_price = self.actions[2]
+        solar_ask_quantity = self.actions[3]
+        #Bess related asks
+        bess_ask_price = self.actions[4]
+        bees_ask_quantity = self.actions[5]
 
-        if generation:
+        if bid_price and bid_quantity:
 
-            actions ={
-                "asks":{next_settle:{
-                    'quantity':quantity,
-                    'price': user_actions
-                }
-                }
-            }
+        # if generation:
+        #
+        #     actions ={
+        #         "asks":{next_settle:{
+        #             'quantity':quantity,
+        #             'price': user_actions
+        #         }
+        #         }
+        #     }
 
         if self.track_metrics:
             await asyncio.gather(
@@ -189,7 +224,7 @@ class Trader:
             self.episode_actions[action].append(self.actions[action][action_indices[action]])
         return actions
 
-    def check_read_flag(self, shared_list):
+    async def check_read_flag(self, shared_list):
         """
         This method checks the read flag in a shared list.
         Parameters:
@@ -202,36 +237,45 @@ class Trader:
         else:
             return False
 
-    def read_action_values(self):
+    async def read_action_values(self):
         """
         This method checks the action buffer flag and if the read flag is set, it reads the value in the buffer and stores
         them in self.actions
 
         """
-
+        self.actions = []
         # check the action flag
         while True:
-            flag = self.check_read_flag(self.shared_list_action)
+            flag = await self.check_read_flag(self.shared_list_action)
+            print("Flag", flag)
             if flag:
                 #read the buffer
-                self.actions = self.shared_list_action[1:]
+                for e, item in enumerate(self.shared_list_action):
+                    print(e, item)
+                    self.actions.append(item)
+                # self.actions = self.shared_list_action[1:]
+                print('actions', self.actions)
                 #reset the flag
-                write_flag(self.shared_list_action, True)
+                await self.write_flag(self.shared_list_action, False)
                 break
 
-    def write_flag(self, shared_list, flag):
+    async def write_flag(self, shared_list, flag):
         """
         This method sets the flag
         Parameters:
             shared_list ->  shared list object to be modified
             flag -> boolean that indicates write 0 or 1. True sets 1
         """
+        print(shared_list)
+
         if flag:
             shared_list[0] = 1
+            print("Flag was set ")
         else:
             shared_list[0] = 0
+            print("Flag was not set")
 
-    def write_observation_values(self, obs):
+    async def write_observation_values(self, obs):
         """
         This method writes the values in the observations array to the observation buffer and then sets the flag for it
 
@@ -240,10 +284,11 @@ class Trader:
         # obs will be an array
         # pack the values of the obs array into the shares list
         for e, item in enumerate(obs):
+            print(e, item)
             self.shared_list_observation[e+1] = item
 
         #set the observation flat to written
-        write_flag(self.shared_list_observation,True)
+        await self.write_flag(self.shared_list_observation,True)
 
 
 
