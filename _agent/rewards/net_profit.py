@@ -1,4 +1,4 @@
-from _agent.rewards.utils import process_ledger
+from TREX_Core._agent.rewards.utils import process_ledger
 
 class Reward:
     def __init__(self, timing=None, ledger=None, market_info=None, **kwargs):

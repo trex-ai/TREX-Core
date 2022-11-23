@@ -1,57 +1,167 @@
+# from _clients.participants.participants import Residential
+
+import tenacity
+from TREX_Core._agent._utils.metrics import Metrics
 import asyncio
-# from _utils._agent.gym_utils import GymPlug
-from _agent._utils.metrics import Metrics
-import numpy as np
-import datetime
+from TREX_Core._utils import jkson as json
+# import serialize
+from multiprocessing import shared_memory
 
 
 class Trader:
-    """This trader is the endpoint for agents that are using the multi agent gym environment.
-    """
     def __init__(self, **kwargs):
-        '''
-        This initializes the gym agent.
-
-        '''
+        # Some util stuffies
         self.__participant = kwargs['trader_fns']
-
         self.status = {
             'weights_loading': False,
             'weights_loaded': False,
             'weights_saving': False,
             'weights_saved': True
         }
-        #TODO Feb 2 2022: see if this is the way to handle stalling the actions
-        self.next_actions = {}
-        self.wait_for_actions = asyncio.Event()
+        # Set up the shared lists for data transfer
+        print(self.__participant)
+        self.name = self.__participant['id']
+        action_list_name = self.name + "_actions"
+        observation_list_name = self.name + "_obs"
 
-        # Initialize learning parameters
-        self.learning = False
+        '''
+        Shared lists get initialized on TREXENV side, so all that the agents have to do is connect to their respective 
+        observation and action lists. Agents dont have to worry about making the actions pretty, they just have to send
+        them into the buffer. 
+        '''
+        self.shared_list_action = shared_memory.ShareableList(name= action_list_name)
+        self.shared_list_observation = shared_memory.ShareableList(name = observation_list_name)
 
-        # Initialize metrics tracking
+
+        # TODO: Find out where the action space will be defined: I suspect its not here
+        # Initialize the agent learning parameters for the agent (your choice)
+        # self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
+        # self.ask_price = kwargs['ask_price'] if 'ask_price' in kwargs else None
+
+        # Initialize the metrics, whatever you
+        # set learning and track_metrics flags
         self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
         self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
         if self.track_metrics:
             self.__init_metrics()
 
     def __init_metrics(self):
-        '''
-        Initializes metrics to record into database
-        '''
         import sqlalchemy
+        '''
+        Pretty self explanitory, this method resets the metric lists in 'agent_metrics' as well as zeroing the metrics dictionary. 
+        '''
         self.metrics.add('timestamp', sqlalchemy.Integer)
         self.metrics.add('actions_dict', sqlalchemy.JSON)
-        self.metrics.add('rewards', sqlalchemy.Float)
         self.metrics.add('next_settle_load', sqlalchemy.Integer)
         self.metrics.add('next_settle_generation', sqlalchemy.Integer)
-        if 'storage' in self.__participant:
-            self.metrics.add('storage_soc', sqlalchemy.Float)
 
-    async def act(self):
+        # if self.battery:
+        #     self.metrics.add('battery_action', sqlalchemy.Integer)
+        #     self.metrics.add('state_of_charge', sqlalchemy.Float)
+
+    # Core Functions, learn and act, called from outside
+
+    async def act(self, **kwargs):
+        """
+
+
+        """
+
         '''
-        This method will poll the envcontroller for the actions.
+        actions are none so far
+        ACTIONS ARE FOR THE NEXT settle!!!!!
+
+        actions = {
+            'bess': {
+                time_interval: scheduled_qty
+            },
+            'bids': {
+                time_interval: {
+                    'quantity': qty,
+                    'price': dollar_per_kWh
+                }
+            },
+            'asks': {
+                source:{
+                     time_interval: {
+                        'quantity': qty,
+                        'price': dollar_per_kWh?
+                     }
+                 }
+            }
+        sources inclued: 'solar', 'bess'
+        Actions in the shared list 
+        [bid price, bid quantity, solar ask price, solar ask quantity, bess ask price, bess ask quantity]
+        }
         '''
-        # TODO: Decemeber 2 2021; need to make sure that this is still the action format
+
+        actions = {}
+        bid_price = 0.0
+        bid_quantity = 0.0
+        solar_ask_price = 0.0
+        solar_ask_quantity = 0.0
+        bess_ask_price = 0.0
+        bees_ask_quantity = 0.0
+
+        # Observation information
+        next_settle = self.__participant['timing']['next_settle']
+        generation, load = await self.__participant['read_profile'](next_settle)
+        residual_load = load - generation
+        residual_gen = -residual_load
+        # Artifact from single agent
+        # message_data = {
+        #     'next_settle' : next_settle,
+        #     'generation': generation,
+        #     'load' : load,
+        #     'residual_load': residual_load,
+        #     'residual_get': residual_gen
+        # }
+        # TODO: write the pre_transition data to obs buffer
+        obs = [next_settle[1], generation, load, residual_load, residual_gen]
+        print('Observations', obs)
+        await self.write_observation_values(obs)
+
+        # wait for the actions to come from EPYMARL
+        await self.read_action_values()
+        # actions come in with a set order, they will need to be split up
+
+        # TODO: these need to be set and coded
+        # Bid related asks
+        bid_price = self.actions[0]
+        bid_quantity = self.actions[1]
+
+        # Solar related asks
+        solar_ask_price = self.actions[2]
+        solar_ask_quantity = self.actions[3]
+        #Bess related asks
+        bess_ask_price = self.actions[4]
+        bees_ask_quantity = self.actions[5]
+
+        if bid_price and bid_quantity:
+
+        # if generation:
+        #
+        #     actions ={
+        #         "asks":{next_settle:{
+        #             'quantity':quantity,
+        #             'price': user_actions
+        #         }
+        #         }
+        #     }
+
+        if self.track_metrics:
+            await asyncio.gather(
+                self.metrics.track('timestamp', self.__participant['timing']['current_round'][1]),
+                self.metrics.track('actions_dict', actions),
+                self.metrics.track('next_settle_load', load),
+                self.metrics.track('next_settle_generation', generation))
+
+            await self.metrics.save(10000)
+        return actions
+
+
+    async def step(self):
+        # actions must come in the following format:
         # actions = {
         #     'bess': {
         #         time_interval: scheduled_qty
@@ -59,124 +169,129 @@ class Trader:
         #     'bids': {
         #         time_interval: {
         #             'quantity': qty,
-        #             'source': source,
         #             'price': dollar_per_kWh
         #         }
         #     },
-        #     'asks': {
-        #         time_interval: {
-        #             'quantity': qty,
-        #             'source': source,
-        #             'price': dollar_per_kWh?
+        #     'asks' {
+        #         source: {
+        #             time_interval: {
+        #                 'quantity': qty,
+        #                 'price': dollar_per_kWh?
+        #             }
         #         }
         #     }
-        # }
-
-        # cleaning
-        self.next_actions.clear()
-        self.wait_for_actions.clear()
-
-        # get the observations:
-        observations = await self._get_observations()
-
-        # send the message to the envcontroller asking for actions
-        print('Getting actions', self.next_actions)
-        await self.__participant['emit']('get_remote_actions',
-                                         data=observations,
-                                         namespace='/simulation')
-
-        await self.wait_for_actions.wait()
-        print("got actions", self.next_actions)
-        print("------breakline------")
-
-        return self.next_actions
-
-    async def _get_observations(self):
-
-        pid = self.__participant['id']
-        mid = self.__participant['market_id']
-        # observations needs id and the observations
-        # this should probably also be some dictionary;
-        # based on DQN, these are the observations that we used for it:
-        # float: time SIN,
-        # float: time COS,
         #
-        # float: next settle gen value,
-        # float: moving average 5 min next settle gen,
-        # float: moving average 30 min next settle gen,
-        # float: moving average 60 min next settle gen,
-        #
-        # float: next settle load value,
-        # float: moving average 5 min next settle load,
-        # float: moving average 30 min next settle load,
-        # float: moving average 60 min next settle load,
-        #
-        # float: next settle projected SOC,
-        # float: Scaled battery max charge,
-        # float: scaled battery max discharge]
-        last_settle = self.__participant['timing']['last_settle']
-        hour = datetime.datetime.utcfromtimetimestamp(last_settle[0]).hour
-        min = datetime.datetime.utcfromtimetimestamp(last_settle[0]).minute
-        daytime = hour * 60 + min
-        max_daytime = 24 * 60
-        daytime_in_rad = 2 * np.pi * (daytime / max_daytime)
-        day_sin = np.sin(daytime_in_rad)
-        day_cos = np.cos(daytime_in_rad)
-        print(day_sin)
-        print(day_cos)
-        next_settle = self.__participant['timing']['next_settle']
-        generation, load = await self.__participant['read_profile'](next_settle)
-        message = {
-            'id' : pid,
-            'market_id': mid,
-            'observations': {
-                # observations stuff
-                'next_settle_load_value': load,
-                'next_settle_gen_value': generation,
-                'last_settle_daytime_sin': day_sin,
-                'last_settle_daytime_cos': day_cos
-
-            }
-        }
-        return message
-
-
-    async def step(self):
-        """
-        This method calls the act and learn processes. Step wraps them so that it is more in line with the
-        syntax of gym.
-        Returns:
-
-        """
-        obs = self._get_observations()
-        next_actions = await self.get_actions(obs)
-
+        next_actions = await self.act()
         return next_actions
 
-    async def reset(self):
+    async def reset(self, **kwargs):
         return True
 
-    async def get_actions(self, observations):
-        '''
-        This method asks the envcontroller to pass the right agents action for this step. 
-        The env controller should get this agents observations.  
-        The env controller should return the values corresponding to the action for the agent to pass to the trader.step() method
-        This will have to be called in the step function 
-        '''
-        participant_id = self.__participant['id']
-        #TODO: Nov 16 send a message to the env_controller requesting this agents actions. 
-        #The esiest way to get this to work is to bind every agent to their ID in the namespace and use those in a dictionary
-        # in the env_controller 
-        
+    async def decode_actions(self, action_indices: dict, next_settle):
+        actions = dict()
+        # print(action_indices)
+
+        price = self.actions['price'][action_indices['price']]
+        quantity = self.actions['quantity'][action_indices['quantity']]
+
+        if quantity > 0:
+            actions['bids'] = {
+                str(next_settle): {
+                    'quantity': quantity,
+                    'price': price
+                }
+            }
+        elif quantity < 0:
+            actions['asks'] = {
+                'solar': {
+                    str(next_settle): {
+                        'quantity': -quantity,
+                        'price': price
+                    }
+                }
+            }
+
+        if 'storage' in self.actions:
+            target = self.actions['storage'][action_indices['storage']]
+            if target:
+                actions['bess'] = {
+                    str(next_settle): target
+                }
+        # print(actions)
+
+        #log actions for later histogram plot
+        for action in self.actions:
+            self.episode_actions[action].append(self.actions[action][action_indices[action]])
+        return actions
+
+    async def check_read_flag(self, shared_list):
+        """
+        This method checks the read flag in a shared list.
+        Parameters:
+            Shared_list -> shared list object to check, assumes that element 0 is the flag and that flag can be
+                            intepreted as boolean
+            returns ->  Boolean
+        """
+        if shared_list[0]:
+            return True
+        else:
+            return False
+
+    async def read_action_values(self):
+        """
+        This method checks the action buffer flag and if the read flag is set, it reads the value in the buffer and stores
+        them in self.actions
+
+        """
+        self.actions = []
+        # check the action flag
+        while True:
+            flag = await self.check_read_flag(self.shared_list_action)
+            print("Flag", flag)
+            if flag:
+                #read the buffer
+                for e, item in enumerate(self.shared_list_action):
+                    print(e, item)
+                    self.actions.append(item)
+                # self.actions = self.shared_list_action[1:]
+                print('actions', self.actions)
+                #reset the flag
+                await self.write_flag(self.shared_list_action, False)
+                break
+
+    async def write_flag(self, shared_list, flag):
+        """
+        This method sets the flag
+        Parameters:
+            shared_list ->  shared list object to be modified
+            flag -> boolean that indicates write 0 or 1. True sets 1
+        """
+        print(shared_list)
+
+        if flag:
+            shared_list[0] = 1
+            print("Flag was set ")
+        else:
+            shared_list[0] = 0
+            print("Flag was not set")
+
+    async def write_observation_values(self, obs):
+        """
+        This method writes the values in the observations array to the observation buffer and then sets the flag for it
+
+        """
+
+        # obs will be an array
+        # pack the values of the obs array into the shares list
+        for e, item in enumerate(obs):
+            print(e, item)
+            self.shared_list_observation[e+1] = item
+
+        #set the observation flat to written
+        await self.write_flag(self.shared_list_observation,True)
 
 
-        # Here is an example of the way to emit a request to the env controller
-        #await self.__participant['emit']('get_remote_actions',
-        #                                 data=observations,
-        #                                 namespace='/simulation')
-        message = {}
-        await self.__participant['emit']('')
 
 
-        action = []
-        return action
+
+

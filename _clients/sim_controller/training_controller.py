@@ -1,4 +1,4 @@
-from _utils import utils
+from TREX_Core._utils import utils
 
 class TrainingController:
     """Training controller is a intended to provide very fine control of the trainin process, especially for generational training.
@@ -10,7 +10,10 @@ class TrainingController:
         self.__last_curriculum_update = None
 
     def load_curriculum(self, current_generation:str):
-        curriculum = self.__config['curriculum']
+        if 'training' not in self.__config or 'curriculum' not in self.__config['training']:
+            return None
+
+        curriculum = self.__config['training']['curriculum']
         if current_generation in curriculum:
             self.__last_curriculum_update = current_generation
             return curriculum[current_generation]

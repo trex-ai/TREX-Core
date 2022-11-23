@@ -1,10 +1,8 @@
 import json
 from pathlib import Path
 def cli(configs, participant_id):
-    # TODO: Nov 30, 2021; this fixes the path problem
-    path_to_trex = str(Path(configs['study']['sim_root']))
-    script_path = path_to_trex + '/_clients/participants/sio_client.py'
-    # script_path = '_clients/participants/sio_client.py'
+    path = __file__.split('_utils')
+    script_path = path[0] + '_clients/participants/sio_client.py'
 
     if 'server' not in configs:
         return None, None
@@ -21,8 +19,8 @@ def cli(configs, participant_id):
     if 'type' not in participant_configs:
         return None, None
 
-    host = configs['server']['host'] if 'host' in configs['server'] else None
-    port = str(configs['server']['port']) if 'port' in configs['server'] else None
+    host = configs['server']['host']
+    port = str(configs['server']['port'])
 
     args = []
     args.append(participant_configs['type'])

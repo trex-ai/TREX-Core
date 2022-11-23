@@ -1,12 +1,14 @@
+import ast
 import importlib
 import json
-import asyncio
-import ast
+
 import databases
-import sqlalchemy
 import tenacity
-from _clients.participants import ledger
-from _utils import db_utils, utils
+import os
+import signal
+from TREX_Core._clients.participants import ledger
+from TREX_Core._utils import db_utils, utils
+
 
 class Participant:
     """
@@ -21,8 +23,8 @@ class Participant:
         self.participant_id = str(participant_id)
         self.__client = sio_client
         self.client = sio_client
-        self.__profile_db = {
-            'path': db_path
+        self.__profile = {
+            'db_path': db_path
         }
 
         # Initialize market variables
@@ -42,6 +44,7 @@ class Participant:
             'extra_transactions': self.__extra_transactions,
             'market_info': self.__market_info,
             'read_profile': self.__read_profile,
+            'get_profile_stats': self.__get_profile_stats,
             'meter': self.__meter
         }
 
@@ -52,7 +55,7 @@ class Participant:
             #     'id': self.participant_id,
             #     'timing': self.__timing
             # }
-            self.storage = importlib.import_module('_devices.' + storage_type).Storage(**storage_params)
+            self.storage = importlib.import_module('TREX_Core._devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
@@ -61,10 +64,9 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
-        # FIXME: 09/21/2020 Hardcoding remote_agent here is bad
-        if trader_type == 'remote_agent':
+        if trader_type == 'gym_agent':
             trader_fns['emit'] = self.__client.emit
-        Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
+        Trader = importlib.import_module('TREX_Core._agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
@@ -75,9 +77,9 @@ class Participant:
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
 
-        if 'market_ns' in kwargs:
-            NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
-            self.__client.register_namespace(NSMarket(self))
+        # if 'market_ns' in kwargs:
+        #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
+            # self.__client.register_namespace(NSMarket(self))
 
     async def delay(self, s):
         await self.__client.sleep(s)
@@ -95,16 +97,30 @@ class Participant:
         Args:
             db_path ([type]): [description]
         """
-        self.__profile_db['path'] = db_path
-        self.__profile_db['db'] = databases.Database(db_path)
+        self.__profile['db_path'] = db_path
+        self.__profile['db'] = databases.Database(db_path)
         profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
             else self.participant_id
-        self.__profile_db['table'] = db_utils.get_table(db_path, profile_name)
-        if 'table' in self.__profile_db or self.__profile_db['table'] is not None:
-            await self.__profile_db['db'].connect()
+        self.__profile['name'] = profile_name
+        self.__profile['db_table'] = db_utils.get_table(db_path, profile_name)
+        if 'db_table' in self.__profile or self.__profile['db_table'] is not None:
+            await self.__profile['db'].connect()
+
+    async def __get_profile_stats(self):
+        """reads and returns pre-calculated profile statistics for calculating Z scores, if available.
+        """
+        db = self.__profile['db']
+        table = db_utils.get_table(self.__profile['db_path'], "_statistics")
+        query = table.select().where(table.c.name == self.__profile['name'])
+        # async with db.transaction():
+        row = await db.fetch_one(query)
+        if row is not None:
+            return dict(row)
+        return None
 
     async def open_profile_db(self):
-        await self.open_db(self.__profile_db['path'])
+        await self.open_db(self.__profile['db_path'])
+        # await self.get_profile_stats(self.__profile['db_path'])
 
     async def join_market(self):
         """Emits event to join a Market
@@ -114,13 +130,13 @@ class Participant:
             'id': self.participant_id,
             'market_id': self.market_id
         }
-        await self.__client.emit('join', client_data, namespace='/market', callback=self.register_success)
+        await self.__client.emit('join_market', client_data, callback=self.register_success)
 
     # Continuously attempt to join server
     async def register_success(self, success):
         if not success:
             # self.__profiles_available()
-            # await self.delay(5)
+            await self.delay(3)
             await self.join_market()
         self.busy = False
 
@@ -150,7 +166,7 @@ class Participant:
             'time_delivery': time_delivery
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
-        await self.__client.emit('bid', bid_entry, namespace='/market')
+        await self.__client.emit('bid', bid_entry)
 
     @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -171,7 +187,7 @@ class Participant:
             'source': kwargs['source'],
             'time_delivery': time_delivery
         }
-        await self.__client.emit('ask', ask_entry, namespace='/market')
+        await self.__client.emit('ask', ask_entry)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -226,8 +242,8 @@ class Participant:
         # in real-time mode there would have to be a timeout function
         # this is currently OK for simulation mode
         await self.__meter_energy(self.__timing['current_round'])
-        await self.__client.emit('end_turn', namespace='/market')
-        await self.__client.emit('end_turn', namespace='/simulation')
+        # await self.__client.emit('end_turn', namespace='/market')
+        await self.__client.emit('end_turn')
 
     async def __read_profile(self, time_interval):
         """Fetches energy profile for one timestamp from database
@@ -238,9 +254,10 @@ class Participant:
         Returns:
             [type]: [description]
         """
-        db = self.__profile_db['db']
-        table = self.__profile_db['table']
-        query = table.select().where(table.c.tstamp == time_interval[1])
+        db = self.__profile['db']
+        table = self.__profile['db_table']
+        # query = table.select().where(table.c.tstamp == time_interval[1])
+        query = table.select().where(table.c.time == time_interval[1])
         async with db.transaction():
             row = await db.fetch_one(query)
         return utils.process_profile(row=row,
@@ -286,7 +303,7 @@ class Participant:
             return False
 
         self.__meter = await self.__allocate_energy(time_interval)
-        await self.__client.emit('meter_data', self.__meter, namespace='/market')
+        await self.__client.emit('meter_data', self.__meter)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -420,7 +437,7 @@ class Participant:
         #         source: {
         #             time_interval: {
         #                 'quantity': qty,
-        #                 'price': dollar_per_kWh?
+        #                 'price': dollar_per_kWh
         #             }
         #         }
         #     }
@@ -464,42 +481,44 @@ class Participant:
                 await self.__client.emit('ping')
             continue
         await self.__client.sleep(5)
-        raise SystemExit
+        await self.__client.disconnect()
+        os.kill(os.getpid(), signal.SIGINT)
+        # raise SystemExit
 
 
-import socketio
-class NSMarket(socketio.AsyncClientNamespace):
-    def __init__(self, participant):
-        super().__init__(namespace='/market')
-        self.participant = participant
-
-    async def on_connect(self):
-        await self.participant.join_market()
-
-    # async def on_disconnect(self):
-    #     pass
-
-    async def on_re_register_participant(self, message):
-        await self.participant.join_market()
-
-    async def on_update_market_info(self, market_id):
-        if market_id == self.participant.market_id:
-            self.participant.market_connected = True
-
-    async def on_start_round(self, message):
-        await self.participant.start_round(message)
-
-    async def on_ask_success(self, message):
-        await self.participant.ask_success(message)
-
-    async def on_bid_success(self, message):
-        await self.participant.bid_success(message)
-
-    async def on_settled(self, message):
-        return await self.participant.settle_success(message)
-
-    async def on_return_extra_transactions(self, message):
-        await self.participant.update_extra_transactions(message)
-
-if __name__ == '__main__':
-    pass
+# import socketio
+# class NSMarket(socketio.AsyncClientNamespace):
+#     def __init__(self, participant):
+#         super().__init__(namespace='/market')
+#         self.participant = participant
+#
+#     # async def on_connect(self):
+#     #     await self.participant.join_market()
+#
+#     # async def on_disconnect(self):
+#     #     pass
+#
+#     async def on_re_register_participant(self, message):
+#         await self.participant.join_market()
+#
+#     async def on_update_market_info(self, market_id):
+#         if market_id == self.participant.market_id:
+#             self.participant.market_connected = True
+#
+#     async def on_start_round(self, message):
+#         await self.participant.start_round(message)
+#
+#     async def on_ask_success(self, message):
+#         await self.participant.ask_success(message)
+#
+#     async def on_bid_success(self, message):
+#         await self.participant.bid_success(message)
+#
+#     async def on_settled(self, message):
+#         return await self.participant.settle_success(message)
+#
+#     async def on_return_extra_transactions(self, message):
+#         await self.participant.update_extra_transactions(message)
+#
+# if __name__ == '__main__':
+#     pass

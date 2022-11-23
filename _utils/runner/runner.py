@@ -1,23 +1,37 @@
+import socket
+import multiprocessing
 import commentjson
 import os
 import random
-from _utils import db_utils
-from _utils import jkson as json
+import itertools
+import TREX_Core._utils
+from TREX_Core._utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
+import numpy as np
 from packaging import version
 import sys
-# FIXME: Nov 30 2021; this needs to be changed so that the path is not hardcoded in TREX
-# pass the trex core path through configs of epymarl
 
 
-from pathlib import Path
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
+        self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.configs = self.__get_config(config, resume, **kwargs)
-        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.6.0"))
+        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
+        if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
+            self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
+
+        db_string = self.configs['study']['output_database']
+        if self.purge_db and database_exists(db_string):
+            drop_database(db_string)
+        config_file = '_configs/' + config + '.json'
+        configs = self.__load_json_file(config_file)
+        self.__create_sim_db(db_string, configs)
+            # self.__create_sim_metadata(self.configs)
+
+
 
         # if not resume:
         #     r = tenacity.Retrying(
@@ -30,6 +44,7 @@ class Runner:
         return json_file
 
     def __get_config(self, config_name: str, resume, **kwargs):
+        cwd = os.getcwd()
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
 
@@ -41,44 +56,46 @@ class Runner:
         else:
             study_name = config_name
 
-        if credentials or 'profiles_db_location' not in config['study']:
+        if credentials and ('profiles_db_location' not in config['study']):
             config['study']['profiles_db_location'] = credentials['profiles_db_location']
 
-        if credentials or 'output_db_location' not in config['study']:
+        if credentials and ('output_db_location' not in config['study']):
             config['study']['output_db_location'] = credentials['output_db_location']
 
-        db_string = config['study']['output_db_location'] + '/' + study_name
-        engine = create_engine(db_string)
 
-        if resume:
-            if 'db_string' in kwargs:
-                db_string = kwargs['db_string']
-            # look for existing db in db. if one exists, return it
-            if database_exists(db_string):
-                if sqlalchemy.inspect(engine).has_table('configs'):
-                    db = dataset.connect(db_string)
-                    configs_table = db['configs']
-                    configs = configs_table.find_one(id=0)['data']
-                    configs['study']['resume'] = resume
-                    return configs
+        # engine = create_engine(db_string)
 
-        # if not resume
+        # if resume:
+        #     if 'db_string' in kwargs:
+        #         db_string = kwargs['db_string']
+        #     # look for existing db in db. if one exists, return it
+        #     if database_exists(db_string):
+        #         if sqlalchemy.inspect(engine).has_table('configs'):
+        #             db = dataset.connect(db_string)
+        #             configs_table = db['configs']
+        #             configs = configs_table.find_one(id=0)['data']
+        #             configs['study']['resume'] = resume
+        #             return configs
+        #
+        # # if not resume
         config['study']['name'] = study_name
+        db_string = config['study']['output_db_location'] + '/' + study_name
         if 'output_database' not in config['study'] or not config['study']['output_database']:
             config['study']['output_database'] = db_string
-
-        if 'purge' in kwargs and kwargs['purge']:
-            if database_exists(db_string):
-                drop_database(db_string)
-
-        if not database_exists(db_string):
-            db_utils.create_db(db_string)
-            self.__create_configs_table(db_string)
-            db = dataset.connect(db_string)
-            configs_table = db['configs']
-            configs_table.insert({'id': 0, 'data': config})
-
-        config['study']['resume'] = resume
+        #
+        # if 'purge' in kwargs and kwargs['purge']:
+        #     if database_exists(db_string):
+        #         drop_database(db_string)
+        #
+        # if not database_exists(db_string):
+        #     db_utils.create_db(db_string)
+        #     self.__create_configs_table(db_string)
+        #     db = dataset.connect(db_string)
+        #     configs_table = db['configs']
+        #     configs_table.insert({'id': 0, 'data': config})
+        #
+        # config['study']['resume'] = False
+        # config['study']['resume'] = resume
         return config
 
     # Give starting time for simulation
@@ -127,10 +144,10 @@ class Runner:
         # if not os.path.exists(sim_path):
         #     os.mkdir(sim_path)
 
-        engine = create_engine(self.configs['study']['output_database'])
+        engine = create_engine(config['study']['output_database'])
         if not sqlalchemy.inspect(engine).has_table('metadata'):
-            self.__create_metadata_table(self.configs['study']['output_database'])
-        db = dataset.connect(self.configs['study']['output_database'])
+            self.__create_metadata_table(config['study']['output_database'])
+        db = dataset.connect(config['study']['output_database'])
         metadata_table = db['metadata']
         for generation in range(config['study']['generations']):
             # check if metadata is in table
@@ -142,6 +159,15 @@ class Runner:
                     'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
                 }
                 metadata_table.insert(dict(generation=generation, data=metadata))
+
+    def __create_sim_db(self, db_string, config):
+        if not database_exists(db_string):
+            #TODO: OCT 24 2022; double check this works as intended
+            TREX_Core._utils.db_utils.create_db(db_string)
+            self.__create_configs_table(db_string)
+            db = dataset.connect(db_string)
+            configs_table = db['configs']
+            configs_table.insert({'id': 0, 'data': config})
 
     def __create_table(self, db_string, table):
         engine = create_engine(db_string)
@@ -168,24 +194,39 @@ class Runner:
         self.__create_table(db_string, table)
 
     def modify_config(self, simulation_type, **kwargs):
-        if not self.__config_version_valid:
-            return []
-
-        seq = kwargs['seq'] if 'seq' in kwargs else 0
+        # if not self.__config_version_valid:
+        #     return []
 
         config = json.loads(json.dumps(self.configs))
-        default_port = int(self.configs['server']['port']) if self.configs['server']['port'] else 3000
-        config['server']['port'] = default_port + seq
+
+        if 'server' not in self.configs or 'host' not in self.configs['server'] or not self.configs['server']['host']:
+            # config['server']['host'] = socket.gethostbyname(socket.getfqdn())
+            config['server']['host'] = "localhost"
+
+        if 'server' not in self.configs or 'port' not in self.configs['server'] or not self.configs['server']['port']:
+            config['server']['port'] = 42069
+
+        # iterate ports until an available one is found, starting from the default or the preferred port
+        while True:
+            if TREX_Core._utils.utils.port_is_open(config['server']['host'], config['server']['port']):
+                config['server']['port'] += 1
+            else:
+                break
+
+        # config['server']['port'] = default_port + seq
+        seq = kwargs['seq'] if 'seq' in kwargs else 0
+        config['server']['port'] += seq
         config['study']['type'] = simulation_type
+        # print(simulation_type, seq, config['server']['port'])
 
         # if resume is False, then drop all tables relevant to the study type
-        if not config['study']['resume']:
-            study_name = config['study']['name']
-            db_string = config['study']['output_db_location'] + '/' + study_name
-            db = dataset.connect(db_string)
-            tables = [table for table in db.tables if simulation_type + '_' in table]
-            for table in tables:
-                db[table].drop()
+        # if not config['study']['resume']:
+        #     study_name = config['study']['name']
+        #     db_string = config['study']['output_db_location'] + '/' + study_name
+        #     db = dataset.connect(db_string)
+        #     tables = [table for table in db.tables if simulation_type + '_' in table]
+        #     for table in tables:
+        #         db[table].drop()
 
         learning_participants = [participant for participant in config['participants'] if
                                  'learning' in config['participants'][participant]['trader'] and
@@ -207,18 +248,28 @@ class Runner:
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
-            if 'target' in kwargs:
-                if not kwargs['target'] in config['participants']:
-                    return []
+            # if 'target' in kwargs:
+            #     if not kwargs['target'] in config['participants']:
+            #         return []
+            #
+            #     config['market']['id'] += '-' + kwargs['target']
+            #     for participant in learning_participants:
+            #         config['participants'][participant]['trader']['learning'] = False
+            #     config['participants'][kwargs['target']]['trader']['learning'] = True
+            # else:
+            # if 'hyperparameters' in kwargs:
+            #     config['training']['hyperparameters'] = kwargs["hyperparameters"]
+                # print(kwargs)
+                # print(config['training']['hyperparameters'])
+                    # if hyperparameter is defined for the trader, then
+                    # overwrite default hyperparameter with one to be searched
+                    # for hyperparameter in config['training']['hyperparameters']:
+                    #     if hyperparameter in config['participants'][participant]['trader']:
+                    #         config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
 
-                config['market']['id'] += '-' + kwargs['target']
-                for participant in learning_participants:
-                    config['participants'][participant]['trader']['learning'] = False
-                config['participants'][kwargs['target']]['trader']['learning'] = True
-            else:
-                for participant in learning_participants:
-                    config['participants'][participant]['trader']['learning'] = True
-                    config['participants'][participant]['trader']['study_name'] = config['study']['name']
+            for participant in learning_participants:
+                config['participants'][participant]['trader']['learning'] = True
+                config['participants'][participant]['trader']['study_name'] = config['study']['name']
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -226,22 +277,60 @@ class Runner:
 
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
+
+        if 'hyperparameters' in kwargs:
+            config['training']['hyperparameters'] = kwargs['hyperparameters']
+
+            # change simulation name to include hyperparameters
+            # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
+            #                                           key, value in config['training']['hyperparameters'].items()])
+            # TODO: make default name the first
+            # hyperparameters_formatted_str = "hps_"+str(kwargs['hyperparameters'][0]['idx'])
+            # For hyperparameter search, each permutation may need its own database
+            # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
+            # config['market']['id'] += '-' + hyperparameters_formatted_str
+            # config['study']['name'] += '-' + hyperparameters_formatted_str
+            # db_string = config['study']['output_db_location'] + '/' + config['study']['name']
+            # config['study']['output_database'] = db_string
+
         return config
+
+    def __find_hyperparameters_permutations(self):
+        # find permutations of hyperparameters
+        hyperparameters = self.configs['training']['hyperparameters']
+        for hyperparameter in hyperparameters:
+            parameters = hyperparameters[hyperparameter]
+            if isinstance(parameters, dict):
+                # round hyperparameter to 4 decimal places
+                hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
+            # elif isinstance(parameters, list):
+            #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
+            elif isinstance(parameters, int) or isinstance(parameters, float):
+                hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
+        hp_keys, hp_values = zip(*hyperparameters.items())
+        hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
+
+        # add index to list
+        # there may be a more efficient way to do this
+        # but since it's only done once and the list is usually not super long
+        # this should be OK
+        for idx in range(len(hp_permutations)):
+            hp_permutations[idx].update({"idx": idx})
+        return hp_permutations
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
-        import _utils.runner.make.sim_controller as sim_controller
-        import _utils.runner.make.participant as participant
+        import TREX_Core._utils.runner.make.sim_controller as sim_controller
+        import TREX_Core._utils.runner.make.participant as participant
 
         exclude = {'sim_controller', 'participants'}
         exclude.update(skip)
-
+        print(config)
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
-
         for module_n in dynamic:
             try:
-                module = import_module('_utils.runner.make.' + module_n)
+                module = import_module('TREX_Core._utils.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
             except:
                 pass
@@ -261,28 +350,62 @@ class Runner:
         path_to_trex_main = path_to_trex + str(Path('/main.py'))
 
         time.sleep(delay)
-        try:
-            print('path to venv in runner', path_to_venv)
-            subprocess.run([path_to_venv, args[0], *args[1]])
-        except:
-            print('in the except clause')
-            subprocess.run(['venv/Scripts/python', args[0], *args[1]])
-        finally:
-            print('in the finally clause')
-            subprocess.run([path_to_venv, args[0], *args[1]])
+        # try:
+        #     subprocess.run(['venv/bin/python', args[0], *args[1]])
+        # except:
+        #     subprocess.run(['venv/Scripts/python', args[0], *args[1]])
+        # finally:
+        subprocess.run([sys.executable, args[0], *args[1]])
 
-    def run(self, simulations):
+    def run(self, simulations,  **kwargs):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
+
+        # import multiprocessing
         from multiprocessing import Pool
 
+        # db_purged = False
+        simulations_list = []
         launch_list = []
         seq = 0
-        for sim_param in simulations:
+
+        if hasattr(self, 'hyperparameters_permutations'):
+            # write HPS list to database
+            db_string = self.configs['study']['output_database']
+            db = dataset.connect(db_string)
+            if "hyperparameters" not in db.tables:
+                table = db.create_table("hyperparameters", primary_id='idx', primary_type=db.types.integer)
+            else:
+                table = db["hyperparameters"]
+            table.upsert_many(self.hyperparameters_permutations, ['idx'])
+
+            # if training or validation needed to be done, then their parameters have to be modified
+            if 'training' in simulations:
+                simulations.remove('training')
+
+                # autochunker to parallelize hyperparam search based on number of cpu cores available
+                cpu_cores = multiprocessing.cpu_count()
+                subprocesses = len(self.configs["participants"]) + 2
+                # parallel_sims = cpu_cores // subprocesses
+                parallel_sims = 1
+                hps_permutations = [self.hyperparameters_permutations[i::parallel_sims] for i in range(parallel_sims)]
+                # [L[i::n] for i in range(n)]
+
+                for permutation in hps_permutations:
+                    simulations_list.append({
+                        'simulation_type': "training",
+                        'hyperparameters': permutation})
+                        # 'hyperparameters': self.hyperparameters_permutations})
+            # if 'validation' in simulations:
+            #     simulations.remove('validation')
+
+        for simulation in simulations:
+            simulations_list.append({'simulation_type': simulation})
+
+        for sim_param in simulations_list:
             config = self.modify_config(**sim_param, seq=seq)
-            self.__create_sim_metadata(config)
-            launch_list.extend(self.make_launch_list(config))
+            launch_list.extend(self.make_launch_list(config, **kwargs))
             seq += 1
         print('Launch list in run',launch_list)
         pool_size = len(launch_list)

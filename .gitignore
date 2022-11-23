@@ -5,6 +5,12 @@ venv/
 
 __pycache__/
 
-_configs/test_if_baselines.json
 
-_configs/
+18P_Tests/
+Alex-recreated/
+BESS_MA_Test/
+BESS_Test/
+
+aklsjfn/Buyer1/
+
+*.v2
