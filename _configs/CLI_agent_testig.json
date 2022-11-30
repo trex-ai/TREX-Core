@@ -58,7 +58,7 @@
           "learning": true,
           "observations" : [
             "generation",
-            'load'
+            "load"
           ],
           "limit_actions": true,
           "reward_function": "net_profit",
