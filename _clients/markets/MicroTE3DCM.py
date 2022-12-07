@@ -199,7 +199,13 @@ class Market:
                     'sell_price': self.__grid.sell_price()
                 }
             },
+            # update start round message for Daniel C May
+            "settle_stats": self.__round_settle_stats
         }
+        # update start round message for Daniel C May
+        # market.update(self.__round_settle_stats)
+        self.__round_settle_stats_buf["settlement_price_buy"].clear()
+        self.__round_settle_stats_buf["settlement_price_sell"].clear()
 
         start_msg = {
             'time': start_time,
@@ -212,11 +218,6 @@ class Market:
             'market_info': market_info,
         }
 
-        # update start round message for Daniel C May
-        start_msg.update(self.__round_settle_stats)
-        self.__round_settle_stats_buf["settlement_price_buy"].clear()
-        self.__round_settle_stats_buf["settlement_price_sell"].clear()
-        
         await self.__client.emit('start_round', start_msg)
 
     async def submit_bid(self, message: dict):
