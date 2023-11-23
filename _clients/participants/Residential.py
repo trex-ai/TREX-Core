@@ -263,6 +263,25 @@ class Participant:
                                      gen_scale=self.__profile_params['generation_scale'],
                                      load_scale=self.__profile_params['load_scale'])
 
+    async def __read_sensors(self, time_interval):
+        """Fetches energy profile for one timestamp from database
+
+        Args:
+            time_interval ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        db = self.__profile['db']
+        table = self.__profile['db_table']
+        # query = table.select().where(table.c.tstamp == time_interval[1])
+        query = table.select().where(table.c.time == time_interval[1])
+        async with db.transaction():
+            row = await db.fetch_one(query)
+        return utils.process_profile(row=row,
+                                     gen_scale=self.__profile_params['generation_scale'],
+                                     load_scale=self.__profile_params['load_scale'])
+
     # def __process_profile(self, row):
     #     """Processes raw readings fetches from database into generation and consumption in integer Wh.
     #

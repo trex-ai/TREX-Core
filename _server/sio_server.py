@@ -651,6 +651,9 @@ class Default(socketio.AsyncNamespace):
                 event='market_ready',
                 data='',
                 to=sim_controller_sid)
+            
+    async def on_skip_generation(self, sid):
+        pass
 
 # register namespaces
 server.register_namespace(Default(''))
