@@ -319,7 +319,7 @@ class Runner:
         import _utils.runner.make.sim_controller as sim_controller
         import _utils.runner.make.participant as participant
 
-        exclude = {'sim_controller', 'participants'}
+        exclude = {'server', 'sim_controller', 'participants'}
         exclude.update(skip)
         print(config)
         launch_list = []
