@@ -110,45 +110,46 @@ class Market:
                 table_name=table_name)
             self.__db['table'] = db_utils.get_table(db_string, table_name)
 
-    async def register(self):
-        """Function that attempts to register Market client with socket.io server in the market namespace
-
-        """
-
-        async def register_cb(success):
-            if success:
-                self.server_online = True
-
-        client_data = {
-            'type': 'MicroTE',
-            'id': self.market_id
-        }
-        await self.__client.emit('register_market', client_data, callback=register_cb)
+    # async def register(self):
+    #     """Function that attempts to register Market client with socket.io server in the market namespace
+    #
+    #     """
+    #
+    #     async def register_cb(success):
+    #         if success:
+    #             self.server_online = True
+    #
+    #     client_data = {
+    #         'type': 'MicroTE',
+    #         'id': self.market_id
+    #     }
+    #     await self.__client.emit('register_market', client_data, callback=register_cb)
 
     async def participant_connected(self, client_data):
         if client_data['id'] not in self.__participants:
             self.__participants[client_data['id']] = {
-                'sid': client_data['sid'],
+                # 'sid': client_data['sid'],
                 'online': True,
                 'meter': {}
             }
         else:
             # if previously registered participant returned, update with new session ID and toggle online status
             self.__participants[client_data['id']].update({
-                'sid': client_data['sid'],
+                # 'sid': client_data['sid'],
                 'online': True
             })
-        self.__clients[client_data['sid']] = client_data['id']
+        # self.__clients[client_data['sid']] = client_data['id']
         self.__status['active_participants'] = min(self.__status['active_participants'] + 1,
                                                    len(self.__participants))
-        return self.market_id, client_data['sid']
+        self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']), self.market_id)
+        # return self.market_id, client_data['sid']
 
     async def participant_disconnected(self, participant_id):
         # if a registered participant disconnects for any reason, switch online status to off
         self.__participants[participant_id].update({
             'online': False
         })
-        self.__clients.pop(self.__participants[participant_id]['sid'], None)
+        # self.__clients.pop(self.__participants[participant_id]['sid'], None)
         self.__status['active_participants'] -= 1
 
     async def __classify_source(self, source):
@@ -201,7 +202,9 @@ class Market:
             'next_settle': self.__timing['next_settle'],
             'market_info': market_info,
         }
-        await self.__client.emit('start_round', start_msg)
+        # await self.__client.emit('start_round', start_msg)
+        self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg)
+
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -540,52 +543,57 @@ class Market:
             'lock': locking
         }
 
-        message = {
+        # if buyer == 'grid' or seller == 'grid':
+        # if buy_price is not None and sell_price is not None:
+        #     return
+        buyer_message = {
             'commit_id': commit_id,
-            'ask_id': ask['uuid'],
             'bid_id': bid['uuid'],
             'source': ask['source'],
             'quantity': quantity,
-            'sell_price': settlement_price_sell,
             'buy_price': settlement_price_buy,
-            'buyer_id': bid['participant_id'],
-            'seller_id': ask['participant_id'],
             'time_delivery': time_delivery
         }
 
-        if locking:
-            await self.__client.emit('send_settlement', message,
-                                     callback=self.__settle_confirm_lock)
-        else:
-            await self.__client.emit('send_settlement', message)
-            bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-            ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+        seller_message = {
+            'commit_id': commit_id,
+            'ask_id': ask['uuid'],
+            'source': ask['source'],
+            'quantity': quantity,
+            'sell_price': settlement_price_sell,
+            'time_delivery': time_delivery
+        }
+        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
+        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
+
+        bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+        ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)
 
     # after settlement confirmation, update bid and ask quantities
     async def settlement_delivered(self, commit_id):
         self.__status['round_settle_delivered'].append(commit_id)
 
-    async def __settle_confirm_lock(self, message):
-        """Callback for settle in locking mode
-
-        """
-
-        time_delivery = tuple(message['time_delivery'])
-        if time_delivery not in self.__settled:
-            return
-
-        commit_id = message['commit_id']
-        ask = self.__settled[time_delivery][commit_id]['ask']
-        bid = self.__settled[time_delivery][commit_id]['bid']
-
-        ask['lock'] = not message['seller']
-        bid['lock'] = not message['buyer']
-
-        if not ask['lock'] and not bid['lock']:
-            self.__settled[time_delivery][commit_id]['lock'] = False
-            bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-            ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+    # async def __settle_confirm_lock(self, message):
+    #     """Callback for settle in locking mode
+    #
+    #     """
+    #
+    #     time_delivery = tuple(message['time_delivery'])
+    #     if time_delivery not in self.__settled:
+    #         return
+    #
+    #     commit_id = message['commit_id']
+    #     ask = self.__settled[time_delivery][commit_id]['ask']
+    #     bid = self.__settled[time_delivery][commit_id]['bid']
+    #
+    #     ask['lock'] = not message['seller']
+    #     bid['lock'] = not message['buyer']
+    #
+    #     if not ask['lock'] and not bid['lock']:
+    #         self.__settled[time_delivery][commit_id]['lock'] = False
+    #         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+    #         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
 
     async def meter_data(self, message):
         """Update meter data from participant
@@ -826,8 +834,12 @@ class Market:
             if participant_id in scrubbed_financial_transactions:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]
 
-            await self.__client.emit(event='return_extra_transactions',
-                                     data=extra_transactions)
+            # await self.__client.emit(event='return_extra_transactions',
+            #                          data=extra_transactions)
+            topic = '/'.join([self.market_id, participant_id, 'return_extra_transactions'])
+            self.__client.publish(topic, extra_transactions)
+
+
         if self.save_transactions:
             self.__transactions.extend(transactions)
             await self.record_transactions(10000)
@@ -1085,19 +1097,22 @@ class Market:
             await self.__ensure_round_complete()
             await self.__process_energy_exchange(self.__timing['current_round'])
             await self.__clean_market(self.__timing['last_round'])
-            await self.__client.emit('end_round', data='')
+            # await self.__client.emit('end_round', data='')
+            # check if msg needs to go to simulation specific topic
+            self.__client.publish('/'.join([self.market_id, 'end_round']), '')
 
     async def loop(self):
         # change loop depending on sim mode or RT mode
         while self.run:
             if self.server_online and self.__timing['mode'] == 'rt':
                 await self.step(60)
-                continue
-            await self.__client.sleep(0.001)
-
-        await self.__client.sleep(5)
-        await self.__client.disconnect()
-        os.kill(os.getpid(), signal.SIGINT)
+            # continue
+            await asyncio.sleep(1)
+        else:
+            await asyncio.sleep(5)
+            await self.__client.disconnect()
+            os.kill(os.getpid(), signal.SIGINT)
+            raise SystemExit
 
         # raise SystemExit
 
@@ -1115,4 +1130,6 @@ class Market:
         # print('transactions recorded')
         # await self.__ensure_transactions_complete()
         await self.reset_market()
-        await self.__client.emit('market_ready')
+        # await self.__client.emit('market_ready')
+        # check if msg needs to go to simulation specific topic
+        self.__client.publish('/'.join([self.market_id, 'market_ready']), '')
