@@ -199,7 +199,7 @@ class Participant:
             'time_delivery': time_delivery
         }
         # await self.__client.emit('ask', ask_entry)
-        self.__client.publish('/'.join([self.market_id, 'bid']), ask_entry)
+        self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -208,8 +208,10 @@ class Participant:
         await self.__ledger.bid_success(message)
 
     async def settle_success(self, message):
-        await self.__ledger.settle_success(message)
-        return message['commit_id']
+        commit_id = await self.__ledger.settle_success(message)
+        if commit_id == message['commit_id']:
+            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id)
+        # return message['commit_id']
 
     async def __update_time(self, message):
         # synchronizes time with market
@@ -509,7 +511,7 @@ class Participant:
     async def kill(self):
         await asyncio.sleep(5)
         await self.__client.disconnect()
-        print('attempting to end')
+        # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)
         raise SystemExit
 

@@ -9,7 +9,7 @@ if os.name == 'posix':
     import uvloop
     uvloop.install()
 
-STOP = asyncio.Event()
+# STOP = asyncio.Event()
 
 class Client:
     """A socket.io client wrapper for participants
@@ -37,19 +37,19 @@ class Client:
         loop = asyncio.get_running_loop()
         loop.create_task(self.ns.on_connect())
         # asyncio.run(keep_alive())
-        print('Connected', market_id, participant_id)
-        client.subscribe("/".join([market_id, participant_id]), qos=0)
-        client.subscribe("/".join([market_id, 're_register_participant']), qos=0)
-        client.subscribe("/".join([market_id, participant_id, 'update_market_info']), qos=0)
+        print('Connected participant', market_id, participant_id)
+        client.subscribe("/".join([market_id]), qos=0)
         client.subscribe("/".join([market_id, 'start_round']), qos=0)
+        client.subscribe("/".join([market_id, participant_id]), qos=0)
+        client.subscribe("/".join([market_id, participant_id, 'update_market_info']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'ask_success']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'bid_success']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'settled']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'return_extra_transaction']), qos=0)
-        client.subscribe("/".join([market_id, 'start_generation']), qos=0)
-        client.subscribe("/".join([market_id, 'end_generation']), qos=0)
-        client.subscribe("/".join([market_id, 'end_simulation']), qos=0)
-
+        client.subscribe("/".join([market_id, 'simulation', 're_register_participant']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         # await keep_alive()
     def on_disconnect(self, client, packet, exc=None):
         self.ns.on_disconnect()
@@ -74,7 +74,8 @@ class Client:
         client.on_message = self.on_message
 
         # client.set_auth_credentials(token, None)
-        await client.connect("localhost")
+        # print(self.server_address)
+        await client.connect(self.server_address)
         # await asyncio.wait()
         # await client.disconnect()
 
@@ -126,7 +127,9 @@ if __name__ == '__main__':
     parser.add_argument('--load_scale', default=1, help='')
     args = parser.parse_args()
 
-    client = Client(''.join(['http://', args.host, ':', str(args.port)]),
+    # server_address = ''.join(['http://', args.host, ':', str(args.port)])
+    server_address = args.host
+    client = Client(server_address=server_address,
                     participant_type=args.type,
                     participant_id=args.id,
                     market_id=args.market_id,

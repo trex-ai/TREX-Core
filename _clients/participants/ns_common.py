@@ -65,7 +65,7 @@ class NSDefault:
         await self.participant.bid_success(message)
 
     async def on_settled(self, message):
-        return await self.participant.settle_success(message)
+        await self.participant.settle_success(message)
 
     async def on_return_extra_transactions(self, message):
         await self.participant.update_extra_transactions(message)
