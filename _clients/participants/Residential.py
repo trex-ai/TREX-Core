@@ -257,7 +257,7 @@ class Participant:
         await self.__meter_energy(self.__timing['current_round'])
         # await self.__client.emit('end_turn', namespace='/market')
         # await self.__client.emit('end_turn')
-        self.__client.publish('/'.join([self.market_id, 'end_turn']), self.participant_id)
+        self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id)
 
 
     async def __read_profile(self, time_interval):
@@ -329,7 +329,7 @@ class Participant:
         Returns:
             [type]: [description]
         """
-
+        # print("meter data", self.server_online, self.market_connected)
         if not self.server_online:
             return False
 
@@ -338,7 +338,11 @@ class Participant:
 
         self.__meter = await self.__allocate_energy(time_interval)
         # await self.__client.emit('meter_data', self.__meter)
-        self.__client.publish('/'.join([self.market_id, 'meter_data']), self.__meter)
+        message = {
+            'participant_id': self.participant_id,
+            'meter': self.__meter
+        }
+        self.__client.publish('/'.join([self.market_id, 'meter_data']), message)
         return True
 
     async def __allocate_energy(self, time_interval):

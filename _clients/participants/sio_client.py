@@ -46,11 +46,11 @@ class Client:
         client.subscribe("/".join([market_id, participant_id, 'bid_success']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'settled']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'return_extra_transaction']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'on_is_participant_joined']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'is_participant_joined']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         # await keep_alive()
     def on_disconnect(self, client, packet, exc=None):
         self.ns.on_disconnect()
@@ -60,13 +60,14 @@ class Client:
     #     print('SUBSCRIBED')
 
     async def on_message(self, client, topic, payload, qos, properties):
-        print('RECV MSG:', topic, payload.decode(), properties)
-        msg = {
+        # print('participant RECV MSG:', topic, payload.decode(), properties)
+        message = {
             'topic': topic,
             'payload': payload.decode(),
             'properties': properties
         }
-        await self.msg_queue.put(msg)
+        # await self.msg_queue.put(message)
+        await self.ns.process_message(message)
     # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect
@@ -89,6 +90,7 @@ class Client:
         Raises:
             SystemExit: [description]
         """
+        # asyncio.run(self.run_client(self.sio_client))
         tasks = [
             # asyncio.create_task(keep_alive()),
             asyncio.create_task(self.ns.listen(self.msg_queue)),

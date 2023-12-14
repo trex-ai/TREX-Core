@@ -46,11 +46,12 @@ class Client:
         client.subscribe("/".join([market_id, 'settlement_delivered']), qos=0)
         client.subscribe("/".join([market_id, 'meter_data']), qos=0)
 
-        client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'is_market_online']), qos=0)
         # participant_id = self.participant.participant_id
         # loop = asyncio.get_running_loop()
         # loop.create_task(self.ns.on_connect())
@@ -63,14 +64,15 @@ class Client:
     #     print('SUBSCRIBED')
 
     async def on_message(self, client, topic, payload, qos, properties):
-        print('market RECV MSG:', topic, payload.decode(), properties)
-        msg = {
+        # print('market RECV MSG:', topic, payload.decode(), properties)
+        message = {
             'topic': topic,
             'payload': payload.decode(),
             'properties': properties
         }
-        await self.msg_queue.put(msg)
 
+        # await self.msg_queue.put(msg)
+        await self.ns.process_message(message)
     # @tenacity.retry(wait=tenacity.wait_fixed(1))
     # async def start_client(self):
     #     await self.sio_client.connect(self.server_address)
@@ -114,7 +116,7 @@ class Client:
         """
         tasks = [
             # asyncio.create_task(keep_alive()),
-            asyncio.create_task(self.ns.listen(self.msg_queue)),
+            # asyncio.create_task(self.ns.listen(self.msg_queue)),
             asyncio.create_task(self.run_client(self.sio_client)),
             asyncio.create_task(self.market.loop())
         ]

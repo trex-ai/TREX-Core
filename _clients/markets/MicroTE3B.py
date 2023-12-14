@@ -620,6 +620,7 @@ class Market:
         # }
 
         # TODO: add data validation later
+        # print(message)
         participant_id = message['participant_id']
         time_delivery = tuple(message['meter']['time_interval'])
         self.__participants[participant_id]['meter'][time_delivery] = message['meter']
@@ -1076,6 +1077,7 @@ class Market:
     # should be for simulation mode only
     @tenacity.retry(wait=tenacity.wait_fixed(0.01))
     async def __ensure_round_complete(self):
+        # print(self.__status)
         if self.__status['round_metered'] < self.__status['active_participants']:
             raise Exception
 
@@ -1095,11 +1097,12 @@ class Market:
             await self.__start_round(duration=timeout)
             await self.__match_all(self.__timing['last_settle'])
             await self.__ensure_round_complete()
+            # print('round complete?')
             await self.__process_energy_exchange(self.__timing['current_round'])
             await self.__clean_market(self.__timing['last_round'])
             # await self.__client.emit('end_round', data='')
-            # check if msg needs to go to simulation specific topic
-            self.__client.publish('/'.join([self.market_id, 'end_round']), '')
+
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_round']), '')
 
     async def loop(self):
         # change loop depending on sim mode or RT mode
@@ -1131,7 +1134,6 @@ class Market:
         # await self.__ensure_transactions_complete()
         await self.reset_market()
         # await self.__client.emit('market_ready')
-        # check if msg needs to go to simulation specific topic
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
 
     async def market_is_online(self):

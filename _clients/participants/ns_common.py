@@ -1,4 +1,6 @@
 # import socketio
+import json
+import asyncio
 
 class NSDefault:
     def __init__(self, participant):
@@ -11,33 +13,62 @@ class NSDefault:
             topic_event = msg['topic'].split('/')[-1]
             payload = msg['payload']
 
-            match topic_event:
-                # market related events
-                case 'update_market_info':
-                    await self.on_update_market_info(payload)
-                case 'start_round':
-                    await self.on_start_round(payload)
-                case 'ask_success':
-                    await self.on_ask_success(payload)
-                case 'bid_success':
-                    await self.on_bid_success(payload)
-                case 'settled':
-                    await self.on_settled(payload)
-                case 'return_extra_transactions':
-                    await self.on_return_extra_transactions(payload)
-                # simulation related events
-                case 'is_participant_joined':
-                    await self.on_is_participant_joined(payload)
-                case 'start_generation':
-                    await self.on_start_generation(payload)
-                case 'end_generation':
-                    await self.on_end_generation(payload)
-                case 'end_simulation':
-                    await self.on_end_simulation()
+            # match topic_event:
+            #     # market related events
+            #     case 'update_market_info':
+            #         await self.on_update_market_info(payload)
+            #     case 'start_round':
+            #         await self.on_start_round(payload)
+            #     case 'ask_success':
+            #         await self.on_ask_success(payload)
+            #     case 'bid_success':
+            #         await self.on_bid_success(payload)
+            #     case 'settled':
+            #         await self.on_settled(payload)
+            #     case 'return_extra_transactions':
+            #         await self.on_return_extra_transactions(payload)
+            #     # simulation related events
+            #     case 'is_participant_joined':
+            #         await self.on_is_participant_joined(payload)
+            #     case 'start_generation':
+            #         await self.on_start_generation(payload)
+            #     case 'end_generation':
+            #         await self.on_end_generation(payload)
+            #     case 'end_simulation':
+            #         await self.on_end_simulation()
+            # await asyncio.sleep(0.001)
         else:
             await self.participant.kill()
             # return True
             # print(msg)
+
+    async def process_message(self, message):
+        topic_event = message['topic'].split('/')[-1]
+        payload = message['payload']
+
+        match topic_event:
+            # market related events
+            case 'update_market_info':
+                await self.on_update_market_info(payload)
+            case 'start_round':
+                await self.on_start_round(payload)
+            case 'ask_success':
+                await self.on_ask_success(payload)
+            case 'bid_success':
+                await self.on_bid_success(payload)
+            case 'settled':
+                await self.on_settled(payload)
+            case 'return_extra_transactions':
+                await self.on_return_extra_transactions(payload)
+            # simulation related events
+            case 'is_participant_joined':
+                await self.on_is_participant_joined(payload)
+            case 'start_generation':
+                await self.on_start_generation(payload)
+            case 'end_generation':
+                await self.on_end_generation(payload)
+            case 'end_simulation':
+                await self.on_end_simulation()
 
     async def on_connect(self):
         # print('connected')
@@ -56,6 +87,8 @@ class NSDefault:
             # self.participant.busy = False
 
     async def on_start_round(self, message):
+        message = json.loads(message)
+        # print(message)
         await self.participant.start_round(message)
 
     async def on_ask_success(self, message):
@@ -107,8 +140,10 @@ class NSDefault:
         if hasattr(self.participant.trader, 'reset'):
             await self.participant.trader.reset(**message)
 
-        await self.participant.client.emit(event='participant_ready',
-                                           data={self.participant.participant_id: True})
+        # await self.participant.client.emit(event='participant_ready',
+        #                                    data={self.participant.participant_id: True})
+        self.participant.client.publish('/'.join([self.participant.market_id, 'simulation', 'participant_ready']),
+                                        {self.participant.participant_id: True})
 
     async def on_end_simulation(self):
         """Event tells the participant that it can terminate itself when ready.

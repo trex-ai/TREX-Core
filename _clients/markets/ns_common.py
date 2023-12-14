@@ -1,5 +1,6 @@
 # import socketio
 import json
+import asyncio
 class NSDefault():
     def __init__(self, market):
         # super().__init__(namespace='')
@@ -16,39 +17,69 @@ class NSDefault():
         # in sim mode, market gives up timing control to sim controller
         # self.market.mode_switch(mode_data)
         # print(mode_data)
-    async def listen(self, msg_queue):
-        while self.market.run:
-            msg = await msg_queue.get()
-            topic_event = msg['topic'].split('/')[-1]
-            payload = msg['payload']
+    # async def listen(self, msg_queue):
+    #     while self.market.run:
+    #         print(msg_queue)
+    #         msg = await msg_queue.get()
+    #         topic_event = msg['topic'].split('/')[-1]
+    #         payload = msg['payload']
+    #
+    #         print(topic_event)
+    #
+    #         match topic_event:
+    #             # market related events
+    #             case 'join_market':
+    #                 await self.on_participant_connected(payload)
+    #             case 'bid':
+    #                 await self.on_bid(payload)
+    #             case 'ask':
+    #                 await self.on_ask(payload)
+    #             case 'settlement_delivered':
+    #                 await self.on_settlement_delivered(payload)
+    #             case 'meter_data':
+    #                 print("METER DATA")
+    #                 await self.on_meter_data(payload)
+    #             # simulation related events
+    #             case 'start_round':
+    #                 await self.on_start_round(payload)
+    #             case 'start_generation':
+    #                 await self.on_start_generation(payload)
+    #             case 'end_generation':
+    #                 await self.on_end_generation(payload)
+    #             case 'end_simulation':
+    #                 await self.on_end_simulation()
+    #             case 'is_market_online':
+    #                 await self.on_is_market_online()
 
-            match topic_event:
-                # market related events
-                case 'join_market':
-                    await self.on_participant_connected(payload)
-                case 'bid':
-                    await self.on_bid(payload)
-                case 'ask':
-                    await self.on_ask(payload)
-                case 'settlement_delivered':
-                    await self.on_settlement_delivered(payload)
-                case 'meter_data':
-                    await self.on_meter_data(payload)
-                # simulation related events
-                case 'start_round':
-                    await self.on_start_round(payload)
-                case 'start_generation':
-                    await self.on_start_generation(payload)
-                case 'end_generation':
-                    await self.on_end_generation(payload)
-                case 'end_simulation':
-                    await self.on_end_simulation()
-                case 'is_market_online':
-                    await self.on_is_market_online()
-        # else:
-        #     await self.participant.kill()
-            # return True
-            # print(msg)
+    async def process_message(self, message):
+        # if self.market.run:
+        topic_event = message['topic'].split('/')[-1]
+        payload = message['payload']
+
+        match topic_event:
+            # market related events
+            case 'join_market':
+                await self.on_participant_connected(payload)
+            case 'bid':
+                await self.on_bid(payload)
+            case 'ask':
+                await self.on_ask(payload)
+            case 'settlement_delivered':
+                await self.on_settlement_delivered(payload)
+            case 'meter_data':
+                # print("METER DATA")
+                await self.on_meter_data(payload)
+            # simulation related events
+            case 'start_round':
+                await self.on_start_round(payload)
+            case 'start_generation':
+                await self.on_start_generation(payload)
+            case 'end_generation':
+                await self.on_end_generation(payload)
+            case 'end_simulation':
+                await self.on_end_simulation()
+            case 'is_market_online':
+                await self.on_is_market_online()
 
     async def on_connect(self):
         # print()
@@ -73,6 +104,8 @@ class NSDefault():
         await self.market.settlement_delivered(commit_id)
 
     async def on_meter_data(self, message):
+        # print("meter data")
+        message = json.loads(message)
         await self.market.meter_data(message)
 
     async def on_participant_connected(self, client_data):
@@ -84,6 +117,7 @@ class NSDefault():
         await self.market.market_is_online()
 
     async def on_start_round(self, message):
+        message = json.loads(message)
         await self.market.step(message['duration'], sim_params=message)
 
     async def on_start_generation(self, message):
