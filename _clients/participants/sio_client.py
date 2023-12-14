@@ -9,7 +9,7 @@ if os.name == 'posix':
     import uvloop
     uvloop.install()
 
-# STOP = asyncio.Event()
+STOP = asyncio.Event()
 
 class Client:
     """A socket.io client wrapper for participants
@@ -54,7 +54,7 @@ class Client:
         # await keep_alive()
     def on_disconnect(self, client, packet, exc=None):
         self.ns.on_disconnect()
-        # print('disconnected')
+        print(self.participant.participant_id, 'disconnected')
 
     # def on_subscribe(self, client, mid, qos, properties):
     #     print('SUBSCRIBED')
@@ -78,7 +78,7 @@ class Client:
         # client.set_auth_credentials(token, None)
         # print(self.server_address)
         await client.connect(self.server_address)
-        # await asyncio.wait()
+        await STOP.wait()
         # await client.disconnect()
 
 
@@ -90,15 +90,17 @@ class Client:
         Raises:
             SystemExit: [description]
         """
-        # asyncio.run(self.run_client(self.sio_client))
         tasks = [
             # asyncio.create_task(keep_alive()),
-            asyncio.create_task(self.ns.listen(self.msg_queue)),
+            # asyncio.create_task(self.ns.listen(self.msg_queue)),
             asyncio.create_task(self.run_client(self.sio_client))
         ]
+        await asyncio.gather(*tasks)
+        # loop = asyncio.get_running_loop()
+        # loop.create_task(self.run_client(self.sio_client))
 
         # try:
-        await asyncio.gather(*tasks)
+
 
         # for python 3.11+
         # async with asyncio.TaskGroup() as tg:
@@ -143,3 +145,4 @@ if __name__ == '__main__':
                     load_scale=float(args.load_scale),
                     )
     asyncio.run(client.run())
+    # asyncio.run(client.run_client(client.sio_client))
