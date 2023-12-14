@@ -38,16 +38,19 @@ class Client:
         market_id = self.market.market_id
         print('Connected market', market_id)
         client.subscribe("/".join([market_id]), qos=0)
+        # client.subscribe("/".join([market_id, '+']), qos=0)
         client.subscribe("/".join([market_id, market_id]), qos=0)
         client.subscribe("/".join([market_id, 'join_market']), qos=0)
         client.subscribe("/".join([market_id, 'bid']), qos=0)
         client.subscribe("/".join([market_id, 'ask']), qos=0)
         client.subscribe("/".join([market_id, 'settlement_delivered']), qos=0)
         client.subscribe("/".join([market_id, 'meter_data']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
+
+        client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
+        # client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         # participant_id = self.participant.participant_id
         # loop = asyncio.get_running_loop()
         # loop.create_task(self.ns.on_connect())
@@ -60,7 +63,7 @@ class Client:
     #     print('SUBSCRIBED')
 
     async def on_message(self, client, topic, payload, qos, properties):
-        print('RECV MSG:', topic, payload.decode(), properties)
+        print('market RECV MSG:', topic, payload.decode(), properties)
         msg = {
             'topic': topic,
             'payload': payload.decode(),

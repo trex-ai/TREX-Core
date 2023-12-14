@@ -1132,4 +1132,7 @@ class Market:
         await self.reset_market()
         # await self.__client.emit('market_ready')
         # check if msg needs to go to simulation specific topic
-        self.__client.publish('/'.join([self.market_id, 'market_ready']), '')
+        self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
+
+    async def market_is_online(self):
+        self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')

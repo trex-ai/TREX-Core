@@ -26,8 +26,8 @@ class NSDefault:
                 case 'return_extra_transactions':
                     await self.on_return_extra_transactions(payload)
                 # simulation related events
-                case 're_register_participant':
-                    await self.on_re_register_participant(payload)
+                case 'is_participant_joined':
+                    await self.on_is_participant_joined(payload)
                 case 'start_generation':
                     await self.on_start_generation(payload)
                 case 'end_generation':
@@ -70,8 +70,8 @@ class NSDefault:
     async def on_return_extra_transactions(self, message):
         await self.participant.update_extra_transactions(message)
 
-    async def on_re_register_participant(self, message):
-        await self.participant.join_market()
+    async def on_is_participant_joined(self, message):
+        await self.participant.is_participant_joined()
     async def on_start_generation(self, message):
         """Event triggers actions to be taken before the start of a simulation
 

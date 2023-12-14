@@ -34,6 +34,7 @@ class NSDefault():
                     await self.on_settlement_delivered(payload)
                 case 'meter_data':
                     await self.on_meter_data(payload)
+                # simulation related events
                 case 'start_round':
                     await self.on_start_round(payload)
                 case 'start_generation':
@@ -42,6 +43,8 @@ class NSDefault():
                     await self.on_end_generation(payload)
                 case 'end_simulation':
                     await self.on_end_simulation()
+                case 'is_market_online':
+                    await self.on_is_market_online()
         # else:
         #     await self.participant.kill()
             # return True
@@ -72,27 +75,19 @@ class NSDefault():
     async def on_meter_data(self, message):
         await self.market.meter_data(message)
 
-# class NSSimulation(socketio.AsyncClientNamespace):
-#     def __init__(self, market):
-#         super().__init__(namespace='/simulation')
-#         self.market = market
-
-    # async def on_connect(self):
-        # print('connected to simulation')
-        # pass
-
-    # async def on_disconnect(self):
-        # print('disconnected from simulation')
-
     async def on_participant_connected(self, client_data):
         # print(type(client_data))
-        await self.market.participant_connected(json.loads(client_data))
+        client_data = json.loads(client_data)
+        await self.market.participant_connected(client_data)
 
+    async def on_is_market_online(self):
+        await self.market.market_is_online()
 
     async def on_start_round(self, message):
         await self.market.step(message['duration'], sim_params=message)
 
     async def on_start_generation(self, message):
+        message = json.loads(message)
         table_name = str(message['generation']) + '_' + message['market_id']
         await self.market.open_db(message['db_string'], table_name)
 

@@ -515,3 +515,6 @@ class Participant:
         os.kill(os.getpid(), signal.SIGINT)
         raise SystemExit
 
+    async def is_participant_joined(self):
+        if self.market_connected:
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_joined']), self.participant_id)
