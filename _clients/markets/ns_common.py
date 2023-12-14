@@ -95,9 +95,11 @@ class NSDefault():
     #     return await self.market.participant_disconnected(client_id)
 
     async def on_bid(self, bid):
+        bid = json.loads(bid)
         return await self.market.submit_bid(bid)
 
     async def on_ask(self, ask):
+        ask = json.loads(ask)
         return await self.market.submit_ask(ask)
 
     async def on_settlement_delivered(self, commit_id):
@@ -130,3 +132,4 @@ class NSDefault():
 
     async def on_end_simulation(self):
         self.market.run = False
+        # print(self.market.run)

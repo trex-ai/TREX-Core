@@ -57,8 +57,8 @@ class Client:
         # loop.create_task(self.ns.on_connect())
 
     def on_disconnect(self, client, packet, exc=None):
-        self.ns.on_disconnect()
-        # print('disconnected')
+        # self.ns.on_disconnect()
+        print('market disconnected')
 
     # def on_subscribe(self, client, mid, qos, properties):
     #     print('SUBSCRIBED')

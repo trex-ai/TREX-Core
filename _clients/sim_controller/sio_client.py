@@ -40,8 +40,8 @@ class Client:
         client.subscribe("/".join([market_id, 'simulation', 'market_ready']), qos=0)
 
     def on_disconnect(self, client, packet, exc=None):
-        self.ns.on_disconnect()
-        # print('disconnected')
+        # self.ns.on_disconnect()
+        print('sim controller disconnected')
 
     # def on_subscribe(self, client, mid, qos, properties):
     #     print('SUBSCRIBED')

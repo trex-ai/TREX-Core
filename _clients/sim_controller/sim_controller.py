@@ -286,24 +286,24 @@ class Controller:
             #     self.status['sim_ended'] = True
             #     continue
 
-            if self.__config['study']['type'] == 'training':
-                if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
-                        ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
-                    # update gen 0 curriculum with new hyperparams to load
-                    # a = self.training_controller.update_hps_curriculum()
-                    hyperparameters = self.__config['training']['hyperparameters'].pop(0)
-                    self.hyperparameters_idx = hyperparameters.pop('idx')
-                    if "0" not in self.__config['training']['curriculum']:
-                        self.__config['training']['curriculum']["0"] = hyperparameters
-                    else:
-                        self.__config['training']['curriculum']["0"].update(hyperparameters)
-                    # make everyone update database path
-                    # pass
-                    self.status["hyperparameters_loaded"] = True
-                curriculum = self.training_controller.load_curriculum(str(self.__generation))
-                if curriculum:
-                    await self.__client.emit('update_curriculum', curriculum)
-                    # print(self.__generation, curriculum)
+            # if self.__config['study']['type'] == 'training':
+            #     if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
+            #             ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
+            #         # update gen 0 curriculum with new hyperparams to load
+            #         # a = self.training_controller.update_hps_curriculum()
+            #         hyperparameters = self.__config['training']['hyperparameters'].pop(0)
+            #         self.hyperparameters_idx = hyperparameters.pop('idx')
+            #         if "0" not in self.__config['training']['curriculum']:
+            #             self.__config['training']['curriculum']["0"] = hyperparameters
+            #         else:
+            #             self.__config['training']['curriculum']["0"].update(hyperparameters)
+            #         # make everyone update database path
+            #         # pass
+            #         self.status["hyperparameters_loaded"] = True
+            #     curriculum = self.training_controller.load_curriculum(str(self.__generation))
+            #     if curriculum:
+            #         await self.__client.emit('update_curriculum', curriculum)
+            #         # print(self.__generation, curriculum)
 
             if not self.status['participants_ready']:
                 continue
@@ -443,7 +443,7 @@ class Controller:
                 'market_id': self.__config['market']['id']
             }
             # await self.__client.emit('end_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), '')
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message)
 
             if self.__generation > self.__generations:
                 # if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):

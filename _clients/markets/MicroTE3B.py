@@ -255,7 +255,8 @@ class Market:
         # entry validity check step 1: quantity must be positive
         if message['quantity'] <= 0:
             # raise Exception('quantity must be a positive integer')
-            return message['session_id'], {'uuid': None}
+            return
+            # return message['participant_id'], {'uuid': None}
 
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
@@ -263,7 +264,7 @@ class Market:
         entry = {
             'uuid': cuid(),
             'participant_id': message['participant_id'],
-            'session_id': message['session_id'],
+            # 'session_id': message['session_id'],
             'price': message['price'],
             'time_submission': self.__time(),
             'quantity': message['quantity'],
@@ -292,7 +293,8 @@ class Market:
             'time_delivery': time_delivery
         }
 
-        return message['session_id'], reply
+        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply)
+        # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
         """Processes bids/asks sent from the participants
@@ -354,13 +356,15 @@ class Market:
         # entry validity check step 1: quantity must be positive
         if message['quantity'] <= 0:
             # raise Exception('quantity must be a positive integer')
-            return message['session_id'], {'uuid': None}
+            # return message['session_id'], {'uuid': None}
+            return
 
         # entry validity check step 2: source must be classifiable
         source_type = await self.__classify_source(message['source'])
         if not source_type:
             # raise Exception('quantity must be a positive integer')
-            return message['session_id'], {'uuid': None}
+            # return message['session_id'], {'uuid': None}
+            return
 
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
@@ -368,7 +372,7 @@ class Market:
         entry = {
             'uuid': cuid(),
             'participant_id': message['participant_id'],
-            'session_id': message['session_id'],
+            # 'session_id': message['session_id'],
             'source': message['source'],
             'price': message['price'],
             'time_submission': self.__time(),
@@ -398,8 +402,9 @@ class Market:
             'quantity': entry['quantity'],
             'time_delivery': time_delivery
         }
+        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply)
 
-        return message['session_id'], reply
+        # return message['session_id'], reply
 
     async def __match(self, time_delivery):
         """Matches bids with asks for a single source type in a time slot
