@@ -5,6 +5,8 @@ import os
 from gmqtt import Client as MQTTClient
 from _clients.participants.ns_common import NSDefault
 
+from cuid2 import Cuid as cuid
+
 if os.name == 'posix':
     import uvloop
     uvloop.install()
@@ -17,7 +19,7 @@ class Client:
     def __init__(self, server_address, participant_type, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
         # Initialize client related data
         self.server_address = server_address
-        self.sio_client = MQTTClient(participant_id)
+        self.sio_client = MQTTClient(cuid(length=10).generate())
 
         Participant = importlib.import_module('_clients.participants.' + participant_type).Participant
         self.participant = Participant(sio_client=self.sio_client,

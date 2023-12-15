@@ -330,7 +330,6 @@ class Runner:
                 launch_list.append(module.cli(config))
             except:
                 pass
-
         launch_list.append(sim_controller.cli(config))
         for p_id in config['participants']:
             launch_list.append(participant.cli(config, p_id))

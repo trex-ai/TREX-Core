@@ -5,6 +5,7 @@ import json
 
 from gmqtt import Client as MQTTClient
 from _clients.markets.ns_common import NSDefault
+from cuid2 import Cuid as cuid
 
 if os.name == 'posix':
     import uvloop
@@ -18,7 +19,7 @@ class Client:
         market_configs['market_id'] = market_configs.pop('id', '')
         grid_params = market_configs.pop('grid', {})
 
-        self.sio_client = MQTTClient(market_configs['market_id'])
+        self.sio_client = MQTTClient(cuid(length=10).generate())
 
         # Initialize market information
         Market = importlib.import_module('_clients.markets.' + market_configs['type']).Market

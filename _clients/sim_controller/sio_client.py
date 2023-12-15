@@ -8,6 +8,7 @@ from _clients.sim_controller.ns_common import NSDefault
 from _clients.sim_controller.sim_controller import Controller
 # from _utils import jkson
 # from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
+from cuid2 import Cuid as cuid
 
 if os.name == 'posix':
     import uvloop
@@ -17,7 +18,7 @@ class Client:
     # Initialize client data for sim controller
     def __init__(self, server_address, config):
         self.server_address = server_address
-        self.sio_client = MQTTClient('sim_controller')
+        self.sio_client = MQTTClient(cuid(length=10).generate())
 
         # Set client to controller class
         self.controller = Controller(self.sio_client, config)

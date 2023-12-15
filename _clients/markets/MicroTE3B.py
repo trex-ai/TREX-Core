@@ -4,7 +4,7 @@ import datetime
 import time
 from operator import itemgetter
 import itertools
-from cuid import cuid
+from cuid2 import Cuid as cuid
 import tenacity
 import os
 import signal
@@ -38,7 +38,8 @@ class Market:
             'round_metered': 0,
             'round_matched': False,
             'round_settled': [],
-            'round_settle_delivered': []
+            # 'round_settle_delivered': []
+            'round_settle_delivered': dict()
         }
 
         self.__time_step_s = kwargs['time_step_size'] if 'time_step_size' in kwargs else 60
@@ -262,7 +263,7 @@ class Market:
         # convert kwh price to token price
 
         entry = {
-            'uuid': cuid(),
+            'uuid': cuid().generate(),
             'participant_id': message['participant_id'],
             # 'session_id': message['session_id'],
             'price': message['price'],
@@ -370,7 +371,7 @@ class Market:
         # convert kwh price to token price
 
         entry = {
-            'uuid': cuid(),
+            'uuid': cuid().generate(),
             'participant_id': message['participant_id'],
             # 'session_id': message['session_id'],
             'source': message['source'],
@@ -519,7 +520,7 @@ class Market:
             ask['lock'] = True
             bid['lock'] = True
 
-        commit_id = cuid()
+        commit_id = cuid().generate()
         settlement_time = self.__timing['current_round'][1]
         settlement_price_sell = ask['price']
         settlement_price_buy = bid['price']
@@ -568,8 +569,10 @@ class Market:
             'sell_price': settlement_price_sell,
             'time_delivery': time_delivery
         }
-        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
-        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
+        # self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
+        # self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
+        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message)
+        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message)
 
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
@@ -577,7 +580,11 @@ class Market:
 
     # after settlement confirmation, update bid and ask quantities
     async def settlement_delivered(self, commit_id):
-        self.__status['round_settle_delivered'].append(commit_id)
+        # self.__status['round_settle_delivered'].append(commit_id)
+        if commit_id not in self.__status['round_settle_delivered']:
+            self.__status['round_settle_delivered'][commit_id] = 1
+        else:
+            self.__status['round_settle_delivered'][commit_id] += 1
 
     # async def __settle_confirm_lock(self, message):
     #     """Callback for settle in locking mode
@@ -1089,7 +1096,9 @@ class Market:
         if not self.__status['round_matched']:
             raise Exception
 
-        if set(self.__status['round_settle_delivered']) != set(self.__status['round_settled']):
+        keys = [k for k, v in self.__status['round_settle_delivered'].items() if v == 2]
+        if set(keys) != set(self.__status['round_settled']):
+        # if set(self.__status['round_settle_delivered']) != set(self.__status['round_settled']):
             raise Exception
 
     # Finish all processes and remove all unnecessary/ remaining records in preparation for a new time step, begin processes for next step
@@ -1102,6 +1111,7 @@ class Market:
             await self.__start_round(duration=timeout)
             await self.__match_all(self.__timing['last_settle'])
             await self.__ensure_round_complete()
+            # print(self.__status)
             # print('round complete?')
             await self.__process_energy_exchange(self.__timing['current_round'])
             await self.__clean_market(self.__timing['last_round'])

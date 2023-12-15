@@ -14,3 +14,7 @@ BESS_Test/
 aklsjfn/Buyer1/
 
 *.v2
+
+_configs/_credentials.json
+
+_configs/mqtt_test.json

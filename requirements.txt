@@ -1,18 +1,18 @@
-aiohttp
-aiosqlite
+# aiohttp
+# aiosqlite
 asyncpg
 commentjson
-cuid
+cuid2
 databases
 dataset
 numpy
 packaging
 psycopg2-binary
 python-dateutil
-python-socketio
+# python-socketio
 pytz
 python-rapidjson
 sqlalchemy-utils
 tenacity
-tensorflow>=2.0
+# tensorflow>=2.0
 websockets
