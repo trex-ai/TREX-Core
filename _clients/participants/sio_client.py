@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Queue
+# from asyncio import Queue
 import os
 
 from gmqtt import Client as MQTTClient
@@ -30,7 +30,7 @@ class Client:
                                        storage_params=storage_params,
                                        **kwargs)
 
-        self.msg_queue = Queue()
+        # self.msg_queue = Queue()
         self.ns = NSDefault(participant=self.participant)
 
     def on_connect(self, client, flags, rc, properties):
@@ -81,10 +81,6 @@ class Client:
         # print(self.server_address)
         await client.connect(self.server_address)
         await STOP.wait()
-        # await client.disconnect()
-
-
-    # client.publish('TEST/TIME', str(time.time()), qos=1)
 
     async def run(self):
         """Function to start the client and other background tasks
@@ -92,22 +88,14 @@ class Client:
         Raises:
             SystemExit: [description]
         """
-        tasks = [
-            # asyncio.create_task(keep_alive()),
-            # asyncio.create_task(self.ns.listen(self.msg_queue)),
-            asyncio.create_task(self.run_client(self.sio_client))
-        ]
-        await asyncio.gather(*tasks)
-        # loop = asyncio.get_running_loop()
-        # loop.create_task(self.run_client(self.sio_client))
-
-        # try:
-
+        # tasks = [
+        #     asyncio.create_task(self.run_client(self.sio_client))
+        # ]
+        # await asyncio.gather(*tasks)
 
         # for python 3.11+
-        # async with asyncio.TaskGroup() as tg:
-        #     tg.create_task(listen()),
-        #     tg.create_task(run_client())
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.run_client(self.sio_client))
 
     # def ask_exit(*args):
     #     STOP.set()
@@ -147,4 +135,3 @@ if __name__ == '__main__':
                     load_scale=float(args.load_scale),
                     )
     asyncio.run(client.run())
-    # asyncio.run(client.run_client(client.sio_client))

@@ -1153,3 +1153,10 @@ class Market:
 
     async def market_is_online(self):
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')
+
+    async def kill(self):
+        await asyncio.sleep(5)
+        await self.__client.disconnect()
+        # print('attempting to end')
+        os.kill(os.getpid(), signal.SIGINT)
+        raise SystemExit

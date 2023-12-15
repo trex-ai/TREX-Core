@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Queue
+# from asyncio import Queue
 import os
 import json
 
@@ -13,6 +13,8 @@ from cuid2 import Cuid as cuid
 if os.name == 'posix':
     import uvloop
     uvloop.install()
+
+STOP = asyncio.Event()
 
 class Client:
     # Initialize client data for sim controller
@@ -74,6 +76,7 @@ class Client:
 
         # client.set_auth_credentials(token, None)
         await client.connect(self.server_address)
+        await STOP.wait()
 
 
     async def run(self):
@@ -82,15 +85,19 @@ class Client:
         Raises:
             SystemExit: [description]
         """
-        tasks = [
-            # asyncio.create_task(keep_alive()),
-            # asyncio.create_task(self.ns.listen(self.msg_queue)),
-            asyncio.create_task(self.run_client(self.sio_client)),
-            asyncio.create_task(self.controller.monitor())
-        ]
+        # tasks = [
+        #     # asyncio.create_task(keep_alive()),
+        #     # asyncio.create_task(self.ns.listen(self.msg_queue)),
+        #     asyncio.create_task(self.run_client(self.sio_client)),
+        #     asyncio.create_task(self.controller.monitor())
+        # ]
+        #
+        # # try:
+        # await asyncio.gather(*tasks)
 
-        # try:
-        await asyncio.gather(*tasks)
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.run_client(self.sio_client))
+            tg.create_task(self.controller.monitor())
     # except SystemExit:
     #     for t in tasks:
     #         t.cancel()

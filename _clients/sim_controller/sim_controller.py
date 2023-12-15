@@ -6,8 +6,8 @@ import signal
 import dataset
 from sqlalchemy_utils import database_exists
 
-from _clients.sim_controller.training_controller import TrainingController
-from _utils import utils
+# from _clients.sim_controller.training_controller import TrainingController
+# from _utils import utils
 
 from pprint import pprint
 
@@ -43,7 +43,7 @@ class Controller:
             'total': None,
             'online': 0,
             'ready': 0,
-            'weights_loaded': 0,
+            # 'weights_loaded': 0,
             # 'weights_saved': 0,
             'ended': 0,
         }
@@ -86,12 +86,12 @@ class Controller:
             'learning_agents': self.__learning_agents,
             'participants_online': False,
             'participants_ready': True,
-            'participants_weights_loaded': False,
+            # 'participants_weights_loaded': False,
             # 'participants_weights_saved': True,
             'turn_control': self.__turn_control,
             'market_turn_end': False,
         }
-        self.training_controller = TrainingController(self.__config, self.status)
+        # self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
         '''This function delays the sim by s seconds using the client sleep method so as not to interrupt the thread control. 
@@ -131,8 +131,8 @@ class Controller:
             self.__participants[participant_id] = {
                 'online': False,
                 'turn_end': False,
-                'ready': False,
-                'weights_loaded': False,
+                'ready': False
+                # 'weights_loaded': False,
                 # 'weights_saved': False
             }
 
@@ -330,23 +330,23 @@ class Controller:
             self.status['monitor_timeout'] = 5
             await self.step()
 
-    async def __load_weights(self, db, generation, market_id, participant_id):
-        # db_string = self.__config['study']['output_database']
-        # db = dataset.connect(db_string)
-        weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
-        # weights_table = db[weights_table_name]
-        # weights = weights_table.find_one(generation=generation)
-        if weights_table_name not in db.tables:
-            self.status['monitor_timeout'] = 30
-            return
-
-        message = {
-            'participant_id': participant_id,
-            'db_path': self.__config['study']['output_database'],
-            'market_id': market_id,
-            'generation': generation
-        }
-        await self.__client.emit('load_weights', message)
+    # async def __load_weights(self, db, generation, market_id, participant_id):
+    #     # db_string = self.__config['study']['output_database']
+    #     # db = dataset.connect(db_string)
+    #     weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
+    #     # weights_table = db[weights_table_name]
+    #     # weights = weights_table.find_one(generation=generation)
+    #     if weights_table_name not in db.tables:
+    #         self.status['monitor_timeout'] = 30
+    #         return
+    #
+    #     message = {
+    #         'participant_id': participant_id,
+    #         'db_path': self.__config['study']['output_database'],
+    #         'market_id': market_id,
+    #         'generation': generation
+    #     }
+    #     await self.__client.emit('load_weights', message)
 
     async def __print_step_time(self):
         # if not self.__current_step:
@@ -406,19 +406,19 @@ class Controller:
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
-                'ready': 0,
-                'weights_loaded': 0,
+                'ready': 0
+                # 'weights_loaded': 0,
                 # 'weights_saved': 0
             })
             for participant_id in self.__participants:
                 self.__participants[participant_id].update({
-                    'ready': False,
-                    'weights_loaded': False,
+                    'ready': False
+                    # 'weights_loaded': False,
                 # 'weights_saved': False
             })
             self.status['participants_ready'] = False
             # self.status['participants_weights_saved'] = False
-            self.status['participants_weights_loaded'] = False
+            # self.status['participants_weights_loaded'] = False
 
             self.status['generation_ended'] = True
             # await db_utils.update_metadata(self.__config['study']['output_database'],

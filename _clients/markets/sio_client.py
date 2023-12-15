@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Queue
+# from asyncio import Queue
 import os
 import json
 
@@ -10,6 +10,8 @@ from cuid2 import Cuid as cuid
 if os.name == 'posix':
     import uvloop
     uvloop.install()
+
+STOP = asyncio.Event()
 
 class Client:
     def __init__(self, server_address, market_configs):
@@ -29,7 +31,7 @@ class Client:
                              **market_configs,
                              grid_params=grid_params)
 
-        self.msg_queue = Queue()
+        # self.msg_queue = Queue()
         self.ns = NSDefault(self.market)
 
         self.data_recorded = False
@@ -93,6 +95,7 @@ class Client:
 
         # client.set_auth_credentials(token, None)
         await client.connect(self.server_address)
+        await STOP.wait()
         # await asyncio.wait()
         # await client.disconnect()
 
@@ -115,20 +118,20 @@ class Client:
         Raises:
             SystemExit: [description]
         """
-        tasks = [
-            # asyncio.create_task(keep_alive()),
-            # asyncio.create_task(self.ns.listen(self.msg_queue)),
-            asyncio.create_task(self.run_client(self.sio_client)),
-            asyncio.create_task(self.market.loop())
-        ]
-
-        # try:
-        await asyncio.gather(*tasks)
+        # tasks = [
+        #     # asyncio.create_task(keep_alive()),
+        #     # asyncio.create_task(self.ns.listen(self.msg_queue)),
+        #     asyncio.create_task(self.run_client(self.sio_client)),
+        #     asyncio.create_task(self.market.loop())
+        # ]
+        #
+        # # try:
+        # await asyncio.gather(*tasks)
 
         # for python 3.11+
-        # async with asyncio.TaskGroup() as tg:
-        #     tg.create_task(listen()),
-        #     tg.create_task(run_client())
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.run_client(self.sio_client))
+            # tg.create_task(self.market.loop())
 
 if __name__ == '__main__':
     import socket

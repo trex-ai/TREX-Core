@@ -1,6 +1,6 @@
 import json
 
-import socketio
+# import socketio
 
 class NSDefault():
     def __init__(self, controller):
