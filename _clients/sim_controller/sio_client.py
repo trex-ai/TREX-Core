@@ -24,7 +24,7 @@ class Client:
 
         # Set client to controller class
         self.controller = Controller(self.sio_client, config)
-        self.msg_queue = Queue()
+        # self.msg_queue = Queue()
         self.ns = NSDefault(self.controller)
 
     def on_connect(self, client, flags, rc, properties):
