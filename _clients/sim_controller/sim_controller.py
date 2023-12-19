@@ -309,13 +309,13 @@ class Controller:
                 continue
 
             #for now, only load weights for validation
-            if self.__config['study']['type'] == 'validation':
-                market_id = 'training'
-                if not self.status['participants_weights_loaded']:
-                    db = dataset.connect(self.__config['study']['output_database'])
-                    for participant_id in self.__participants:
-                        await self.__load_weights(db, self.__generation, market_id, participant_id)
-                    continue
+            # if self.__config['study']['type'] == 'validation':
+            #     market_id = 'validation'
+            #     if not self.status['participants_weights_loaded']:
+            #         db = dataset.connect(self.__config['study']['output_database'])
+            #         for participant_id in self.__participants:
+            #             await self.__load_weights(db, self.__generation, market_id, participant_id)
+            #         continue
 
             if self.status['sim_interrupted']:
                 print('drop drop')
