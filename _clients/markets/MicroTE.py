@@ -266,6 +266,8 @@ class Market:
             return message['session_id'], {'uuid': None}
 
         # entry validity check step 2: source must be classifiable
+        # if message['source'] == None:
+            # print(message)
         source_type = await self.__classify_source(message['source'])
         if not source_type:
             # raise Exception('quantity must be a positive integer')
@@ -1007,7 +1009,7 @@ class Market:
         await self.record_transactions(delay=False)
         await self.__ensure_transactions_complete()
         await self.reset_market()
-        await self.__client.emit('market_ready', namespace='/simulation')
+        await self.__client.emit('market_ready', data='', namespace='/simulation')
 
 import socketio
 

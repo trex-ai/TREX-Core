@@ -101,6 +101,7 @@ class NSDefault(socketio.AsyncClientNamespace):
         Args:
             message ([type]): [description]
         """
+        
         self.participant.reset()
         if hasattr(self.participant, 'storage'):
             self.participant.storage.reset(soc_pct=0)

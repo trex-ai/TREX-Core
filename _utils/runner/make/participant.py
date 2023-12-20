@@ -1,5 +1,5 @@
 import json
-
+from pathlib import Path
 def cli(configs, participant_id):
     path = __file__.split('_utils')
     script_path = path[0] + '_clients/participants/sio_client.py'

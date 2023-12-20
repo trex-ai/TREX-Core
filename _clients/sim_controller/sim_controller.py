@@ -170,6 +170,7 @@ class Controller:
         await self.delay(utils.secure_random.random() * 10)
         if not success:
             await self.register()
+            return
         self.status['registered_on_server'] = True
 
     # Track ending of turns
@@ -261,6 +262,17 @@ class Controller:
 
             if not self.status['market_online']:
                 await self.__client.emit('is_market_online')
+                continue
+
+            # TODO Jan 31 2022: Is this code pattern still functional, can I use it to make sure that the GymAgents have
+            # actions?
+            if 'remote_agent_ready' in self.status and not self.status['remote_agent_ready']:
+                message = {
+                    'market_id': self.__config['market']['id']
+                }
+                await self.__client.emit(event='remote_agent_status',
+                                         data=message,
+                                         namespace='/simulation')
                 continue
 
             if not self.status['participants_online']:
@@ -425,6 +437,8 @@ class Controller:
                 self.__time = self.__start_time
                 self.status['sim_started'] = False
                 self.status['market_ready'] = False
+                if 'remote_agent_ready' in self.status:
+                    self.status['remote_agent_ready'] = False
 
             message = {
                 # 'output_path': self.status['output_path'],

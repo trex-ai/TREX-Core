@@ -233,6 +233,7 @@ class Runner:
                                  config['participants'][participant]['trader']['learning']]
 
         if simulation_type == 'baseline':
+            config.pop('remote_agent', None)
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
             config['market']['id'] = simulation_type
@@ -343,6 +344,11 @@ class Runner:
         import subprocess
         import time
 
+        # path_to_trex = str(Path('C:/source/Trex-Core/'))
+        path_to_trex = self.configs['study']['sim_root']
+        path_to_venv = path_to_trex + str(Path('/venv/Scripts/python'))
+        path_to_trex_main = path_to_trex + str(Path('/main.py'))
+
         time.sleep(delay)
         # try:
         #     subprocess.run(['venv/bin/python', args[0], *args[1]])
@@ -401,7 +407,7 @@ class Runner:
             config = self.modify_config(**sim_param, seq=seq)
             launch_list.extend(self.make_launch_list(config, **kwargs))
             seq += 1
-
+        print('Launch list in run',launch_list)
         pool_size = len(launch_list)
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)

@@ -38,6 +38,7 @@ class Participant:
         trader_params = json.loads(trader_params)
         trader_fns = {
             'id': self.participant_id,
+            'market_id':self.market_id,
             'timing': self.__timing,
             'ledger': self.__ledger,
             'extra_transactions': self.__extra_transactions,
@@ -230,6 +231,7 @@ class Participant:
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
         next_actions = await self.trader.step()
+
         # next_actions = await self.trader.act()
         await self.__take_actions(next_actions)
         # await self.trader.learn()
