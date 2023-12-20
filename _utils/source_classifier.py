@@ -6,7 +6,7 @@ source_info = {
     "bess": "dispatch"
 }
 
-async def classify(source):
+def classify(source):
     source = source.lower()
     if source in source_info:
         return source_info[source]

@@ -1,13 +1,13 @@
 aiohttp
 aiosqlite
+asyncpg
 commentjson
 cuid
 databases
-databases[postgresql]
 dataset
-dss
 numpy
 packaging
+psycopg2-binary
 python-dateutil
 python-socketio
 pytz
@@ -15,5 +15,4 @@ python-rapidjson
 sqlalchemy-utils
 tenacity
 tensorflow>=2.0
-tensorflow-probability
 websockets

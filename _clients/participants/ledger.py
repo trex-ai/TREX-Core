@@ -24,7 +24,6 @@ class Ledger:
 
         self.bids[time_delivery][confirmation['uuid']] = {
             'time_submission': confirmation['time_submission'],
-            'source': confirmation['source'],
             'price': confirmation['price'],
             'quantity': confirmation['quantity']
         }
@@ -89,7 +88,7 @@ class Ledger:
                 if self.asks[time_delivery][confirmation['ask_id']]['quantity'] <= 0:
                     self.asks[time_delivery].pop(confirmation['ask_id'])
 
-    def get_settled_info(self, time_interval, **kwargs):
+    async def get_settled_info(self, time_interval, **kwargs):
         """Summarizes ledger data for a certain time interval
 
         Args:
