@@ -1,0 +1,657 @@
+{
+  "version": "3.7.0",
+  "study": {
+    "name": "SineTest_GreedyAgent_NewBuilderTest",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 1,
+      "generations": 5000,
+      "sim_root": "/home/trex/sim/"
+    },
+  "server": {
+      "host": "",
+      "port": 5122
+    },
+  "training": {
+    "curriculum": {
+       "20": {
+         "anneal": {
+           "warmup_actor":  [false, "set"]}}
+        }
+    },
+
+    "market": {
+      "id": "",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "GreedyBaseline": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "greedy_battery",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+          ],
+          "learning": true,
+          "limit_actions": true,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 600,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House2": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House3": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House4": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House5": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House6": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House7": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House8": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": true,
+          "type": "ppo_trader_multivar",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "P_max": 25,
+          "actions": [
+            "storage"
+           // "price",
+          //  "quantity"
+          ],
+          "learning": true,
+          "use_early_stop_critic": true,
+          "use_early_stop_actor": true,
+          "warmup_actor": true,
+          "alpha_critic": 5e-4,
+          "alpha_actor": 1.5e-4,
+          "batch_size": 32,
+          "experience_replay_buffer_length": 1440,
+          "policy_clip": 0.2,
+          "kl_stop": 0.02,
+          "gamma": 0.99,
+          "gae_lambda": 0.95,
+          "normalize_advantages": true,
+          "entropy_reg": 0.01,
+          "limit_actions": true,
+          "critic_patience": 60,
+          "max_train_steps": 300,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "8step_offsetsine_load_solar"
+          //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+        },
+        "load": {
+          "scale": 17
+        },
+        "generation": {
+          "scale": 17
+        },
+        "storage": {
+          "type": "Bess",
+          "capacity": 200,
+          "power": 3500,
+          "efficiency": 1,
+          "monthly_sdr": 0
+        }
+      },
+      "House9": {
+  "type": "Residential",
+  "trader": {
+    "track_metrics": true,
+    "type": "ppo_trader_multivar",
+    "bid_price": 0.14,
+    "ask_price": 0.07,
+    "P_max": 25,
+    "actions": [
+      "storage"
+     // "price",
+    //  "quantity"
+    ],
+    "learning": true,
+    "use_early_stop_critic": true,
+    "use_early_stop_actor": true,
+    "warmup_actor": true,
+    "alpha_critic": 5e-4,
+    "alpha_actor": 1.5e-4,
+    "batch_size": 32,
+    "experience_replay_buffer_length": 1440,
+    "policy_clip": 0.2,
+    "kl_stop": 0.02,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "normalize_advantages": true,
+    "entropy_reg": 0.01,
+    "limit_actions": true,
+    "critic_patience": 60,
+    "max_train_steps": 300,
+    "reward_function": "net_profit",
+    "use_synthetic_profile": "8step_offsetsine_load_solar"
+    //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+  },
+  "load": {
+    "scale": 17
+  },
+  "generation": {
+    "scale": 17
+  },
+  "storage": {
+    "type": "Bess",
+    "capacity": 200,
+    "power": 3500,
+    "efficiency": 1,
+    "monthly_sdr": 0
+  }
+},
+      "House10": {
+  "type": "Residential",
+  "trader": {
+    "track_metrics": true,
+    "type": "ppo_trader_multivar",
+    "bid_price": 0.14,
+    "ask_price": 0.07,
+    "P_max": 25,
+    "actions": [
+      "storage"
+     // "price",
+    //  "quantity"
+    ],
+    "learning": true,
+    "use_early_stop_critic": true,
+    "use_early_stop_actor": true,
+    "warmup_actor": true,
+    "alpha_critic": 5e-4,
+    "alpha_actor": 1.5e-4,
+    "batch_size": 32,
+    "experience_replay_buffer_length": 1440,
+    "policy_clip": 0.2,
+    "kl_stop": 0.02,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "normalize_advantages": true,
+    "entropy_reg": 0.01,
+    "limit_actions": true,
+    "critic_patience": 60,
+    "max_train_steps": 300,
+    "reward_function": "net_profit",
+    "use_synthetic_profile": "8step_offsetsine_load_solar"
+    //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+  },
+  "load": {
+    "scale": 17
+  },
+  "generation": {
+    "scale": 17
+  },
+  "storage": {
+    "type": "Bess",
+    "capacity": 200,
+    "power": 3500,
+    "efficiency": 1,
+    "monthly_sdr": 0
+  }
+},
+      "House11": {
+  "type": "Residential",
+  "trader": {
+    "track_metrics": true,
+    "type": "ppo_trader_multivar",
+    "bid_price": 0.14,
+    "ask_price": 0.07,
+    "P_max": 25,
+    "actions": [
+      "storage"
+     // "price",
+    //  "quantity"
+    ],
+    "learning": true,
+    "use_early_stop_critic": true,
+    "use_early_stop_actor": true,
+    "warmup_actor": true,
+    "alpha_critic": 5e-4,
+    "alpha_actor": 1.5e-4,
+    "batch_size": 32,
+    "experience_replay_buffer_length": 1440,
+    "policy_clip": 0.2,
+    "kl_stop": 0.02,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "normalize_advantages": true,
+    "entropy_reg": 0.01,
+    "limit_actions": true,
+    "critic_patience": 60,
+    "max_train_steps": 300,
+    "reward_function": "net_profit",
+    "use_synthetic_profile": "8step_offsetsine_load_solar"
+    //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+  },
+  "load": {
+    "scale": 17
+  },
+  "generation": {
+    "scale": 17
+  },
+  "storage": {
+    "type": "Bess",
+    "capacity": 200,
+    "power": 3500,
+    "efficiency": 1,
+    "monthly_sdr": 0
+  }
+},
+      "House12": {
+  "type": "Residential",
+  "trader": {
+    "track_metrics": true,
+    "type": "ppo_trader_multivar",
+    "bid_price": 0.14,
+    "ask_price": 0.07,
+    "P_max": 25,
+    "actions": [
+      "storage"
+     // "price",
+    //  "quantity"
+    ],
+    "learning": true,
+    "use_early_stop_critic": true,
+    "use_early_stop_actor": true,
+    "warmup_actor": true,
+    "alpha_critic": 5e-4,
+    "alpha_actor": 1.5e-4,
+    "batch_size": 32,
+    "experience_replay_buffer_length": 1440,
+    "policy_clip": 0.2,
+    "kl_stop": 0.02,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "normalize_advantages": true,
+    "entropy_reg": 0.01,
+    "limit_actions": true,
+    "critic_patience": 60,
+    "max_train_steps": 300,
+    "reward_function": "net_profit",
+    "use_synthetic_profile": "8step_offsetsine_load_solar"
+    //"use_synthetic_profile": "test_profile_1kw_square_p2+1"
+
+  },
+  "load": {
+    "scale": 17
+  },
+  "generation": {
+    "scale": 17
+  },
+  "storage": {
+    "type": "Bess",
+    "capacity": 200,
+    "power": 3500,
+    "efficiency": 1,
+    "monthly_sdr": 0
+  }
+}
+    }
+  }
+  
