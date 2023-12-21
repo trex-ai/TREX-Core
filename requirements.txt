@@ -13,6 +13,3 @@ python-rapidjson
 sqlalchemy-utils
 tenacity
 websockets
-gym 
-baselines
-git+https://github.com/andnp/PyFixedReps@0.4#egg=PyFixedReps
