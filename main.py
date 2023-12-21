@@ -1,7 +1,7 @@
 import os
-
+import argparse
 if __name__ == '__main__':
-    from _utils.runner.runner import Runner
+    from TREX_Core._utils.runner import Runner
     # configuration to be used must be under _configs
     # file name must be config name. Case sensitive.
     # it is sometimes possible to resume a simulation in case it crashes in the middle
@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # list of simulations to be performed.
     # in general, it is recommended to perform at base line and training at minimum
     simulations = {
-        #'baseline',
+        # 'baseline'
         'training'
         # 'validation'
     }
