@@ -6,11 +6,16 @@ venv/
 __pycache__/
 
 
+Logs/
 18P_Tests/
 Alex-recreated/
 BESS_MA_Test/
-BESS_Test/
+BESS_Test/
+
+aklsjfn/Buyer1/
+
+*.v2
 
-aklsjfn/Buyer1/
+_configs/_credentials.json
 
-*.v2
+TREX_Core.egg-info/
