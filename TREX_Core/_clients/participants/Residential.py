@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import importlib
 import json
 
@@ -64,9 +65,9 @@ class Participant:
             }
 
         trader_type = trader_params.pop('type', None)
-        if trader_type == 'gym_agent':
-            trader_fns['emit'] = self.__client.emit
-        Trader = importlib.import_module('TREX_Core._agent.traders.' + trader_type).Trader
+        # if trader_type == 'remote_agent':
+        #     trader_fns['emit'] = self.__client.emit
+        Trader = importlib.import_module('_agent.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
@@ -81,8 +82,8 @@ class Participant:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
             # self.__client.register_namespace(NSMarket(self))
 
-    async def delay(self, s):
-        await self.__client.sleep(s)
+    # async def delay(self, s):
+    #     await self.__client.sleep(s)
 
     # async def disconnect(self):
     #     '''
@@ -122,23 +123,32 @@ class Participant:
         await self.open_db(self.__profile['db_path'])
         # await self.get_profile_stats(self.__profile['db_path'])
 
+    @tenacity.retry(wait=tenacity.wait_fixed(3))
     async def join_market(self):
         """Emits event to join a Market
         """
+        if self.market_connected:
+            return True
+
         client_data = {
             'type': ('participant', 'Residential'),
             'id': self.participant_id,
             'market_id': self.market_id
         }
-        await self.__client.emit('join_market', client_data, callback=self.register_success)
+        # await self.__client.emit('join_market', client_data, callback=self.register_success)
+        self.__client.publish('/'.join([self.market_id, 'join_market']), client_data)
+        # print('joining market')
+        # await asyncio.sleep(2)
+        if not self.market_connected:
+            raise tenacity.TryAgain
 
     # Continuously attempt to join server
-    async def register_success(self, success):
-        if not success:
-            # self.__profiles_available()
-            await self.delay(3)
-            await self.join_market()
-        self.busy = False
+    # async def register_success(self, success):
+    #     if not success:
+    #         # self.__profiles_available()
+    #         await self.delay(3)
+    #         await self.join_market()
+    #     self.busy = False
 
     async def update_extra_transactions(self, message):
         time_delivery = tuple(message.pop('time_delivery'))
@@ -146,7 +156,7 @@ class Participant:
         self.__extra_transactions.clear()
         self.__extra_transactions.update(message)
 
-    @tenacity.retry(wait=tenacity.wait_random(0, 3))
+    # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def bid(self, time_delivery=None, **kwargs):
         """Submit a bid
 
@@ -166,9 +176,10 @@ class Participant:
             'time_delivery': time_delivery
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
-        await self.__client.emit('bid', bid_entry)
+        # await self.__client.emit('bid', bid_entry)
+        self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry)
 
-    @tenacity.retry(wait=tenacity.wait_random(0, 3))
+    # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
         """Submit an ask
 
@@ -187,7 +198,8 @@ class Participant:
             'source': kwargs['source'],
             'time_delivery': time_delivery
         }
-        await self.__client.emit('ask', ask_entry)
+        # await self.__client.emit('ask', ask_entry)
+        self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -196,8 +208,10 @@ class Participant:
         await self.__ledger.bid_success(message)
 
     async def settle_success(self, message):
-        await self.__ledger.settle_success(message)
-        return message['commit_id']
+        commit_id = await self.__ledger.settle_success(message)
+        if commit_id == message['commit_id']:
+            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id)
+        # return message['commit_id']
 
     async def __update_time(self, message):
         # synchronizes time with market
@@ -243,9 +257,30 @@ class Participant:
         # this is currently OK for simulation mode
         await self.__meter_energy(self.__timing['current_round'])
         # await self.__client.emit('end_turn', namespace='/market')
-        await self.__client.emit('end_turn')
+        # await self.__client.emit('end_turn')
+        self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id)
+
 
     async def __read_profile(self, time_interval):
+        """Fetches energy profile for one timestamp from database
+
+        Args:
+            time_interval ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        db = self.__profile['db']
+        table = self.__profile['db_table']
+        # query = table.select().where(table.c.tstamp == time_interval[1])
+        query = table.select().where(table.c.time == time_interval[1])
+        async with db.transaction():
+            row = await db.fetch_one(query)
+        return utils.process_profile(row=row,
+                                     gen_scale=self.__profile_params['generation_scale'],
+                                     load_scale=self.__profile_params['load_scale'])
+
+    async def __read_sensors(self, time_interval):
         """Fetches energy profile for one timestamp from database
 
         Args:
@@ -295,7 +330,7 @@ class Participant:
         Returns:
             [type]: [description]
         """
-
+        # print("meter data", self.server_online, self.market_connected)
         if not self.server_online:
             return False
 
@@ -303,7 +338,12 @@ class Participant:
             return False
 
         self.__meter = await self.__allocate_energy(time_interval)
-        await self.__client.emit('meter_data', self.__meter)
+        # await self.__client.emit('meter_data', self.__meter)
+        message = {
+            'participant_id': self.participant_id,
+            'meter': self.__meter
+        }
+        self.__client.publish('/'.join([self.market_id, 'meter_data']), message)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -473,52 +513,13 @@ class Participant:
         self.__meter.clear()
         self.__timing.clear()
 
-    # Keep participant connected to server
-    async def ping(self):
-        while self.run:
-            await self.delay(10)
-            if self.server_online:
-                await self.__client.emit('ping')
-            continue
-        await self.__client.sleep(5)
+    async def kill(self):
+        await asyncio.sleep(5)
         await self.__client.disconnect()
+        # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)
-        # raise SystemExit
+        raise SystemExit
 
-
-# import socketio
-# class NSMarket(socketio.AsyncClientNamespace):
-#     def __init__(self, participant):
-#         super().__init__(namespace='/market')
-#         self.participant = participant
-#
-#     # async def on_connect(self):
-#     #     await self.participant.join_market()
-#
-#     # async def on_disconnect(self):
-#     #     pass
-#
-#     async def on_re_register_participant(self, message):
-#         await self.participant.join_market()
-#
-#     async def on_update_market_info(self, market_id):
-#         if market_id == self.participant.market_id:
-#             self.participant.market_connected = True
-#
-#     async def on_start_round(self, message):
-#         await self.participant.start_round(message)
-#
-#     async def on_ask_success(self, message):
-#         await self.participant.ask_success(message)
-#
-#     async def on_bid_success(self, message):
-#         await self.participant.bid_success(message)
-#
-#     async def on_settled(self, message):
-#         return await self.participant.settle_success(message)
-#
-#     async def on_return_extra_transactions(self, message):
-#         await self.participant.update_extra_transactions(message)
-#
-# if __name__ == '__main__':
-#     pass
+    async def is_participant_joined(self):
+        if self.market_connected:
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_joined']), self.participant_id)

@@ -54,7 +54,7 @@ class Ledger:
         """
         # todo: add validity checks, and feedback messages for invalid settlements
         time_delivery = tuple(confirmation['time_delivery'])
-        if confirmation['buyer_id'] == self.__participant_id:
+        if 'buyer_id' in confirmation and confirmation['buyer_id'] == self.__participant_id:
             # make sure settled bid exists in local record as well
             if confirmation['bid_id'] in self.bids[time_delivery]:
                 if time_delivery not in self.settled:
@@ -71,7 +71,7 @@ class Ledger:
                 if self.bids[time_delivery][confirmation['bid_id']]['quantity'] <= 0:
                     self.bids[time_delivery].pop(confirmation['bid_id'])
 
-        elif confirmation['seller_id'] == self.__participant_id:
+        elif 'seller_id' in confirmation and confirmation['seller_id'] == self.__participant_id:
             if confirmation['ask_id'] in self.asks[time_delivery]:
                 if time_delivery not in self.settled:
                     self.settled[time_delivery] = {'bids': {},
@@ -87,6 +87,7 @@ class Ledger:
                 self.asks[time_delivery][confirmation['ask_id']]['quantity'] -= confirmation['quantity']
                 if self.asks[time_delivery][confirmation['ask_id']]['quantity'] <= 0:
                     self.asks[time_delivery].pop(confirmation['ask_id'])
+        return confirmation['commit_id']
 
     async def get_settled_info(self, time_interval, **kwargs):
         """Summarizes ledger data for a certain time interval

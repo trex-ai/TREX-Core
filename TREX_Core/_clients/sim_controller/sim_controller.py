@@ -1,11 +1,17 @@
+import asyncio
 import datetime
 import time
 import os
 import signal
-import dataset
-from TREX_Core._clients.sim_controller.training_controller import TrainingController
-from TREX_Core._utils import utils, db_utils
+# import dataset
+# from TREX_Core._clients.sim_controller.training_controller import TrainingController
+# from TREX_Core._utils import utils, db_utils
 import sqlalchemy_utils
+
+# from _clients.sim_controller.training_controller import TrainingController
+# from _utils import utils
+
+# from pprint import pprint
 
 class Controller:
     '''
@@ -23,9 +29,9 @@ class Controller:
     The sim controller has special permission to see when participants join the market
     '''
     # Intialize client related data
-    def __init__(self, sio_client, configs, **kwargs):
+    def __init__(self, sio_client, config, **kwargs):
         self.__client = sio_client
-        self.__config = configs
+        self.__config = config
 
         self.__learning_agents = [participant for participant in self.__config['participants'] if
                                  'learning' in self.__config['participants'][participant]['trader'] and
@@ -39,7 +45,7 @@ class Controller:
             'total': None,
             'online': 0,
             'ready': 0,
-            'weights_loaded': 0,
+            # 'weights_loaded': 0,
             # 'weights_saved': 0,
             'ended': 0,
         }
@@ -51,8 +57,8 @@ class Controller:
         self.__time = self.__start_time
 
         # TODO: temporarily add method to manually define profile step size until auto detection works
-        if 'time_step_size' in configs['study']:
-            self.__time_step_s = configs['study']['time_step_size']
+        if 'time_step_size' in config['study']:
+            self.__time_step_s = config['study']['time_step_size']
         else:
             self.__time_step_s = 60
         self.__day_steps = int(1440 / (self.__time_step_s / 60))
@@ -64,11 +70,11 @@ class Controller:
 
         self.timer_start = datetime.datetime.now().timestamp()
         self.timer_end = 0
-
+        self.market_id = self.__config['market']['id']
         self.status = {
             'monitor_timeout': 5,
             'registered_on_server': False,
-            'market_id': self.__config['market']['id'],
+            'market_id': self.market_id,
             'sim_started': False,
             'sim_ended': False,
             'generation_ended': False,
@@ -82,12 +88,12 @@ class Controller:
             'learning_agents': self.__learning_agents,
             'participants_online': False,
             'participants_ready': True,
-            'participants_weights_loaded': False,
+            # 'participants_weights_loaded': False,
             # 'participants_weights_saved': True,
             'turn_control': self.__turn_control,
             'market_turn_end': False,
         }
-        self.training_controller = TrainingController(self.__config, self.status)
+        # self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
         '''This function delays the sim by s seconds using the client sleep method so as not to interrupt the thread control. 
@@ -95,7 +101,7 @@ class Controller:
         Params: 
             int or float : number of seconds to 
         '''
-        await self.__client.sleep(s)
+        await asyncio.sleep(s)
 
     # def __get_metadata(self, generation):
     #     if generation > self.__generations:
@@ -127,8 +133,8 @@ class Controller:
             self.__participants[participant_id] = {
                 'online': False,
                 'turn_end': False,
-                'ready': False,
-                'weights_loaded': False,
+                'ready': False
+                # 'weights_loaded': False,
                 # 'weights_saved': False
             }
 
@@ -159,19 +165,19 @@ class Controller:
 
     # Register client in server
     async def register(self):
-        client_data = {
-            'id': '',
-            'market_id': self.__config['market']['id']
-        }
-        await self.__client.emit('register_sim_controller', client_data, callback=self.register_success)
-
-    # If client has not connected, retry registration
-    async def register_success(self, success):
-        await self.delay(utils.secure_random.random() * 10)
-        if not success:
-            await self.register()
-            return
         self.status['registered_on_server'] = True
+        # client_data = {
+        #     'id': '',
+        #     'market_id': self.__config['market']['id']
+        # }
+        # await self.__client.emit('register_sim_controller', client_data, callback=self.register_success)
+    #
+    # # If client has not connected, retry registration
+    # async def register_success(self, success):
+    #     await self.delay(utils.secure_random.random() * 10)
+    #     if not success:
+    #         await self.register()
+    #     self.status['registered_on_server'] = True
 
     # Track ending of turns
     async def update_turn_status(self, participant_id):
@@ -183,6 +189,7 @@ class Controller:
             return
         if self.status['market_turn_end']:
             await self.__advance_turn()
+        # pprint(self.status)
 
     def __reset_turn_trackers(self):
         self.status['market_turn_end'] = False
@@ -237,14 +244,14 @@ class Controller:
     async def monitor(self):
         while True:
             await self.delay(self.status['monitor_timeout'])
-            # print(self.status)
+            # pprint(self.status)
 
             if not self.status['registered_on_server']:
                 continue
 
             if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 600:
                 self.status['last_step_clock'] = time.time()
-                print(self.status)
+                # print(self.status)
 
                 #TODO: One of the most likely scensarios for sim to get stuck is that a participant
                 # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
@@ -261,7 +268,8 @@ class Controller:
                 continue
 
             if not self.status['market_online']:
-                await self.__client.emit('is_market_online')
+                # await self.__client.emit('is_market_online')
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_market_online']), '')
                 continue
 
             # TODO Jan 31 2022: Is this code pattern still functional, can I use it to make sure that the GymAgents have
@@ -276,7 +284,8 @@ class Controller:
                 continue
 
             if not self.status['participants_online']:
-                await self.__client.emit('re_register_participant')
+                # await self.__client.emit('re_register_participant')
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_participant_joined']), '')
                 continue
 
             if not self.status['market_ready']:
@@ -290,36 +299,36 @@ class Controller:
             #     self.status['sim_ended'] = True
             #     continue
 
-            if self.__config['study']['type'] == 'training':
-                if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
-                        ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
-                    # update gen 0 curriculum with new hyperparams to load
-                    # a = self.training_controller.update_hps_curriculum()
-                    hyperparameters = self.__config['training']['hyperparameters'].pop(0)
-                    self.hyperparameters_idx = hyperparameters.pop('idx')
-                    if "0" not in self.__config['training']['curriculum']:
-                        self.__config['training']['curriculum']["0"] = hyperparameters
-                    else:
-                        self.__config['training']['curriculum']["0"].update(hyperparameters)
-                    # make everyone update database path
-                    # pass
-                    self.status["hyperparameters_loaded"] = True
-                curriculum = self.training_controller.load_curriculum(str(self.__generation))
-                if curriculum:
-                    await self.__client.emit('update_curriculum', curriculum)
-                    # print(self.__generation, curriculum)
+            # if self.__config['study']['type'] == 'training':
+            #     if 'hyperparameters' in self.__config['training'] and self.__generation == 0 and \
+            #             ("hyperparameters_loaded" not in self.status or not self.status["hyperparameters_loaded"]):
+            #         # update gen 0 curriculum with new hyperparams to load
+            #         # a = self.training_controller.update_hps_curriculum()
+            #         hyperparameters = self.__config['training']['hyperparameters'].pop(0)
+            #         self.hyperparameters_idx = hyperparameters.pop('idx')
+            #         if "0" not in self.__config['training']['curriculum']:
+            #             self.__config['training']['curriculum']["0"] = hyperparameters
+            #         else:
+            #             self.__config['training']['curriculum']["0"].update(hyperparameters)
+            #         # make everyone update database path
+            #         # pass
+            #         self.status["hyperparameters_loaded"] = True
+            #     curriculum = self.training_controller.load_curriculum(str(self.__generation))
+            #     if curriculum:
+            #         await self.__client.emit('update_curriculum', curriculum)
+            #         # print(self.__generation, curriculum)
 
             if not self.status['participants_ready']:
                 continue
 
             #for now, only load weights for validation
-            if self.__config['study']['type'] == 'validation':
-                market_id = 'training'
-                if not self.status['participants_weights_loaded']:
-                    db = dataset.connect(self.__config['study']['output_database'])
-                    for participant_id in self.__participants:
-                        await self.__load_weights(db, self.__generation, market_id, participant_id)
-                    continue
+            # if self.__config['study']['type'] == 'validation':
+            #     market_id = 'validation'
+            #     if not self.status['participants_weights_loaded']:
+            #         db = dataset.connect(self.__config['study']['output_database'])
+            #         for participant_id in self.__participants:
+            #             await self.__load_weights(db, self.__generation, market_id, participant_id)
+            #         continue
 
             if self.status['sim_interrupted']:
                 print('drop drop')
@@ -334,23 +343,23 @@ class Controller:
             self.status['monitor_timeout'] = 5
             await self.step()
 
-    async def __load_weights(self, db, generation, market_id, participant_id):
-        # db_string = self.__config['study']['output_database']
-        # db = dataset.connect(db_string)
-        weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
-        # weights_table = db[weights_table_name]
-        # weights = weights_table.find_one(generation=generation)
-        if weights_table_name not in db.tables:
-            self.status['monitor_timeout'] = 30
-            return
-
-        message = {
-            'participant_id': participant_id,
-            'db_path': self.__config['study']['output_database'],
-            'market_id': market_id,
-            'generation': generation
-        }
-        await self.__client.emit('load_weights', message)
+    # async def __load_weights(self, db, generation, market_id, participant_id):
+    #     # db_string = self.__config['study']['output_database']
+    #     # db = dataset.connect(db_string)
+    #     weights_table_name = '_'.join((str(generation), market_id, 'weights', participant_id))
+    #     # weights_table = db[weights_table_name]
+    #     # weights = weights_table.find_one(generation=generation)
+    #     if weights_table_name not in db.tables:
+    #         self.status['monitor_timeout'] = 30
+    #         return
+    #
+    #     message = {
+    #         'participant_id': participant_id,
+    #         'db_path': self.__config['study']['output_database'],
+    #         'market_id': market_id,
+    #         'generation': generation
+    #     }
+    #     await self.__client.emit('load_weights', message)
 
     async def __print_step_time(self):
         # if not self.__current_step:
@@ -390,7 +399,8 @@ class Controller:
             }
             if hasattr(self, 'hyperparameters_idx'):
                 message["market_id"] += "-hps" + str(self.hyperparameters_idx)
-            await self.__client.emit('start_generation', message)
+            # await self.__client.emit('start_generation', message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message)
             self.status['generation_ended'] = False
 
         # Beginning new time step
@@ -404,23 +414,24 @@ class Controller:
                 'update': True
             }
             # print("start simulation round")
-            await self.__client.emit('start_round_simulation', message)
+            # await self.__client.emit('start_round_simulation', message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message)
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
-                'ready': 0,
-                'weights_loaded': 0,
+                'ready': 0
+                # 'weights_loaded': 0,
                 # 'weights_saved': 0
             })
             for participant_id in self.__participants:
                 self.__participants[participant_id].update({
-                    'ready': False,
-                    'weights_loaded': False,
+                    'ready': False
+                    # 'weights_loaded': False,
                 # 'weights_saved': False
             })
             self.status['participants_ready'] = False
             # self.status['participants_weights_saved'] = False
-            self.status['participants_weights_loaded'] = False
+            # self.status['participants_weights_loaded'] = False
 
             self.status['generation_ended'] = True
             # await db_utils.update_metadata(self.__config['study']['output_database'],
@@ -446,23 +457,25 @@ class Controller:
                 'generation': self.__generation - 1,
                 'market_id': self.__config['market']['id']
             }
-            await self.__client.emit('end_generation', message)
+            # await self.__client.emit('end_generation', message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message)
 
             if self.__generation > self.__generations:
-                if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
-                    self.__generation = self.set_initial_generation()
-                    self.__current_step = 0
-                    self.__start_time = self.get_start_time()
-                    self.__time = self.__start_time
-                    self.status['sim_started'] = False
-                    self.status['market_ready'] = False
-                    self.status["hyperparameters_loaded"] = False
-                else:
-                    self.status['sim_ended'] = True
-                    # TODO: add function to reset sim for next hyperparameter set
-                    # if self.status['sim_ended']:
-                    print('end_simulation', self.__generation-1, self.__generations)
-                    await self.__client.emit('end_simulation')
-                    await self.delay(1)
-                    await self.__client.disconnect()
-                    os.kill(os.getpid(), signal.SIGINT)
+                # if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
+                #     self.__generation = self.set_initial_generation()
+                #     self.__current_step = 0
+                #     self.__start_time = self.get_start_time()
+                #     self.__time = self.__start_time
+                #     self.status['sim_started'] = False
+                #     self.status['market_ready'] = False
+                #     self.status["hyperparameters_loaded"] = False
+                # else:
+                self.status['sim_ended'] = True
+                # TODO: add function to reset sim for next hyperparameter set
+                # if self.status['sim_ended']:
+                print('end_simulation', self.__generation-1, self.__generations)
+                # await self.__client.emit('end_simulation')
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '')
+                await self.delay(1)
+                await self.__client.disconnect()
+                os.kill(os.getpid(), signal.SIGINT)

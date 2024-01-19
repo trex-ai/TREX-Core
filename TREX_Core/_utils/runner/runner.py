@@ -20,8 +20,8 @@ class Runner:
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.configs = self.__get_config(config, resume, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
-        if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
-            self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
+        # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
+        #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
         db_string = self.configs['study']['output_database']
         if self.purge_db and database_exists(db_string):
@@ -207,15 +207,15 @@ class Runner:
             config['server']['port'] = 42069
 
         # iterate ports until an available one is found, starting from the default or the preferred port
-        while True:
-            if TREX_Core._utils.utils.port_is_open(config['server']['host'], config['server']['port']):
-                config['server']['port'] += 1
-            else:
-                break
+        # while True:
+        #     if utils.port_is_open(config['server']['host'], config['server']['port']):
+        #         config['server']['port'] += 1
+        #     else:
+        #         break
 
         # config['server']['port'] = default_port + seq
-        seq = kwargs['seq'] if 'seq' in kwargs else 0
-        config['server']['port'] += seq
+        # seq = kwargs['seq'] if 'seq' in kwargs else 0
+        # config['server']['port'] += seq
         config['study']['type'] = simulation_type
         # print(simulation_type, seq, config['server']['port'])
 
@@ -278,8 +278,8 @@ class Runner:
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
 
-        if 'hyperparameters' in kwargs:
-            config['training']['hyperparameters'] = kwargs['hyperparameters']
+        # if 'hyperparameters' in kwargs:
+        #     config['training']['hyperparameters'] = kwargs['hyperparameters']
 
             # change simulation name to include hyperparameters
             # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
@@ -295,35 +295,35 @@ class Runner:
 
         return config
 
-    def __find_hyperparameters_permutations(self):
-        # find permutations of hyperparameters
-        hyperparameters = self.configs['training']['hyperparameters']
-        for hyperparameter in hyperparameters:
-            parameters = hyperparameters[hyperparameter]
-            if isinstance(parameters, dict):
-                # round hyperparameter to 4 decimal places
-                hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
-            # elif isinstance(parameters, list):
-            #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
-            elif isinstance(parameters, int) or isinstance(parameters, float):
-                hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
-        hp_keys, hp_values = zip(*hyperparameters.items())
-        hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
-
-        # add index to list
-        # there may be a more efficient way to do this
-        # but since it's only done once and the list is usually not super long
-        # this should be OK
-        for idx in range(len(hp_permutations)):
-            hp_permutations[idx].update({"idx": idx})
-        return hp_permutations
+    # def __find_hyperparameters_permutations(self):
+    #     # find permutations of hyperparameters
+    #     hyperparameters = self.configs['training']['hyperparameters']
+    #     for hyperparameter in hyperparameters:
+    #         parameters = hyperparameters[hyperparameter]
+    #         if isinstance(parameters, dict):
+    #             # round hyperparameter to 4 decimal places
+    #             hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
+    #         # elif isinstance(parameters, list):
+    #         #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
+    #         elif isinstance(parameters, int) or isinstance(parameters, float):
+    #             hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
+    #     hp_keys, hp_values = zip(*hyperparameters.items())
+    #     hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
+    #
+    #     # add index to list
+    #     # there may be a more efficient way to do this
+    #     # but since it's only done once and the list is usually not super long
+    #     # this should be OK
+    #     for idx in range(len(hp_permutations)):
+    #         hp_permutations[idx].update({"idx": idx})
+    #     return hp_permutations
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
         import TREX_Core._utils.runner.make.sim_controller as sim_controller
         import TREX_Core._utils.runner.make.participant as participant
 
-        exclude = {'sim_controller', 'participants'}
+        exclude = {'server', 'sim_controller', 'participants'}
         exclude.update(skip)
         print(config)
         launch_list = []
@@ -334,7 +334,6 @@ class Runner:
                 launch_list.append(module.cli(config))
             except:
                 pass
-
         launch_list.append(sim_controller.cli(config))
         for p_id in config['participants']:
             launch_list.append(participant.cli(config, p_id))
@@ -368,47 +367,50 @@ class Runner:
         # db_purged = False
         simulations_list = []
         launch_list = []
-        seq = 0
+        # seq = 0
 
-        if hasattr(self, 'hyperparameters_permutations'):
-            # write HPS list to database
-            db_string = self.configs['study']['output_database']
-            db = dataset.connect(db_string)
-            if "hyperparameters" not in db.tables:
-                table = db.create_table("hyperparameters", primary_id='idx', primary_type=db.types.integer)
-            else:
-                table = db["hyperparameters"]
-            table.upsert_many(self.hyperparameters_permutations, ['idx'])
-
-            # if training or validation needed to be done, then their parameters have to be modified
-            if 'training' in simulations:
-                simulations.remove('training')
-
-                # autochunker to parallelize hyperparam search based on number of cpu cores available
-                cpu_cores = multiprocessing.cpu_count()
-                subprocesses = len(self.configs["participants"]) + 2
-                # parallel_sims = cpu_cores // subprocesses
-                parallel_sims = 1
-                hps_permutations = [self.hyperparameters_permutations[i::parallel_sims] for i in range(parallel_sims)]
-                # [L[i::n] for i in range(n)]
-
-                for permutation in hps_permutations:
-                    simulations_list.append({
-                        'simulation_type': "training",
-                        'hyperparameters': permutation})
-                        # 'hyperparameters': self.hyperparameters_permutations})
-            # if 'validation' in simulations:
-            #     simulations.remove('validation')
+        # if hasattr(self, 'hyperparameters_permutations'):
+        #     # write HPS list to database
+        #     db_string = self.configs['study']['output_database']
+        #     db = dataset.connect(db_string)
+        #     if "hyperparameters" not in db.tables:
+        #         table = db.create_table("hyperparameters", primary_id='idx', primary_type=db.types.integer)
+        #     else:
+        #         table = db["hyperparameters"]
+        #     table.upsert_many(self.hyperparameters_permutations, ['idx'])
+        #
+        #     # if training or validation needed to be done, then their parameters have to be modified
+        #     if 'training' in simulations:
+        #         simulations.remove('training')
+        #
+        #         # autochunker to parallelize hyperparam search based on number of cpu cores available
+        #         cpu_cores = multiprocessing.cpu_count()
+        #         subprocesses = len(self.configs["participants"]) + 2
+        #         # parallel_sims = cpu_cores // subprocesses
+        #         parallel_sims = 1
+        #         hps_permutations = [self.hyperparameters_permutations[i::parallel_sims] for i in range(parallel_sims)]
+        #         # [L[i::n] for i in range(n)]
+        #
+        #         for permutation in hps_permutations:
+        #             simulations_list.append({
+        #                 'simulation_type': "training",
+        #                 'hyperparameters': permutation})
+        #                 # 'hyperparameters': self.hyperparameters_permutations})
+        #     # if 'validation' in simulations:
+        #     #     simulations.remove('validation')
 
         for simulation in simulations:
             simulations_list.append({'simulation_type': simulation})
 
         for sim_param in simulations_list:
-            config = self.modify_config(**sim_param, seq=seq)
+            config = self.modify_config(**sim_param)
             launch_list.extend(self.make_launch_list(config, **kwargs))
-            seq += 1
-        print('Launch list in run',launch_list)
-        pool_size = len(launch_list)
+            # seq += 1
+
+        # from pprint import pprint
+        # print(seq)
+        # pprint(launch_list)
+        pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)
         pool.close()

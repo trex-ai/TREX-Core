@@ -1,4 +1,3 @@
-# import socketio
 import json
 import asyncio
 
@@ -82,7 +81,6 @@ class NSDefault:
         Args:
             message ([type]): [description]
         """
-        
         self.participant.reset()
         if hasattr(self.participant, 'storage'):
             self.participant.storage.reset(soc_pct=0)
@@ -100,6 +98,9 @@ class NSDefault:
         Args:
             message ([type]): [description]
         """
+        if hasattr(self.participant.trader, 'end_of_generation_tasks'):
+            await self.participant.trader.end_of_generation_tasks()
+
         if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
             await self.participant.trader.metrics.save()
             self.participant.trader.metrics.reset()
