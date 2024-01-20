@@ -3,6 +3,7 @@
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column, func
 from sqlalchemy_utils import database_exists, create_database
+from sqlalchemy.orm import sessionmaker
 import databases
 
 def create_db(db_string):
@@ -34,10 +35,9 @@ def get_table(db_string, table_name, engine=None):
 
 def get_table_len(db_string, table):
     engine = create_engine(db_string)
-    # print(table)
-    with engine.begin() as connection:
-        rows = connection.execute(func.count(table.id)).scalar()
-    print(rows)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    rows = session.query(table).count()
     return rows
     # return engine.scalar(table.count())
 
