@@ -3,7 +3,7 @@ import asyncio
 import os
 
 from gmqtt import Client as MQTTClient
-from _clients.participants.ns_common import NSDefault
+from TREX_Core._clients.participants.ns_common import NSDefault
 
 from cuid2 import Cuid as cuid
 

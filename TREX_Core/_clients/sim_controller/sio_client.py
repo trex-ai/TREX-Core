@@ -4,8 +4,8 @@ import os
 import json
 
 from gmqtt import Client as MQTTClient
-from _clients.sim_controller.ns_common import NSDefault
-from _clients.sim_controller.sim_controller import Controller
+from TREX_Core._clients.sim_controller.ns_common import NSDefault
+from TREX_Core._clients.sim_controller.sim_controller import Controller
 # from _utils import jkson
 # from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
 from cuid2 import Cuid as cuid
