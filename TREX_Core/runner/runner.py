@@ -4,7 +4,7 @@ import commentjson
 import os
 import random
 import itertools
-import TREX_Core._utils
+from TREX_Core._utils import utils, db_utils
 from TREX_Core._utils import jkson as json
 import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
@@ -13,7 +13,6 @@ import dataset
 import numpy as np
 from packaging import version
 import sys
-
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
@@ -44,7 +43,6 @@ class Runner:
         return json_file
 
     def __get_config(self, config_name: str, resume, **kwargs):
-        cwd = os.getcwd()
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
 
@@ -113,12 +111,12 @@ class Runner:
             return int(start_time.timestamp())
 
         # If start_datetime is formatted as a time step with beginning and end, choose either of these as a start time
-        # If sequential is set then the startime will 
+        # If sequential is set then the startime will
         if isinstance(start_datetime, (list, tuple)):
             if len(start_datetime) == 2:
                 start_time_s = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[0])).timestamp())
                 start_time_e = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[1])).timestamp())
-                # This is the sequential startime code 
+                # This is the sequential startime code
                 if 'start_datetime_sequence' in self.configs['study']:
                     if self.configs['study']['start_datetime_sequence'] == 'sequential':
                         interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
@@ -162,8 +160,7 @@ class Runner:
 
     def __create_sim_db(self, db_string, config):
         if not database_exists(db_string):
-            #TODO: OCT 24 2022; double check this works as intended
-            TREX_Core._utils.db_utils.create_db(db_string)
+            db_utils.create_db(db_string)
             self.__create_configs_table(db_string)
             db = dataset.connect(db_string)
             configs_table = db['configs']
@@ -233,7 +230,6 @@ class Runner:
                                  config['participants'][participant]['trader']['learning']]
 
         if simulation_type == 'baseline':
-            config.pop('remote_agent', None)
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
             config['market']['id'] = simulation_type
@@ -320,19 +316,23 @@ class Runner:
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
-        import TREX_Core._utils.runner.make.sim_controller as sim_controller
-        import TREX_Core._utils.runner.make.participant as participant
+        import TREX_Core.runner.make.sim_controller as sim_controller
+        import TREX_Core.runner.make.participant as participant
 
-        exclude = {'server', 'sim_controller', 'participants'}
+        # exclude = {'server', 'sim_controller', 'participants'}
+        exclude = {'sim_controller', 'participants'}
         exclude.update(skip)
         print(config)
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
+        # print(dynamic)
         for module_n in dynamic:
+            # print(module_n)
             try:
-                module = import_module('TREX_Core._utils.runner.make.' + module_n)
+                module = import_module('TREX_Core.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
             except:
+                # print(module_n)
                 pass
         launch_list.append(sim_controller.cli(config))
         for p_id in config['participants']:
@@ -343,11 +343,6 @@ class Runner:
         import subprocess
         import time
 
-        # path_to_trex = str(Path('C:/source/Trex-Core/'))
-        path_to_trex = self.configs['study']['sim_root']
-        path_to_venv = path_to_trex + str(Path('/venv/Scripts/python'))
-        path_to_trex_main = path_to_trex + str(Path('/main.py'))
-
         time.sleep(delay)
         # try:
         #     subprocess.run(['venv/bin/python', args[0], *args[1]])
@@ -356,7 +351,7 @@ class Runner:
         # finally:
         subprocess.run([sys.executable, args[0], *args[1]])
 
-    def run(self, simulations,  **kwargs):
+    def run(self, simulations, **kwargs):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
@@ -409,6 +404,7 @@ class Runner:
 
         # from pprint import pprint
         # print(seq)
+        # from pprint import pprint
         # pprint(launch_list)
         pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
         pool = Pool(pool_size)

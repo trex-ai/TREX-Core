@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 def cli(configs):
-    path = __file__.split('_utils')
-
+    path = __file__.split('runner')
     script_path = path[0] + '_clients/markets/sio_client.py'
+    # print(path)
 
     if 'server' not in configs:
         return None, None
@@ -28,4 +28,5 @@ def cli(configs):
         args.append('--port=' + port)
 
     args.append('--configs=' + json.dumps(market_configs))
+    print(script_path)
     return (script_path, args)

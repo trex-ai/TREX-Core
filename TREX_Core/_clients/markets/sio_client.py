@@ -4,7 +4,7 @@ import os
 import json
 
 from gmqtt import Client as MQTTClient
-from _clients.markets.ns_common import NSDefault
+from TREX_Core._clients.markets.ns_common import NSDefault
 from cuid2 import Cuid as cuid
 
 if os.name == 'posix':

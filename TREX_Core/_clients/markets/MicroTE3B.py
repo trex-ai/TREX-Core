@@ -1004,7 +1004,7 @@ class Market:
         # await self.__client.emit('settlement_complete', message, namespace='/market')
         del self.__settled[time_delivery][commit_id]
 
-    @tenacity.retry(wait=tenacity.wait_fixed(5))
+    @tenacity.retry(wait=tenacity.wait_random(1, 5))
     async def __ensure_transactions_complete(self):
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
         if table_len < self.transactions_count:
@@ -1032,7 +1032,7 @@ class Market:
             return False
 
         transactions = self.__transactions[:transactions_len]
-        asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
+        await asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
 
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
         del self.__transactions[:transactions_len]
@@ -1145,6 +1145,7 @@ class Market:
         await self.reset_market()
         # await self.__client.emit('market_ready')
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
+
 
     async def market_is_online(self):
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')

@@ -3,7 +3,7 @@ import asyncio
 import os
 
 from gmqtt import Client as MQTTClient
-from _clients.participants.ns_common import NSDefault
+from TREX_Core._clients.participants.ns_common import NSDefault
 
 from cuid2 import Cuid as cuid
 
@@ -21,7 +21,7 @@ class Client:
         self.server_address = server_address
         self.sio_client = MQTTClient(cuid(length=10).generate())
 
-        Participant = importlib.import_module('_clients.participants.' + participant_type).Participant
+        Participant = importlib.import_module('TREX_Core._clients.participants.' + participant_type).Participant
         self.participant = Participant(sio_client=self.sio_client,
                                        participant_id=participant_id,
                                        market_id=market_id,

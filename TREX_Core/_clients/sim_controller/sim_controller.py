@@ -3,15 +3,13 @@ import datetime
 import time
 import os
 import signal
-# import dataset
-# from TREX_Core._clients.sim_controller.training_controller import TrainingController
-# from TREX_Core._utils import utils, db_utils
-import sqlalchemy_utils
+import dataset
+from sqlalchemy_utils import database_exists
 
 # from _clients.sim_controller.training_controller import TrainingController
 # from _utils import utils
 
-# from pprint import pprint
+from pprint import pprint
 
 class Controller:
     '''
@@ -96,10 +94,10 @@ class Controller:
         # self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
-        '''This function delays the sim by s seconds using the client sleep method so as not to interrupt the thread control. 
+        '''This function delays the sim by s seconds using the client sleep method so as not to interrupt the thread control.
 
-        Params: 
-            int or float : number of seconds to 
+        Params:
+            int or float : number of seconds to
         '''
         await asyncio.sleep(s)
 
@@ -143,7 +141,7 @@ class Controller:
     #TODO: update this to check all dbs
     def set_initial_generation(self):
         db_string = self.__config['study']['output_database']
-        if not sqlalchemy_utils.database_exists(db_string):
+        if not database_exists(db_string):
             return 0
 
         # TODO: rewrite generation detection for resume
@@ -272,17 +270,6 @@ class Controller:
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'is_market_online']), '')
                 continue
 
-            # TODO Jan 31 2022: Is this code pattern still functional, can I use it to make sure that the GymAgents have
-            # actions?
-            if 'remote_agent_ready' in self.status and not self.status['remote_agent_ready']:
-                message = {
-                    'market_id': self.__config['market']['id']
-                }
-                await self.__client.emit(event='remote_agent_status',
-                                         data=message,
-                                         namespace='/simulation')
-                continue
-
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'is_participant_joined']), '')
@@ -322,13 +309,13 @@ class Controller:
                 continue
 
             #for now, only load weights for validation
-            # if self.__config['study']['type'] == 'validation':
-            #     market_id = 'validation'
-            #     if not self.status['participants_weights_loaded']:
-            #         db = dataset.connect(self.__config['study']['output_database'])
-            #         for participant_id in self.__participants:
-            #             await self.__load_weights(db, self.__generation, market_id, participant_id)
-            #         continue
+            if self.__config['study']['type'] == 'validation':
+                market_id = 'training'
+                if not self.status['participants_weights_loaded']:
+                    db = dataset.connect(self.__config['study']['output_database'])
+                    for participant_id in self.__participants:
+                        await self.__load_weights(db, self.__generation, market_id, participant_id)
+                    continue
 
             if self.status['sim_interrupted']:
                 print('drop drop')
@@ -448,8 +435,6 @@ class Controller:
                 self.__time = self.__start_time
                 self.status['sim_started'] = False
                 self.status['market_ready'] = False
-                if 'remote_agent_ready' in self.status:
-                    self.status['remote_agent_ready'] = False
 
             message = {
                 # 'output_path': self.status['output_path'],
