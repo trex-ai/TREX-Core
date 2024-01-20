@@ -1,9 +1,30 @@
-import socketio
+import json
 
-class NSDefault(socketio.AsyncClientNamespace):
+# import socketio
+
+class NSDefault():
     def __init__(self, controller):
-        super().__init__(namespace='')
         self.controller = controller
+
+    async def process_message(self, message):
+        # while True:
+        #     msg = await msg_queue.get()
+        topic_event = message['topic'].split('/')[-1]
+        payload = message['payload']
+
+        match topic_event:
+            case 'market_online':
+                await self.on_market_online(payload)
+            case 'participant_joined':
+                await self.on_participant_joined(payload)
+            case 'end_turn':
+                await self.on_end_turn(payload)
+            case 'end_round':
+                await self.on_end_round(payload)
+            case 'participant_ready':
+                await self.on_participant_ready(payload)
+            case 'market_ready':
+                await self.on_market_ready(payload)
 
     async def on_connect(self):
         await self.controller.register()
@@ -18,6 +39,7 @@ class NSDefault(socketio.AsyncClientNamespace):
         await self.controller.participant_online(participant_id, False)
 
     async def on_participant_ready(self, message):
+        message = json.loads(message)
         for participant_id in message:
             await self.controller.participant_status(participant_id, 'ready', message[participant_id])
 

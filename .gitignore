@@ -12,9 +12,14 @@ Alex-recreated/
 BESS_MA_Test/
 BESS_Test/
 
-aklsjfn/Buyer1/
+aklsjfn/Buyer1/
 
+<<<<<<< Updated upstream
+=======
 *.v2
+
+_configs/_credentials.json
+>>>>>>> Stashed changes
 
 _configs/_credentials.json
 
