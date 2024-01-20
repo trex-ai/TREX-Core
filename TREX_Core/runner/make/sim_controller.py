@@ -1,7 +1,7 @@
 import json
-from pathlib import Path
+# from pathlib import Path
 def cli(configs):
-    path = __file__.split('_utils')
+    path = __file__.split('runner')
     script_path = path[0] + '_clients/sim_controller/sio_client.py'
 
     if 'server' not in configs:

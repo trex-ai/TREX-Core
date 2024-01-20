@@ -316,8 +316,8 @@ class Runner:
 
     def make_launch_list(self, config, skip: tuple = ()):
         from importlib import import_module
-        import TREX_Core._utils.runner.make.sim_controller as sim_controller
-        import TREX_Core._utils.runner.make.participant as participant
+        import TREX_Core.runner.make.sim_controller as sim_controller
+        import TREX_Core.runner.make.participant as participant
 
         # exclude = {'server', 'sim_controller', 'participants'}
         exclude = {'sim_controller', 'participants'}
@@ -329,7 +329,7 @@ class Runner:
         for module_n in dynamic:
             # print(module_n)
             try:
-                module = import_module('TREX_Core._utils.runner.make.' + module_n)
+                module = import_module('TREX_Core.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
             except:
                 # print(module_n)
