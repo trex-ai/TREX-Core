@@ -1,7 +1,7 @@
 # https://stackoverflow.com/questions/30778015/how-to-increase-the-max-connections-in-postgres
 
 import sqlalchemy
-from sqlalchemy import create_engine, MetaData, Column
+from sqlalchemy import create_engine, MetaData, Column, func
 from sqlalchemy_utils import database_exists, create_database
 import databases
 
@@ -12,18 +12,20 @@ def create_db(db_string):
     return database_exists(engine.url)
 
 async def dump_data(data, db_string, table):
-    db = databases.Database(db_string)
-    await db.connect()
-    query = table.insert()
-    async with db.transaction():
-        await db.execute_many(query, data)
-    await db.disconnect()
+    # db = databases.Database(db_string)
+    # await db.connect()
+    # query = table.insert()
+    async with databases.Database(db_string) as db:
+        async with db.transaction():
+            query = table.insert()
+            await db.execute_many(query, data)
+    # await db.disconnect()
 
 def get_table(db_string, table_name, engine=None):
     if not engine:
         engine = create_engine(db_string)
 
-    if not engine.dialect.has_table(engine, table_name):
+    if not sqlalchemy.inspect(engine).has_table(table_name):
         return None
 
     metadata = MetaData()
@@ -32,7 +34,12 @@ def get_table(db_string, table_name, engine=None):
 
 def get_table_len(db_string, table):
     engine = create_engine(db_string)
-    return engine.scalar(table.count())
+    # print(table)
+    with engine.begin() as connection:
+        rows = connection.execute(func.count(table.id)).scalar()
+    print(rows)
+    return rows
+    # return engine.scalar(table.count())
 
 def drop_table(db_string, table_name):
     engine = create_engine(db_string)
@@ -45,7 +52,7 @@ async def create_table(db_string, table_type, table_name=None, **kwargs):
     if not database_exists(engine.url):
         create_db(db_string)
 
-    if engine.dialect.has_table(engine, table_name):
+    if sqlalchemy.inspect(engine).has_table(table_name):
         return
 
     meta = MetaData()

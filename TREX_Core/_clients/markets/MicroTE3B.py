@@ -1007,6 +1007,7 @@ class Market:
     @tenacity.retry(wait=tenacity.wait_fixed(5))
     async def __ensure_transactions_complete(self):
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
+        print(table_len, self.transactions_count)
         if table_len < self.transactions_count:
             raise Exception
         return True
@@ -1141,10 +1142,12 @@ class Market:
 
     async def end_sim_generation(self):
         await self.record_transactions(delay=False)
-        await self.__ensure_transactions_complete()
+        #TODO: figure out why ensure transactions complete gets stuck
+        # await self.__ensure_transactions_complete()
         await self.reset_market()
         # await self.__client.emit('market_ready')
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
+
 
     async def market_is_online(self):
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')

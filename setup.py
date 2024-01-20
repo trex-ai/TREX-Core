@@ -18,6 +18,7 @@ setup(
                         "python-dateutil",
                         "pytz",
                         "python-rapidjson",
+                        "sqlalchemy",
                         "sqlalchemy-utils",
                         "tenacity",
                         "websockets"
