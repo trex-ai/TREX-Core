@@ -17,17 +17,13 @@ import sys
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
+        self.config_file_name = config
         self.configs = self.__get_config(config, resume, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
-        db_string = self.configs['study']['output_database']
-        if self.purge_db and database_exists(db_string):
-            drop_database(db_string)
-        config_file = '_configs/' + config + '.json'
-        configs = self.__load_json_file(config_file)
-        self.__create_sim_db(db_string, configs)
+
             # self.__create_sim_metadata(self.configs)
 
 
@@ -314,15 +310,21 @@ class Runner:
     #         hp_permutations[idx].update({"idx": idx})
     #     return hp_permutations
 
-    def make_launch_list(self, config, skip: tuple = ()):
+    def make_launch_list(self, config=None, skip: tuple = ()):
         from importlib import import_module
         import TREX_Core.runner.make.sim_controller as sim_controller
         import TREX_Core.runner.make.participant as participant
 
         # exclude = {'server', 'sim_controller', 'participants'}
+        if config is None:
+            config = self.configs
+
+        if not config['market']['id']:
+            config['market']['id'] = config['market']['type']
+
         exclude = {'sim_controller', 'participants'}
         exclude.update(skip)
-        print(config)
+        # print(config)
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
         # print(dynamic)
@@ -339,7 +341,7 @@ class Runner:
             launch_list.append(participant.cli(config, p_id))
         return launch_list
 
-    def run_subprocess(self, args: list, delay=0):
+    def run_subprocess(self, args: list, delay=0, **kwargs):
         import subprocess
         import time
 
@@ -349,12 +351,32 @@ class Runner:
         # except:
         #     subprocess.run(['venv/Scripts/python', args[0], *args[1]])
         # finally:
-        subprocess.run([sys.executable, args[0], *args[1]])
+        subprocess.run([sys.executable, args[0], *args[1]], **kwargs)
 
-    def run(self, simulations, **kwargs):
+    def run(self, launch_list, **kwargs):
         if not self.__config_version_valid:
             print('CONFIG NOT COMPATIBLE')
             return
+        if len(launch_list) == 1:
+            self.run_subprocess(launch_list[0])
+        else:
+            from multiprocessing import Pool
+            pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
+            pool = Pool(pool_size)
+            pool.map(self.run_subprocess, launch_list)
+            pool.close()
+
+    def run_simulations(self, simulations, **kwargs):
+        if not self.__config_version_valid:
+            print('CONFIG NOT COMPATIBLE')
+            return
+
+        db_string = self.configs['study']['output_database']
+        if self.purge_db and database_exists(db_string):
+            drop_database(db_string)
+        config_file = '_configs/' + self.config_file_name + '.json'
+        configs = self.__load_json_file(config_file)
+        self.__create_sim_db(db_string, configs)
 
         # import multiprocessing
         from multiprocessing import Pool
