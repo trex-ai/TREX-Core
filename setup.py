@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 #ToDO, make nicer, for example by importing requirements or sth
 setup(
     name='TREX_Core',
-    version='0.0.1',
+    version='4.0.0',
     install_requires=[  "asyncpg",
                         "commentjson",
                         "asyncpg",
