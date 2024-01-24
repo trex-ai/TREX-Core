@@ -24,7 +24,11 @@ class Client:
         self.sio_client = MQTTClient(cuid(length=10).generate())
 
         # Initialize market information
-        Market = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).Market
+        try:
+            Market = importlib.import_module('markets.' + market_configs['type']).Market
+        except ImportError:
+            Market = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).Market
+
 
         self.market = Market(sio_client=self.sio_client,
                              **market_configs,
