@@ -70,7 +70,7 @@ class Participant:
         try:
             Trader = importlib.import_module('traders.' + trader_type).Trader
         except ImportError:
-            Trader = importlib.import_module('TREX_core.traders.' + trader_type).Trader
+            Trader = importlib.import_module('TREX_Core.traders.' + trader_type).Trader
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
