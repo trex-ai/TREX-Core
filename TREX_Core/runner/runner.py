@@ -10,7 +10,7 @@ import sqlalchemy
 from sqlalchemy import create_engine, MetaData, Column
 from sqlalchemy_utils import database_exists, create_database, drop_database
 import dataset
-import numpy as np
+# import numpy as np
 from packaging import version
 import sys
 
