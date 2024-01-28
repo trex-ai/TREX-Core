@@ -272,7 +272,8 @@ class Controller:
 
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_participant_joined']), '')
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_participant_joined']), '',
+                                      user_property=('to', '^all'))
                 continue
 
             if not self.status['market_ready']:
@@ -387,7 +388,8 @@ class Controller:
             if hasattr(self, 'hyperparameters_idx'):
                 message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message,
+                                  user_property=('to', '^all'))
             self.status['generation_ended'] = False
 
         # Beginning new time step
@@ -402,7 +404,8 @@ class Controller:
             }
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
+                                  user_property=('to', '^all'))
         # end of generation
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -443,7 +446,8 @@ class Controller:
                 'market_id': self.__config['market']['id']
             }
             # await self.__client.emit('end_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message,
+                                  user_property=('to', '^all'))
 
             if self.__generation > self.__generations:
                 # if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
@@ -460,7 +464,8 @@ class Controller:
                 # if self.status['sim_ended']:
                 print('end_simulation', self.__generation-1, self.__generations)
                 # await self.__client.emit('end_simulation')
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '')
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',
+                                      user_property=('to', '^all'))
                 await self.delay(1)
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)
