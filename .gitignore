@@ -24,3 +24,5 @@ _configs/_credentials.json
 _configs/_credentials.json
 
 TREX_Core.egg-info/
+
+.DS_Store

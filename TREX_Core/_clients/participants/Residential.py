@@ -39,7 +39,7 @@ class Participant:
         trader_params = json.loads(trader_params)
         trader_fns = {
             'id': self.participant_id,
-            'market_id':self.market_id,
+            'market_id': self.market_id,
             'timing': self.__timing,
             'ledger': self.__ledger,
             'extra_transactions': self.__extra_transactions,
@@ -136,10 +136,12 @@ class Participant:
         client_data = {
             'type': ('participant', 'Residential'),
             'id': self.participant_id,
+            'sid': self.sid if hasattr(self, 'sid') else self.participant_id,
             'market_id': self.market_id
         }
         # await self.__client.emit('join_market', client_data, callback=self.register_success)
-        self.__client.publish('/'.join([self.market_id, 'join_market']), client_data)
+        self.__client.publish('/'.join([self.market_id, 'join_market']), client_data,
+                              user_property=('to', '^all'))
         # print('joining market')
         # await asyncio.sleep(2)
         if not self.market_connected:
@@ -180,7 +182,8 @@ class Participant:
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
         # await self.__client.emit('bid', bid_entry)
-        self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry)
+        self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry,
+                              user_property=('to', self.market_sid))
 
     # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -202,7 +205,8 @@ class Participant:
             'time_delivery': time_delivery
         }
         # await self.__client.emit('ask', ask_entry)
-        self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry)
+        self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry,
+                              user_property=('to', self.market_sid))
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -213,7 +217,8 @@ class Participant:
     async def settle_success(self, message):
         commit_id = await self.__ledger.settle_success(message)
         if commit_id == message['commit_id']:
-            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id)
+            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id,
+                                  user_property=('to', self.market_sid))
         # return message['commit_id']
 
     async def __update_time(self, message):
@@ -261,7 +266,8 @@ class Participant:
         await self.__meter_energy(self.__timing['current_round'])
         # await self.__client.emit('end_turn', namespace='/market')
         # await self.__client.emit('end_turn')
-        self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id)
+        self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id,
+                              user_property=('to', self.market_sid))
 
 
     async def __read_profile(self, time_interval):
@@ -346,7 +352,8 @@ class Participant:
             'participant_id': self.participant_id,
             'meter': self.__meter
         }
-        self.__client.publish('/'.join([self.market_id, 'meter_data']), message)
+        self.__client.publish('/'.join([self.market_id, 'meter_data']), message,
+                              user_property=('to', self.market_sid))
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -525,4 +532,5 @@ class Participant:
 
     async def is_participant_joined(self):
         if self.market_connected:
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_joined']), self.participant_id)
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_joined']), self.participant_id,
+                                  user_property=('to', self.market_sid))
