@@ -1,4 +1,4 @@
-import numpy as np
+# import numpy as np
 import calendar
 import datetime
 import time
@@ -129,20 +129,22 @@ class Market:
     async def participant_connected(self, client_data):
         if client_data['id'] not in self.__participants:
             self.__participants[client_data['id']] = {
-                # 'sid': client_data['sid'],
+                'sid': client_data['sid'],
                 'online': True,
                 'meter': {}
             }
         else:
             # if previously registered participant returned, update with new session ID and toggle online status
             self.__participants[client_data['id']].update({
-                # 'sid': client_data['sid'],
+                # 'client_id': client_data['client_id'],
                 'online': True
             })
         # self.__clients[client_data['sid']] = client_data['id']
         self.__status['active_participants'] = min(self.__status['active_participants'] + 1,
                                                    len(self.__participants))
-        self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']), self.market_id)
+        self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']),
+                              {'market_id': self.market_id, 'sid': self.sid if hasattr(self, 'sid') else self.market_id},
+                              user_property=('to', client_data['sid']))
         # return self.market_id, client_data['sid']
 
     async def participant_disconnected(self, participant_id):
@@ -204,7 +206,8 @@ class Market:
             'market_info': market_info,
         }
         # await self.__client.emit('start_round', start_msg)
-        self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg)
+        self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg,
+                              user_property=('to', '^all'))
 
 
     async def submit_bid(self, message: dict):
@@ -294,7 +297,8 @@ class Market:
             'time_delivery': time_delivery
         }
 
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply)
+        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
+                              user_property=('to', self.__participants[message['participant_id']]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -403,7 +407,8 @@ class Market:
             'quantity': entry['quantity'],
             'time_delivery': time_delivery
         }
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply)
+        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
+                              user_property=('to', self.__participants[message['participant_id']]['sid']))
 
         # return message['session_id'], reply
 
@@ -571,8 +576,10 @@ class Market:
         }
         # self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
         # self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
-        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message)
-        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message)
+        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message,
+                              user_property=('to', self.__participants[bid['participant_id']]['sid']))
+        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message,
+                              user_property=('to', self.__participants[ask['participant_id']]['sid']))
 
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
@@ -850,7 +857,8 @@ class Market:
             # await self.__client.emit(event='return_extra_transactions',
             #                          data=extra_transactions)
             topic = '/'.join([self.market_id, participant_id, 'return_extra_transactions'])
-            self.__client.publish(topic, extra_transactions)
+            self.__client.publish(topic, extra_transactions,
+                                  user_property=('to', self.__participants[participant_id]['sid']))
 
 
         if self.save_transactions:

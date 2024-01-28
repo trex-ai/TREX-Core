@@ -48,8 +48,10 @@ class NSDefault:
         self.participant.busy = True
         # print("participant disconnected")
 
-    async def on_update_market_info(self, market_id):
-        if market_id == self.participant.market_id:
+    async def on_update_market_info(self, message):
+        client_data = json.loads(message)
+        if client_data['market_id'] == self.participant.market_id:
+            self.participant.market_sid = client_data['sid']
             self.participant.market_connected = True
             # self.participant.busy = False
 
@@ -114,7 +116,8 @@ class NSDefault:
         # await self.participant.client.emit(event='participant_ready',
         #                                    data={self.participant.participant_id: True})
         self.participant.client.publish('/'.join([self.participant.market_id, 'simulation', 'participant_ready']),
-                                        {self.participant.participant_id: True})
+                                        {self.participant.participant_id: True},
+                                        user_property=('to', self.market_sid))
 
     async def on_end_simulation(self):
         """Event tells the participant that it can terminate itself when ready.

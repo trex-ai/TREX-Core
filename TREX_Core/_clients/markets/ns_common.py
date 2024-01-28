@@ -110,9 +110,9 @@ class NSDefault():
         message = json.loads(message)
         await self.market.meter_data(message)
 
-    async def on_participant_connected(self, client_data):
+    async def on_participant_connected(self, message):
         # print(type(client_data))
-        client_data = json.loads(client_data)
+        client_data = json.loads(message)
         await self.market.participant_connected(client_data)
 
     async def on_is_market_online(self):
