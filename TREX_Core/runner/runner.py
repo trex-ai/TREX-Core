@@ -108,27 +108,27 @@ class Runner:
 
         # If start_datetime is formatted as a time step with beginning and end, choose either of these as a start time
         # If sequential is set then the startime will
-        if isinstance(start_datetime, (list, tuple)):
-            if len(start_datetime) == 2:
-                start_time_s = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[0])).timestamp())
-                start_time_e = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[1])).timestamp())
-                # This is the sequential startime code
-                if 'start_datetime_sequence' in self.configs['study']:
-                    if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
-                        start_time = range(start_time_s, start_time_e, interval)[generation]
-                        return start_time
-                start_time = random.choice(range(start_time_s, start_time_e, 60))
-                return start_time
-            else:
-                if 'start_datetime_sequence' in self.configs['study']:
-                    if self.configs['study']['start_datetime_sequence'] == 'sequential':
-                        multiplier = math.ceil(self.configs['study']['generations'] / len(start_datetime))
-                        start_time_readable = start_datetime * multiplier[generation]
-                        start_time = pytz.timezone(start_timezone).localize(timeparse(start_time_readable))
-                        return start_time
-                start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
-                return int(start_time.timestamp())
+        # if isinstance(start_datetime, (list, tuple)):
+        #     if len(start_datetime) == 2:
+        #         start_time_s = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[0])).timestamp())
+        #         start_time_e = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[1])).timestamp())
+        #         # This is the sequential startime code
+        #         if 'start_datetime_sequence' in self.configs['study']:
+        #             if self.configs['study']['start_datetime_sequence'] == 'sequential':
+        #                 interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
+        #                 start_time = range(start_time_s, start_time_e, interval)[generation]
+        #                 return start_time
+        #         start_time = random.choice(range(start_time_s, start_time_e, 60))
+        #         return start_time
+        #     else:
+        #         if 'start_datetime_sequence' in self.configs['study']:
+        #             if self.configs['study']['start_datetime_sequence'] == 'sequential':
+        #                 multiplier = math.ceil(self.configs['study']['generations'] / len(start_datetime))
+        #                 start_time_readable = start_datetime * multiplier[generation]
+        #                 start_time = pytz.timezone(start_timezone).localize(timeparse(start_time_readable))
+        #                 return start_time
+        #         start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
+        #         return int(start_time.timestamp())
 
     def __create_sim_metadata(self, config):
         # if not config:

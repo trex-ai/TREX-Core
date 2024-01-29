@@ -1,0 +1,63 @@
+{
+//sawtooth profile: "use_synthetic_profile": "test_profile_1kw_square_p2+1",
+    "version": "3.7.2",
+    "study": {
+      "name": "mqtt_test_backport",
+      "description": "",
+      "start_datetime": "2018-07-01 0:0:0",
+      "start_datetime_sequence": "sequential",
+      "timezone": "America/Vancouver",
+      "days": 1,
+      "generations": 10,
+      "sim_root": "simulations/"
+    },
+    "server": {
+      "host": "localhost",
+      "port": 1883
+    },
+    "market": {
+      "id": "MicroTE3B",
+      "type": "MicroTE3B",
+      "close_steps": 2,
+      "grid": {
+        "price": 0.069,
+        "fee_ratio": 1.1
+      }
+    },
+    "participants": {
+      "b1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": false,
+          "type": "basic_trader",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 1
+        },
+        "generation": {
+          "scale": 0
+        }
+      },
+      "s1": {
+        "type": "Residential",
+        "trader": {
+          "track_metrics": false,
+          "type": "basic_trader",
+          "bid_price": 0.14,
+          "ask_price": 0.07,
+          "reward_function": "net_profit",
+          "use_synthetic_profile": "test_profile_1kw_constant_gl"
+        },
+        "load": {
+          "scale": 0
+        },
+        "generation": {
+          "scale": 1
+        }
+      }
+    }
+  }

@@ -117,7 +117,7 @@ class NSDefault:
         #                                    data={self.participant.participant_id: True})
         self.participant.client.publish('/'.join([self.participant.market_id, 'simulation', 'participant_ready']),
                                         {self.participant.participant_id: True},
-                                        user_property=('to', self.market_sid))
+                                        user_property=('to', self.participant.market_sid))
 
     async def on_end_simulation(self):
         """Event tells the participant that it can terminate itself when ready.
