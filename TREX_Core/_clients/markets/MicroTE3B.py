@@ -1,15 +1,15 @@
 # import numpy as np
+import asyncio
 import calendar
 import datetime
-import time
-from operator import itemgetter
 import itertools
-from cuid2 import Cuid as cuid
-import tenacity
 import os
 import signal
+import tenacity
+import time
+from cuid2 import Cuid as cuid
+from operator import itemgetter
 
-import asyncio
 from TREX_Core._clients.markets.Grid import Market as Grid
 from TREX_Core._utils import db_utils, source_classifier
 
@@ -60,6 +60,7 @@ class Market:
         self.__db = {}
         self.save_transactions = True
         self.market_id = market_id
+        self.sid = kwargs.get('sid', market_id)
         self.__client = kwargs['sio_client']
         self.__server_ts = 0
 
@@ -143,7 +144,8 @@ class Market:
         self.__status['active_participants'] = min(self.__status['active_participants'] + 1,
                                                    len(self.__participants))
         self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']),
-                              {'market_id': self.market_id, 'sid': self.sid if hasattr(self, 'sid') else self.market_id},
+                              {'market_id': self.market_id,
+                               'sid': self.sid},
                               user_property=('to', client_data['sid']))
         # return self.market_id, client_data['sid']
 
@@ -208,7 +210,6 @@ class Market:
         # await self.__client.emit('start_round', start_msg)
         self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg,
                               user_property=('to', '^all'))
-
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -678,7 +679,7 @@ class Market:
                         residual_generation = self.__participants[seller]['meter'][time_delivery]['generation'][
                             energy_source]
                         residual_consumption = \
-                        self.__participants[buyer]['meter'][time_delivery]['consumption']['other']['external']
+                            self.__participants[buyer]['meter'][time_delivery]['consumption']['other']['external']
 
                         # check to see if physical generation is less than settled quantity
                         # extra_purchase = 0
@@ -859,7 +860,6 @@ class Market:
             topic = '/'.join([self.market_id, participant_id, 'return_extra_transactions'])
             self.__client.publish(topic, extra_transactions,
                                   user_property=('to', self.__participants[participant_id]['sid']))
-
 
         if self.save_transactions:
             self.__transactions.extend(transactions)
@@ -1103,7 +1103,7 @@ class Market:
 
         keys = [k for k, v in self.__status['round_settle_delivered'].items() if v == 2]
         if set(keys) != set(self.__status['round_settled']):
-        # if set(self.__status['round_settle_delivered']) != set(self.__status['round_settled']):
+            # if set(self.__status['round_settle_delivered']) != set(self.__status['round_settled']):
             raise Exception
 
     # Finish all processes and remove all unnecessary/ remaining records in preparation for a new time step, begin processes for next step
@@ -1153,7 +1153,6 @@ class Market:
         await self.reset_market()
         # await self.__client.emit('market_ready')
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
-
 
     async def market_is_online(self):
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')

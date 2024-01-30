@@ -1,18 +1,21 @@
-import socket
-import multiprocessing
 import commentjson
+import dataset
+import itertools
+import json
+import multiprocessing
 import os
 import random
-import itertools
-from TREX_Core._utils import utils, db_utils
-from TREX_Core._utils import jkson as json
+import socket
+# from TREX_Core._utils import jkson as json
 import sqlalchemy
-from sqlalchemy import create_engine, MetaData, Column
-from sqlalchemy_utils import database_exists, create_database, drop_database
-import dataset
+import sys
 # import numpy as np
 from packaging import version
-import sys
+from sqlalchemy import create_engine, MetaData, Column
+from sqlalchemy_utils import database_exists, create_database, drop_database
+
+from TREX_Core._utils import utils, db_utils
+
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
@@ -23,10 +26,7 @@ class Runner:
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
-
-            # self.__create_sim_metadata(self.configs)
-
-
+        # self.__create_sim_metadata(self.configs)
 
         # if not resume:
         #     r = tenacity.Retrying(
@@ -55,7 +55,6 @@ class Runner:
 
         if credentials and ('output_db_location' not in config['study']):
             config['study']['output_db_location'] = credentials['output_db_location']
-
 
         # engine = create_engine(db_string)
 
@@ -251,13 +250,13 @@ class Runner:
             # else:
             # if 'hyperparameters' in kwargs:
             #     config['training']['hyperparameters'] = kwargs["hyperparameters"]
-                # print(kwargs)
-                # print(config['training']['hyperparameters'])
-                    # if hyperparameter is defined for the trader, then
-                    # overwrite default hyperparameter with one to be searched
-                    # for hyperparameter in config['training']['hyperparameters']:
-                    #     if hyperparameter in config['participants'][participant]['trader']:
-                    #         config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
+            # print(kwargs)
+            # print(config['training']['hyperparameters'])
+            # if hyperparameter is defined for the trader, then
+            # overwrite default hyperparameter with one to be searched
+            # for hyperparameter in config['training']['hyperparameters']:
+            #     if hyperparameter in config['participants'][participant]['trader']:
+            #         config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
 
             for participant in learning_participants:
                 config['participants'][participant]['trader']['learning'] = True
@@ -273,17 +272,17 @@ class Runner:
         # if 'hyperparameters' in kwargs:
         #     config['training']['hyperparameters'] = kwargs['hyperparameters']
 
-            # change simulation name to include hyperparameters
-            # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
-            #                                           key, value in config['training']['hyperparameters'].items()])
-            # TODO: make default name the first
-            # hyperparameters_formatted_str = "hps_"+str(kwargs['hyperparameters'][0]['idx'])
-            # For hyperparameter search, each permutation may need its own database
-            # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
-            # config['market']['id'] += '-' + hyperparameters_formatted_str
-            # config['study']['name'] += '-' + hyperparameters_formatted_str
-            # db_string = config['study']['output_db_location'] + '/' + config['study']['name']
-            # config['study']['output_database'] = db_string
+        # change simulation name to include hyperparameters
+        # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
+        #                                           key, value in config['training']['hyperparameters'].items()])
+        # TODO: make default name the first
+        # hyperparameters_formatted_str = "hps_"+str(kwargs['hyperparameters'][0]['idx'])
+        # For hyperparameter search, each permutation may need its own database
+        # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
+        # config['market']['id'] += '-' + hyperparameters_formatted_str
+        # config['study']['name'] += '-' + hyperparameters_formatted_str
+        # db_string = config['study']['output_db_location'] + '/' + config['study']['name']
+        # config['study']['output_database'] = db_string
 
         return config
 
@@ -315,14 +314,15 @@ class Runner:
         import TREX_Core.runner.make.sim_controller as sim_controller
         import TREX_Core.runner.make.participant as participant
 
-        # exclude = {'server', 'sim_controller', 'participants'}
+
         if config is None:
             config = self.configs
 
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
 
-        exclude = {'sim_controller', 'participants'}
+        # exclude = {'sim_controller', 'participants'}
+        exclude = {'server', 'sim_controller', 'participants'}
         exclude.update(skip)
         # print(config)
         launch_list = []

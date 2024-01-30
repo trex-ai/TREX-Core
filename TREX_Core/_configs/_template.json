@@ -30,9 +30,6 @@
     "host": "localhost",
     "port": 1883
   },
-  // having the meshtastic field lets the runner poll the hardware and get info
-  "meshtastic": {},
-
   // parameters for market
   "market": {
     "id": "",

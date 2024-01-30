@@ -22,6 +22,7 @@ class Participant:
         self.market_id = market_id
         self.market_connected = False
         self.participant_id = str(participant_id)
+        self.sid = kwargs.get('sid', market_id)
         self.__client = sio_client
         self.client = sio_client
         self.__profile = {
@@ -136,7 +137,7 @@ class Participant:
         client_data = {
             'type': ('participant', 'Residential'),
             'id': self.participant_id,
-            'sid': self.sid if hasattr(self, 'sid') else self.participant_id,
+            'sid': self.sid,
             'market_id': self.market_id
         }
         # await self.__client.emit('join_market', client_data, callback=self.register_success)
