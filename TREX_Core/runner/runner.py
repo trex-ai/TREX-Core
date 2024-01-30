@@ -337,7 +337,9 @@ class Runner:
                 module = import_module('TREX_Core.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
             except ImportError:
-                print(module_n, 'not found')
+                # print(module_n, 'not found')
+                module = import_module('runner.make.' + module_n)
+                launch_list.append(module.cli(config))
         if 'sim_controller' not in exclude:
             launch_list.append(sim_controller.cli(config))
         for p_id in config['participants']:
