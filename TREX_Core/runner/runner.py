@@ -321,24 +321,28 @@ class Runner:
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
 
-        # exclude = {'sim_controller', 'participants'}
-        exclude = {'server', 'sim_controller', 'participants'}
+        exclude = {'version', 'study', 'server', 'participants'}
+        if isinstance(skip, str):
+            skip = (skip,)
         exclude.update(skip)
         # print(config)
         launch_list = []
         dynamic = [k for k in config if k not in exclude]
         # print(dynamic)
         for module_n in dynamic:
-            # print(module_n)
+            # print(module_n, exclude)
+            if module_n in exclude:
+                continue
             try:
                 module = import_module('TREX_Core.runner.make.' + module_n)
                 launch_list.append(module.cli(config))
-            except:
-                # print(module_n)
-                pass
-        launch_list.append(sim_controller.cli(config))
+            except ImportError:
+                print(module_n, 'not found')
+        if 'sim_controller' not in exclude:
+            launch_list.append(sim_controller.cli(config))
         for p_id in config['participants']:
-            launch_list.append(participant.cli(config, p_id))
+            if p_id not in exclude:
+                launch_list.append(participant.cli(config, p_id))
         return launch_list
 
     def run_subprocess(self, args: list, delay=0, **kwargs):
@@ -384,37 +388,6 @@ class Runner:
         # db_purged = False
         simulations_list = []
         launch_list = []
-        # seq = 0
-
-        # if hasattr(self, 'hyperparameters_permutations'):
-        #     # write HPS list to database
-        #     db_string = self.configs['study']['output_database']
-        #     db = dataset.connect(db_string)
-        #     if "hyperparameters" not in db.tables:
-        #         table = db.create_table("hyperparameters", primary_id='idx', primary_type=db.types.integer)
-        #     else:
-        #         table = db["hyperparameters"]
-        #     table.upsert_many(self.hyperparameters_permutations, ['idx'])
-        #
-        #     # if training or validation needed to be done, then their parameters have to be modified
-        #     if 'training' in simulations:
-        #         simulations.remove('training')
-        #
-        #         # autochunker to parallelize hyperparam search based on number of cpu cores available
-        #         cpu_cores = multiprocessing.cpu_count()
-        #         subprocesses = len(self.configs["participants"]) + 2
-        #         # parallel_sims = cpu_cores // subprocesses
-        #         parallel_sims = 1
-        #         hps_permutations = [self.hyperparameters_permutations[i::parallel_sims] for i in range(parallel_sims)]
-        #         # [L[i::n] for i in range(n)]
-        #
-        #         for permutation in hps_permutations:
-        #             simulations_list.append({
-        #                 'simulation_type': "training",
-        #                 'hyperparameters': permutation})
-        #                 # 'hyperparameters': self.hyperparameters_permutations})
-        #     # if 'validation' in simulations:
-        #     #     simulations.remove('validation')
 
         for simulation in simulations:
             simulations_list.append({'simulation_type': simulation})
