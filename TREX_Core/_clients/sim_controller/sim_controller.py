@@ -227,13 +227,14 @@ class Controller:
     # Update tracker when participant is active
     async def participant_online(self, participant_id, online):
         if participant_id in self.__participants:
-            self.__participants[participant_id]['online'] = online
-            if online:
-                self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
-            else:
-                self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
-                self.status['sim_interrupted'] = True
-                self.status['sim_started'] = False
+            if self.__participants[participant_id]['online'] ^ online:
+                self.__participants[participant_id]['online'] = online
+                if online:
+                    self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
+                else:
+                    self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
+                    self.status['sim_interrupted'] = True
+                    self.status['sim_started'] = False
         if self.__turn_control['online'] < self.__turn_control['total']:
             self.status['participants_online'] = False
         else:
