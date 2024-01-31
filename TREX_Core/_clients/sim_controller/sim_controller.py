@@ -40,7 +40,7 @@ class Controller:
                                  not self.__config['participants'][participant]['trader']['learning']]
         self.__participants = {}
         self.__turn_control = {
-            'total': None,
+            'total': 0,
             'online': 0,
             'ready': 0,
             # 'weights_loaded': 0,
@@ -226,15 +226,17 @@ class Controller:
 
     # Update tracker when participant is active
     async def participant_online(self, participant_id, online):
-        if participant_id in self.__participants:
-            if self.__participants[participant_id]['online'] ^ online:
-                self.__participants[participant_id]['online'] = online
-                if online:
-                    self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
-                else:
-                    self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
-                    self.status['sim_interrupted'] = True
-                    self.status['sim_started'] = False
+        if not self.__participants.get(participant_id):
+            return
+        if not self.__participants[participant_id]['online'] ^ online:
+            return
+        self.__participants[participant_id]['online'] = online
+        if online:
+            self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
+        else:
+            self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
+            self.status['sim_interrupted'] = True
+            self.status['sim_started'] = False
         if self.__turn_control['online'] < self.__turn_control['total']:
             self.status['participants_online'] = False
         else:
@@ -250,7 +252,7 @@ class Controller:
 
             if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 600:
                 self.status['last_step_clock'] = time.time()
-                # print(self.status)
+                print(self.status)
 
                 #TODO: One of the most likely scensarios for sim to get stuck is that a participant
                 # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
@@ -261,7 +263,7 @@ class Controller:
                     'duration': self.__time_step_s,
                     'update': False
                 }
-                await self.__client.emit('start_round_simulation', message)
+                # await self.__client.emit('start_round_simulation', message)
 
             if self.status['sim_started']:
                 continue

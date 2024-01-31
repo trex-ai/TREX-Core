@@ -75,8 +75,8 @@ class Participant:
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
-            'generation_scale': kwargs.get('generation_scale', 1),
-            'load_scale': kwargs.get('load_scale', 1)
+            'generation_scale': kwargs.get('generation', {}).get('scale', 1),
+            'load_scale': kwargs.get('load', {}).get('scale', 1)
         }
         synthetic_profile = trader_params.pop('use_synthetic_profile', None)
         if synthetic_profile:
