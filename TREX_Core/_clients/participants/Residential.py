@@ -15,7 +15,7 @@ class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
+    def __init__(self, sio_client, participant_id, market_id, db_path, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -37,7 +37,7 @@ class Participant:
         self.__timing = {}
 
         # Initialize trader variables and functions
-        trader_params = json.loads(trader_params)
+        trader_params = kwargs.get('trader')
         trader_fns = {
             'id': self.participant_id,
             'market_id': self.market_id,
@@ -50,8 +50,8 @@ class Participant:
             'meter': self.__meter
         }
 
-        if storage_params:
-            storage_params = json.loads(storage_params)
+        storage_params = kwargs.get('storage')
+        if storage_params is not None:
             storage_type = storage_params.pop('type', None)
             # self.storage_fns = {
             #     'id': self.participant_id,
@@ -75,12 +75,14 @@ class Participant:
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
-            'generation_scale': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
-            'load_scale': kwargs['load_scale'] if 'load_scale' in kwargs else 1
+            'generation_scale': kwargs.get('generation_scale', 1),
+            'load_scale': kwargs.get('load_scale', 1)
         }
         synthetic_profile = trader_params.pop('use_synthetic_profile', None)
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
+
+        print(trader_type, storage_params,  self.__profile_params)
 
         # if 'market_ns' in kwargs:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
