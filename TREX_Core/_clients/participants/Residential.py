@@ -238,8 +238,32 @@ class Participant:
             'stale_round': (start_time - duration * 10, start_time - duration * 9)
         })
 
+    async def __update_market_info(self, message):
+
+        market_info = {
+            str(self.__timing['current_round']): {
+                'grid': {
+                    'buy_price': message['current_round'][0],
+                    'sell_price': message['current_round'][1]
+                }
+            },
+            str(self.__timing['next_settle']): {
+                'grid': {
+                    'buy_price': message['next_settle'][0],
+                    'sell_price': message['next_settle'][0]
+                }
+            },
+        }
+        self.__market_info.update(market_info)
+
+        # market_info = {
+        #     'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+        #     'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
+        # }
+
 
     async def start_round(self, message):
+
         """Sequence of actions during each round
         Currently only for simulation mode.
         Real time mode needs slight modifications.
@@ -249,7 +273,7 @@ class Participant:
         """
         # start of current time step
         await self.__update_time(message)
-        self.__market_info.update(message['market_info'])
+        await self.__update_market_info(message['market_info'])
         await self.__ledger.clear_history(self.__timing['stale_round'])
         self.__market_info.pop(str(self.__timing['stale_round']), None)
         # print(self.__market_info)
