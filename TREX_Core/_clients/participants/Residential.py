@@ -82,7 +82,7 @@ class Participant:
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
 
-        print(trader_type, storage_params,  self.__profile_params)
+        # print(trader_type, storage_params,  self.__profile_params)
 
         # if 'market_ns' in kwargs:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
