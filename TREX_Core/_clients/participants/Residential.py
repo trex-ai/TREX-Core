@@ -231,13 +231,13 @@ class Participant:
         end_time = start_time + duration
         close_steps = message['close_steps']
 
-        last_round = self.__timing['current_round']
-        current_round = (start_time, end_time),
+        last_round = self.__timing.get('current_round', (0, 0))
+        current_round = (start_time, end_time)
         last_settle = (start_time + duration * (close_steps - 1), start_time + duration * close_steps)
         next_settle = (start_time + duration * close_steps, start_time + duration * (close_steps + 1))
 
         self.__timing.update({
-            # 'timezone': message['timezone'],
+            'timezone': message['timezone'],
             'duration': duration,
             'last_round': last_round,
             'current_round': current_round,

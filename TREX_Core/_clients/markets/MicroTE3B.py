@@ -206,7 +206,7 @@ class Market:
             'time': start_time,
             'duration': duration,
             'close_steps': self.__timing['close_steps'],
-            # 'timezone': self.__timing['timezone'],
+            'timezone': self.__timing['timezone'],
             # 'last_round': self.__timing['last_round'],
             # 'current_round': self.__timing['current_round'],
             # 'last_settle': self.__timing['last_settle'],
