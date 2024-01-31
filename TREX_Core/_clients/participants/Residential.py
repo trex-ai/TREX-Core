@@ -228,16 +228,40 @@ class Participant:
         # synchronizes time with market
         duration = message['duration']
         start_time = message['time']
+        end_time = start_time + duration
+        close_steps = message['close_steps']
+
+        last_round = self.__timing['current_round']
+        current_round = (start_time, end_time),
+        last_settle = (start_time + duration * (close_steps - 1), start_time + duration * close_steps)
+        next_settle = (start_time + duration * close_steps, start_time + duration * (close_steps + 1))
+
         self.__timing.update({
-            'timezone': message['timezone'],
+            # 'timezone': message['timezone'],
             'duration': duration,
-            'last_round': tuple(message['last_round']),
-            'current_round': tuple(message['current_round']),
-            'last_settle': tuple(message['last_settle']),
-            'next_settle': tuple(message['next_settle']),
+            'last_round': last_round,
+            'current_round': current_round,
+            'last_settle': last_settle,
+            'next_settle': next_settle,
             'stale_round': (start_time - duration * 10, start_time - duration * 9)
         })
 
+    async def __update_market_info(self, message):
+        market_info = {
+            str(self.__timing['current_round']): {
+                'grid': {
+                    'buy_price': message['current_round'][0],
+                    'sell_price': message['current_round'][1]
+                }
+            },
+            str(self.__timing['next_settle']): {
+                'grid': {
+                    'buy_price': message['current_round'][0],
+                    'sell_price': message['current_round'][1]
+                }
+            },
+        }
+        self.__market_info.update(market_info)
 
     async def start_round(self, message):
         """Sequence of actions during each round
@@ -249,7 +273,7 @@ class Participant:
         """
         # start of current time step
         await self.__update_time(message)
-        self.__market_info.update(message['market_info'])
+        await self.__update_market_info(message['market_info'])
         await self.__ledger.clear_history(self.__timing['stale_round'])
         self.__market_info.pop(str(self.__timing['stale_round']), None)
         # print(self.__market_info)

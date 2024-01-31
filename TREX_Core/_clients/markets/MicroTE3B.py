@@ -182,29 +182,35 @@ class Market:
         """
         start_time = self.__time()
         self.__reset_status()
+        # market_info = {
+        #     str(self.__timing['current_round']): {
+        #         'grid': {
+        #             'buy_price': self.__grid.buy_price(),
+        #             'sell_price': self.__grid.sell_price()
+        #         }
+        #     },
+        #     str(self.__timing['next_settle']): {
+        #         'grid': {
+        #             'buy_price': self.__grid.buy_price(),
+        #             'sell_price': self.__grid.sell_price()
+        #         }
+        #     },
+        # }
+        # market info format has to be shortened for mesh
         market_info = {
-            str(self.__timing['current_round']): {
-                'grid': {
-                    'buy_price': self.__grid.buy_price(),
-                    'sell_price': self.__grid.sell_price()
-                }
-            },
-            str(self.__timing['next_settle']): {
-                'grid': {
-                    'buy_price': self.__grid.buy_price(),
-                    'sell_price': self.__grid.sell_price()
-                }
-            },
+            'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+            'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
         }
 
         start_msg = {
             'time': start_time,
             'duration': duration,
-            'timezone': self.__timing['timezone'],
-            'last_round': self.__timing['last_round'],
-            'current_round': self.__timing['current_round'],
-            'last_settle': self.__timing['last_settle'],
-            'next_settle': self.__timing['next_settle'],
+            'close_steps': self.__timing['close_steps'],
+            # 'timezone': self.__timing['timezone'],
+            # 'last_round': self.__timing['last_round'],
+            # 'current_round': self.__timing['current_round'],
+            # 'last_settle': self.__timing['last_settle'],
+            # 'next_settle': self.__timing['next_settle'],
             'market_info': market_info,
         }
         # await self.__client.emit('start_round', start_msg)
