@@ -385,10 +385,10 @@ class Controller:
                 # 'output_path': self.status['output_path'],
                 'market_id': self.__config['market']['id'],
             }
-            # if hasattr(self, 'hyperparameters_idx'):
-            #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
+            if hasattr(self, 'hyperparameters_idx'):
+                message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message, qos=2,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message,
                                   user_property=('to', '^all'))
             self.status['generation_ended'] = False
 
@@ -404,7 +404,7 @@ class Controller:
             }
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message, qos=2,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
                                   user_property=('to', '^all'))
         # end of generation
         elif self.__current_step == self.__end_step + 1:
