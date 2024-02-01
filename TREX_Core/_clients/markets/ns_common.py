@@ -104,8 +104,8 @@ class NSDefault():
         ask = json.loads(ask)
         return await self.market.submit_ask(ask)
 
-    async def on_settlement_delivered(self, commit_id):
-        await self.market.settlement_delivered(commit_id)
+    async def on_settlement_delivered(self, message):
+        await self.market.settlement_delivered(message)
 
     async def on_meter_data(self, message):
         # print("meter data")

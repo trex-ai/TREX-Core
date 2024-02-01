@@ -220,11 +220,12 @@ class Participant:
     async def settle_success(self, message):
         commit_id = await self.__ledger.settle_success(message)
         if commit_id == message['commit_id']:
-            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id,
+            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), {self.participant_id: commit_id},
                                   user_property=('to', self.market_sid))
         # return message['commit_id']
 
     async def __update_time(self, message):
+        # print(message)
         # synchronizes time with market
         duration = message['duration']
         start_time = message['time']
@@ -444,7 +445,7 @@ class Participant:
 
         # step 3. get readings from meter (profile)
         solar_generation, residual_consumption = await self.__read_profile(time_interval)
-
+        print(self.participant_id, time_interval, solar_generation, residual_consumption)
         # step 4. allocate energy
         # use solar for settlement
         residual_solar = max(0, solar_generation - settled_solar)
