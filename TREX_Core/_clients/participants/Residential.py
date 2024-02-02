@@ -381,7 +381,8 @@ class Participant:
             'meter': self.__meter
         }
         self.__client.publish('/'.join([self.market_id, 'meter_data']), message,
-                              user_property=('to', self.market_sid))
+                              user_property=('to', self.market_sid),
+                              topic_alias=5)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -445,7 +446,7 @@ class Participant:
 
         # step 3. get readings from meter (profile)
         solar_generation, residual_consumption = await self.__read_profile(time_interval)
-        print(self.participant_id, time_interval, solar_generation, residual_consumption)
+        # print(self.participant_id, time_interval, solar_generation, residual_consumption)
         # step 4. allocate energy
         # use solar for settlement
         residual_solar = max(0, solar_generation - settled_solar)

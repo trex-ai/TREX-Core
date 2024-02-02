@@ -79,6 +79,7 @@ class Client:
 
         # await self.msg_queue.put(msg)
         await self.ns.process_message(message)
+        return 0
     # @tenacity.retry(wait=tenacity.wait_fixed(1))
     # async def start_client(self):
     #     await self.sio_client.connect(self.server_address)

@@ -45,8 +45,8 @@ class Client:
         client.subscribe("/".join([market_id, 'start_round']), qos=0)
         client.subscribe("/".join([market_id, participant_id]), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'update_market_info']), qos=0)
-        client.subscribe("/".join([market_id, participant_id, 'ask_success']), qos=0)
-        client.subscribe("/".join([market_id, participant_id, 'bid_success']), qos=0)
+        # client.subscribe("/".join([market_id, participant_id, 'ask_success']), qos=0)
+        # client.subscribe("/".join([market_id, participant_id, 'bid_success']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'settled']), qos=0)
         client.subscribe("/".join([market_id, participant_id, 'return_extra_transaction']), qos=0)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
@@ -71,6 +71,7 @@ class Client:
         }
         # await self.msg_queue.put(message)
         await self.ns.process_message(message)
+        return 0
     # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect

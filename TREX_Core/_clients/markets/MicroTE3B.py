@@ -214,7 +214,8 @@ class Market:
         }
         # await self.__client.emit('start_round', start_msg)
         self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg,
-                              user_property=('to', '^all'))
+                              user_property=('to', '^all'),
+                              topic_alias=1)
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -295,16 +296,19 @@ class Market:
         # add open entry
         self.__open[time_delivery]['bid'].append(entry)
 
+        # reply = {
+        #     'uuid': entry['uuid'],
+        #     'time_submission': entry['time_submission'],
+        #     'price': entry['price'],
+        #     'quantity': entry['quantity'],
+        #     'time_delivery': time_delivery
+        # }
         reply = {
-            'uuid': entry['uuid'],
-            'time_submission': entry['time_submission'],
-            'price': entry['price'],
-            'quantity': entry['quantity'],
-            'time_delivery': time_delivery
+            'uuid': entry['uuid']
         }
 
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
+        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -413,8 +417,8 @@ class Market:
             'quantity': entry['quantity'],
             'time_delivery': time_delivery
         }
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
+        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
 
         # return message['session_id'], reply
 
@@ -565,7 +569,7 @@ class Market:
         #     return
         buyer_message = {
             'commit_id': commit_id,
-            'bid_id': bid['uuid'],
+            # 'bid_id': bid['uuid'],
             'source': ask['source'],
             'quantity': quantity,
             'buy_price': settlement_price_buy,
@@ -574,7 +578,7 @@ class Market:
 
         seller_message = {
             'commit_id': commit_id,
-            'ask_id': ask['uuid'],
+            # 'ask_id': ask['uuid'],
             'source': ask['source'],
             'quantity': quantity,
             'sell_price': settlement_price_sell,

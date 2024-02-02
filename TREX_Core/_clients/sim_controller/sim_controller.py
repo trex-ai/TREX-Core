@@ -250,7 +250,7 @@ class Controller:
             if not self.status['registered_on_server']:
                 continue
 
-            if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 600:
+            if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
                 self.status['last_step_clock'] = time.time()
                 print(self.status)
 
@@ -264,6 +264,8 @@ class Controller:
                     'update': False
                 }
                 # await self.__client.emit('start_round_simulation', message)
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
+                                      user_property=('to', '^all'))
 
             if self.status['sim_started']:
                 continue
@@ -352,15 +354,16 @@ class Controller:
     #     }
     #     await self.__client.emit('load_weights', message)
 
-    async def __print_step_time(self):
+    async def __print_step_time(self, report_steps=None):
         # if not self.__current_step:
         #     print('starting generation', self.__generation)
-
-        if self.__current_step % self.__day_steps == 0 and self.__current_step:
+        if not report_steps:
+            report_steps = self.__end_step
+        if self.__current_step % report_steps == 0 and self.__current_step:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start
-            eta_s = round((self.__end_step - self.__current_step) / self.__day_steps * step_time)
+            eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
                   ', generation', self.__generation, '/', self.__generations,
                   ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
@@ -407,6 +410,7 @@ class Controller:
             }
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
+            # print(self.__current_step, self.__end_step)
             self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
                                   user_property=('to', '^all'))
         # end of generation
