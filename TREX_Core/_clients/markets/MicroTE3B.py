@@ -295,16 +295,19 @@ class Market:
         # add open entry
         self.__open[time_delivery]['bid'].append(entry)
 
+        # reply = {
+        #     'uuid': entry['uuid'],
+        #     'time_submission': entry['time_submission'],
+        #     'price': entry['price'],
+        #     'quantity': entry['quantity'],
+        #     'time_delivery': time_delivery
+        # }
         reply = {
-            'uuid': entry['uuid'],
-            'time_submission': entry['time_submission'],
-            'price': entry['price'],
-            'quantity': entry['quantity'],
-            'time_delivery': time_delivery
+            'uuid': entry['uuid']
         }
 
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
+        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -413,8 +416,8 @@ class Market:
             'quantity': entry['quantity'],
             'time_delivery': time_delivery
         }
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
+        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
 
         # return message['session_id'], reply
 
