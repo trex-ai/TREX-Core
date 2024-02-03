@@ -433,7 +433,7 @@ class Participant:
                 'solar': 0,
                 'bess': 0
             },
-            'consumption': {
+            'load': {
                 # consumption keeps track of self consumption by source
                 # other denotes energy flowing in from the outside
                 'bess': {
