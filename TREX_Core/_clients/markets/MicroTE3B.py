@@ -824,7 +824,7 @@ class Market:
                                 source] -= quantity
 
             extra_transactions = {
-                'participant': participant_id,
+                # 'participant': participant_id,
                 'time_delivery': time_delivery,
                 'grid': {
                     'buy': [],
