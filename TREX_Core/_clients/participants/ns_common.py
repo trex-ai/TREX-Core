@@ -52,6 +52,7 @@ class NSDefault:
         client_data = json.loads(message)
         if client_data['market_id'] == self.participant.market_id:
             self.participant.market_sid = client_data['sid']
+            self.participant.timezone = client_data['timezone']
             self.participant.market_connected = True
             # self.participant.busy = False
 

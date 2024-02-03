@@ -145,7 +145,8 @@ class Market:
                                                    len(self.__participants))
         self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']),
                               {'market_id': self.market_id,
-                               'sid': self.sid},
+                               'sid': self.sid,
+                               'timezone': self.__timing['timezone'],},
                               user_property=('to', client_data['sid']))
         # return self.market_id, client_data['sid']
 
@@ -205,13 +206,20 @@ class Market:
         start_msg = {
             'time': start_time,
             'duration': duration,
-            'timezone': self.__timing['timezone'],
-            'last_round': self.__timing['last_round'],
-            'current_round': self.__timing['current_round'],
-            'last_settle': self.__timing['last_settle'],
-            'next_settle': self.__timing['next_settle'],
+            'close_steps': self.__timing['close_steps'],
             'market_info': market_info,
         }
+
+        # start_msg = {
+        #     'time': start_time,
+        #     'duration': duration,
+        #     'timezone': self.__timing['timezone'],
+        #     'last_round': self.__timing['last_round'],
+        #     'current_round': self.__timing['current_round'],
+        #     'last_settle': self.__timing['last_settle'],
+        #     'next_settle': self.__timing['next_settle'],
+        #     'market_info': market_info,
+        # }
         # await self.__client.emit('start_round', start_msg)
         self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg,
                               user_property=('to', '^all'),

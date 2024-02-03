@@ -227,17 +227,43 @@ class Participant:
     async def __update_time(self, message):
         # print(message)
         # synchronizes time with market
-        duration = message['duration']
         start_time = message['time']
+        duration = message['duration']
+        close_steps = message['close_steps']
+        end_time = start_time + duration
+        # last_round = self.__timing['current_round'].copy()
+
         self.__timing.update({
-            'timezone': message['timezone'],
-            'duration': duration,
-            'last_round': tuple(message['last_round']),
-            'current_round': tuple(message['current_round']),
-            'last_settle': tuple(message['last_settle']),
-            'next_settle': tuple(message['next_settle']),
+            'timezone': self.timezone,
+            # 'duration': duration,
+            'last_round': (start_time - duration, start_time),
+            'current_round': (start_time, end_time),
+            'last_settle': (start_time + duration * (close_steps - 1), start_time + duration * close_steps),
+            'next_settle': (start_time + duration * close_steps, start_time + duration * (close_steps + 1)),
             'stale_round': (start_time - duration * 10, start_time - duration * 9)
         })
+
+        # 'last_round': self.__timing['last_round'],
+        # 'current_round': self.__timing['current_round'],
+        # 'last_settle': self.__timing['last_settle'],
+        # 'next_settle': self.__timing['next_settle'],
+        #
+        # 'last_round': self.__timing['current_round'],
+        # 'current_round': (start_time, end_time),
+        # 'last_settle': (start_time + duration * (self.__timing['close_steps'] - 1),
+        #                 start_time + duration * self.__timing['close_steps']),
+        # 'next_settle': (start_time + duration * self.__timing['close_steps'],
+        #                 start_time + duration * (self.__timing['close_steps'] + 1))
+
+        # self.__timing.update({
+        #     'timezone': message['timezone'],
+        #     'duration': duration,
+        #     'last_round': tuple(message['last_round']),
+        #     'current_round': tuple(message['current_round']),
+        #     'last_settle': tuple(message['last_settle']),
+        #     'next_settle': tuple(message['next_settle']),
+        #     'stale_round': (start_time - duration * 10, start_time - duration * 9)
+        # })
 
     async def __update_market_info(self, message):
 
