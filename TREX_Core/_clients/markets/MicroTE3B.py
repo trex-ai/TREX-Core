@@ -281,13 +281,13 @@ class Market:
         # convert kwh price to token price
 
         entry = {
-            'uuid': cuid().generate(),
+            'uuid': cuid().generate(6),
             'participant_id': message['participant_id'],
             # 'session_id': message['session_id'],
             'price': message['price'],
             'time_submission': self.__time(),
             'quantity': message['quantity'],
-            'lock': False
+            # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
@@ -311,9 +311,9 @@ class Market:
         #     'quantity': entry['quantity'],
         #     'time_delivery': time_delivery
         # }
-        reply = {
-            'uuid': entry['uuid']
-        }
+        # reply = {
+        #     'uuid': entry['uuid']
+        # }
 
         # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
         #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
@@ -393,14 +393,14 @@ class Market:
         # convert kwh price to token price
 
         entry = {
-            'uuid': cuid().generate(),
+            'uuid': cuid().generate(6),
             'participant_id': message['participant_id'],
             # 'session_id': message['session_id'],
             'source': message['source'],
             'price': message['price'],
             'time_submission': self.__time(),
             'quantity': message['quantity'],
-            'lock': False
+            # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
@@ -417,14 +417,14 @@ class Market:
         # add open entry
         self.__open[time_delivery]['ask'].append(entry)
 
-        reply = {
-            'uuid': entry['uuid'],
-            'time_submission': entry['time_submission'],
-            'source': entry['source'],
-            'price': entry['price'],
-            'quantity': entry['quantity'],
-            'time_delivery': time_delivery
-        }
+        # reply = {
+        #     'uuid': entry['uuid'],
+        #     'time_submission': entry['time_submission'],
+        #     'source': entry['source'],
+        #     'price': entry['price'],
+        #     'quantity': entry['quantity'],
+        #     'time_delivery': time_delivery
+        # }
         # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
         #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
 
@@ -484,24 +484,24 @@ class Market:
             # if bid['source'] != ask['source']:
             #     continue
 
-            if bid['lock'] or ask['lock']:
-                continue
+            # if bid['lock'] or ask['lock']:
+            #     continue
 
             if bid['quantity'] <= 0 or ask['quantity'] <= 0:
                 continue
 
-            if bid['participant_id'] not in self.__participants:
-                bid['lock'] = True
-                continue
-
-            if ask['participant_id'] not in self.__participants:
-                ask['lock'] = True
-                continue
+            # if bid['participant_id'] not in self.__participants:
+            #     bid['lock'] = True
+            #     continue
+            #
+            # if ask['participant_id'] not in self.__participants:
+            #     ask['lock'] = True
+            #     continue
 
             # Settle highest price bids with lowest price asks
             await self.__settle(bid, ask, time_delivery)
 
-    async def __settle(self, bid: dict, ask: dict, time_delivery: tuple, settlement_method=None, locking=False):
+    async def __settle(self, bid: dict, ask: dict, time_delivery: tuple):
         """Performs settlement for bid/ask pairs found during the matching process.
 
         If bid/ask are valid, the bid/ask quantities are adjusted, a commitment record is created, and a settlement confirmation is sent to both participants.
@@ -538,12 +538,12 @@ class Market:
         if quantity <= 0:
             return
 
-        if locking:
-            # lock the bid and ask until confirmations are received
-            ask['lock'] = True
-            bid['lock'] = True
+        # if locking:
+        #     # lock the bid and ask until confirmations are received
+        #     ask['lock'] = True
+        #     bid['lock'] = True
 
-        commit_id = cuid().generate()
+        commit_id = cuid().generate(6)
         settlement_time = self.__timing['current_round'][1]
         settlement_price_sell = ask['price']
         settlement_price_buy = bid['price']
@@ -569,7 +569,7 @@ class Market:
             'seller_id': ask['participant_id'],
             'bid': bid,
             'buyer_id': bid['participant_id'],
-            'lock': locking
+            # 'lock': locking
         }
 
         # if buyer == 'grid' or seller == 'grid':
@@ -680,7 +680,7 @@ class Market:
 
                 # Extract settlements involving buyer and seller (that are not locked)
                 relevant_settlements = {k: v for (k, v) in settlements.items() if
-                                        settlements[k]['lock'] is False and
+                                        # settlements[k]['lock'] is False and
                                         settlements[k]['buyer_id'] == buyer and
                                         settlements[k]['seller_id'] == seller}
 
