@@ -442,7 +442,7 @@ class Participant:
                 'other': {
                     'solar': 0,  # solar from self
                     'bess': 0,  # bess from self
-                    'external': 0
+                    'ext': 0
                 }
             }
         }
@@ -484,40 +484,40 @@ class Participant:
         # use residual solar to charge battery (if battery was charged)
         if residual_solar > 0 and bess_charge > 0:
             if residual_solar <= bess_charge:
-                meter['consumption']['bess']['solar'] += residual_solar
+                meter['load']['bess']['solar'] += residual_solar
                 bess_charge -= residual_solar
                 residual_solar -= residual_solar
             elif residual_solar > bess_charge:
-                meter['consumption']['bess']['solar'] += bess_charge
+                meter['load']['bess']['solar'] += bess_charge
                 residual_solar -= bess_charge
                 bess_charge -= bess_charge
 
         # use residual solar for other loads
         if residual_solar > 0:
             if residual_solar <= residual_consumption:
-                meter['consumption']['other']['solar'] += residual_solar
+                meter['load']['other']['solar'] += residual_solar
                 residual_consumption -= residual_solar
                 residual_solar -= residual_solar
             elif residual_solar > residual_consumption:
-                meter['consumption']['other']['solar'] += residual_consumption
+                meter['load']['other']['solar'] += residual_consumption
                 residual_solar -= residual_consumption
                 residual_consumption -= residual_consumption
 
         # if battery was discharged
         if bess_discharge > 0:
             if bess_discharge <= residual_consumption:
-                meter['consumption']['other']['bess'] += bess_discharge
+                meter['load']['other']['bess'] += bess_discharge
                 residual_consumption -= bess_discharge
                 bess_discharge -= bess_discharge
             elif bess_discharge > residual_consumption:
-                meter['consumption']['other']['bess'] += residual_consumption
+                meter['load']['other']['bess'] += residual_consumption
                 bess_discharge -= residual_consumption
                 residual_consumption -= residual_consumption
 
         meter['generation']['solar'] += residual_solar
         meter['generation']['bess'] += bess_discharge
-        meter['consumption']['other']['external'] += residual_consumption
-        meter['consumption']['other']['external'] += bess_charge
+        meter['load']['other']['ext'] += residual_consumption
+        meter['load']['other']['ext'] += bess_charge
 
         return meter
 

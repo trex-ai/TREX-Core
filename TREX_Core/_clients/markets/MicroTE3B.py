@@ -697,13 +697,13 @@ class Market:
                         residual_generation = self.__participants[seller]['meter'][time_delivery]['generation'][
                             energy_source]
                         residual_consumption = \
-                            self.__participants[buyer]['meter'][time_delivery]['consumption']['other']['external']
+                            self.__participants[buyer]['meter'][time_delivery]['load']['other']['ext']
 
                         # check to see if physical generation is less than settled quantity
                         # extra_purchase = 0
                         deficit_generation = max(0, settled_quantity - residual_generation)
                         # Add on the amount that needed to be bought from the grid?
-                        # self.__participants[buyer]['meter']['consumption']['other']['external'] += deficit_generation
+                        # self.__participants[buyer]['meter']['consumption']['other']['ext'] += deficit_generation
                         # if not deficit_generation:
                         # check if settled quantity is greater than residual consumption
                         # if settled amount is greater than residual generation, then figure out
@@ -800,11 +800,11 @@ class Market:
                 continue
 
             # self consumption
-            for load in self.__participants[participant_id]['meter'][time_delivery]['consumption']:
-                for source in self.__participants[participant_id]['meter'][time_delivery]['consumption'][load]:
+            for load in self.__participants[participant_id]['meter'][time_delivery]['load']:
+                for source in self.__participants[participant_id]['meter'][time_delivery]['load'][load]:
                     if source in self.__participants[participant_id]['meter'][time_delivery]['generation']:
                         # assuming everything is perfectly sub metered
-                        quantity = self.__participants[participant_id]['meter'][time_delivery]['consumption'][load][
+                        quantity = self.__participants[participant_id]['meter'][time_delivery]['load'][load][
                             source]
 
                         if quantity > 0:
@@ -820,7 +820,7 @@ class Market:
                                 'time_consumption': time_delivery[1]
                             }
                             transactions.append(transaction_record.copy())
-                            self.__participants[participant_id]['meter'][time_delivery]['consumption'][load][
+                            self.__participants[participant_id]['meter'][time_delivery]['load'][load][
                                 source] -= quantity
 
             extra_transactions = {
@@ -851,8 +851,8 @@ class Market:
                         source] -= residual_generation
                     extra_transactions['grid']['sell'].append(transaction_record.copy())
             # buy residual consumption (other) from grid
-            residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['consumption']['other'][
-                'external']
+            residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
+                'ext']
             if residual_consumption > 0:
                 transaction_record = {
                     'quantity': residual_consumption,
@@ -866,8 +866,8 @@ class Market:
                     'time_consumption': time_delivery[1]
                 }
                 transactions.append(transaction_record.copy())
-                self.__participants[participant_id]['meter'][time_delivery]['consumption']['other'][
-                    'external'] -= residual_consumption
+                self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
+                    'ext'] -= residual_consumption
                 extra_transactions['grid']['buy'].append(transaction_record.copy())
 
             if participant_id in scrubbed_financial_transactions:
@@ -916,7 +916,7 @@ class Market:
             })
             physical_qty = physical_record['quantity']
             self.__participants[seller_id]['meter'][time_delivery]['generation'][energy_source] -= physical_qty
-            self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other']['external'] -= physical_qty
+            self.__participants[buyer_id]['meter'][time_delivery]['load']['other']['ext'] -= physical_qty
             physical_transactions.append(physical_record)
         # settled for more than consumed
         elif extra_purchase:
@@ -935,8 +935,8 @@ class Market:
             if physical_record['quantity']:
                 physical_qty = physical_record['quantity']
                 self.__participants[seller_id]['meter'][time_delivery]['generation'][energy_source] -= physical_qty
-                self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other'][
-                    'external'] -= physical_qty
+                self.__participants[buyer_id]['meter'][time_delivery]['load']['other'][
+                    'ext'] -= physical_qty
                 physical_transactions.append(physical_record)
 
         elif deficit_generation:
@@ -973,8 +973,8 @@ class Market:
                         'time_consumption': time_delivery[1]
                     }
                     self.__participants[seller_id]['meter'][time_delivery]['generation']['bess'] -= bess_compensation
-                    self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other'][
-                        'external'] -= bess_compensation
+                    self.__participants[buyer_id]['meter'][time_delivery]['load']['other'][
+                        'ext'] -= bess_compensation
                     deficit_generation -= bess_compensation
                     physical_transactions.append(compensation_record)
 
