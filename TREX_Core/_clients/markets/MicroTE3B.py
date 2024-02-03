@@ -875,7 +875,7 @@ class Market:
 
             # await self.__client.emit(event='return_extra_transactions',
             #                          data=extra_transactions)
-            topic = '/'.join([self.market_id, participant_id, 'return_extra_transactions'])
+            topic = '/'.join([self.market_id, participant_id, 'extra_transactions'])
             self.__client.publish(topic, extra_transactions,
                                   user_property=('to', self.__participants[participant_id]['sid']))
 

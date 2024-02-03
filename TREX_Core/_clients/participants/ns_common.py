@@ -24,7 +24,7 @@ class NSDefault:
             case 'settled':
                 # print('settled?')
                 await self.on_settled(payload)
-            case 'return_extra_transactions':
+            case 'extra_transactions':
                 await self.on_return_extra_transactions(payload)
             # simulation related events
             case 'is_participant_joined':
