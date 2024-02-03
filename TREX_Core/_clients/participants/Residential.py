@@ -268,13 +268,13 @@ class Participant:
     async def __update_market_info(self, message):
 
         market_info = {
-            str(self.__timing['current_round']): {
+            self.__timing['current_round']: {
                 'grid': {
                     'buy_price': message['current_round'][0],
                     'sell_price': message['current_round'][1]
                 }
             },
-            str(self.__timing['next_settle']): {
+            self.__timing['next_settle']: {
                 'grid': {
                     'buy_price': message['next_settle'][0],
                     'sell_price': message['next_settle'][0]
@@ -302,7 +302,7 @@ class Participant:
         await self.__update_time(message)
         await self.__update_market_info(message['market_info'])
         await self.__ledger.clear_history(self.__timing['stale_round'])
-        self.__market_info.pop(str(self.__timing['stale_round']), None)
+        self.__market_info.pop(self.__timing['stale_round'], None)
         # print(self.__market_info)
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
