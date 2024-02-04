@@ -177,12 +177,18 @@ class Participant:
         if time_delivery is None:
             time_delivery = self.__timing['next_settle']
 
-        bid_entry = {
-            'id': self.participant_id,
-            'quantity': kwargs['quantity'],  # Wh
-            'price': kwargs['price'],  # $/kWh
-            'time_delivery': time_delivery
-        }
+        # bid_entry = {
+        #     'id': self.participant_id,
+        #     'quantity': kwargs['quantity'],  # Wh
+        #     'price': kwargs['price'],  # $/kWh
+        #     'time_delivery': time_delivery
+        # }
+
+        bid_entry = [self.participant_id,
+                     kwargs['quantity'],  # Wh
+                     kwargs['price'],  # $/kWh
+                     kwargs['source'],
+                     time_delivery]
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
         # await self.__client.emit('bid', bid_entry)
         self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry,
@@ -200,13 +206,19 @@ class Participant:
         if time_delivery is None:
             time_delivery = self.__timing['next_settle']
 
-        ask_entry = {
-            'id': self.participant_id,
-            'quantity': kwargs['quantity'],  # Wh
-            'price': kwargs['price'],  # $/kWh
-            'source': kwargs['source'],
-            'time_delivery': time_delivery
-        }
+        # ask_entry = {
+        #     'id': self.participant_id,
+        #     'quantity': kwargs['quantity'],  # Wh
+        #     'price': kwargs['price'],  # $/kWh
+        #     'source': kwargs['source'],
+        #     'time_delivery': time_delivery
+        # }
+
+        ask_entry = [self.participant_id,
+                     kwargs['quantity'],  # Wh
+                     kwargs['price'],  # $/kWh
+                     kwargs['source'],
+                     time_delivery]
         # await self.__client.emit('ask', ask_entry)
         self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry,
                               user_property=('to', self.market_sid))

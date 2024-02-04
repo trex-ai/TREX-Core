@@ -280,18 +280,29 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
+        # entry = {
+        #     'uuid': cuid().generate(6),
+        #     'participant_id': message['id'],
+        #     # 'session_id': message['session_id'],
+        #     'price': message['price'],
+        #     'time_submission': self.__time(),
+        #     'quantity': message['quantity'],
+        #     # 'lock': False
+        # }
+
         entry = {
             'uuid': cuid().generate(6),
-            'participant_id': message['id'],
-            # 'session_id': message['session_id'],
-            'price': message['price'],
+            'participant_id': message[0],
+            'quantity': message[1],
+            'price': message[2],
+            'source': message[3],
             'time_submission': self.__time(),
-            'quantity': message['quantity'],
+
             # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
-        time_delivery = tuple(message['time_delivery'])
+        time_delivery = tuple(message[4])
         if time_delivery not in self.__open:
             self.__open[time_delivery] = {
                 'bid': []
@@ -392,19 +403,30 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
+        # entry = {
+        #     'uuid': cuid().generate(6),
+        #     'participant_id': message['id'],
+        #     # 'session_id': message['session_id'],
+        #     'source': message['source'],
+        #     'price': message['price'],
+        #     'time_submission': self.__time(),
+        #     'quantity': message['quantity'],
+        #     # 'lock': False
+        # }
+
         entry = {
             'uuid': cuid().generate(6),
-            'participant_id': message['id'],
-            # 'session_id': message['session_id'],
-            'source': message['source'],
-            'price': message['price'],
+            'participant_id': message[0],
+            'quantity': message[1],
+            'price': message[2],
+            'source': message[3],
             'time_submission': self.__time(),
-            'quantity': message['quantity'],
+
             # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
-        time_delivery = tuple(message['time_delivery'])
+        time_delivery = tuple(message[4])
         if time_delivery not in self.__open:
             self.__open[time_delivery] = {
                 'ask': []
