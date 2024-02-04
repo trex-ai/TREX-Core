@@ -13,7 +13,7 @@ class NSDefault:
 
         match topic_event:
             # market related events
-            case 'update_market_info':
+            case 'market_info':
                 await self.on_update_market_info(payload)
             case 'start_round':
                 await self.on_start_round(payload)
@@ -50,7 +50,7 @@ class NSDefault:
 
     async def on_update_market_info(self, message):
         client_data = json.loads(message)
-        if client_data['market_id'] == self.participant.market_id:
+        if client_data['id'] == self.participant.market_id:
             self.participant.market_sid = client_data['sid']
             self.participant.timezone = client_data['timezone']
             self.participant.market_connected = True

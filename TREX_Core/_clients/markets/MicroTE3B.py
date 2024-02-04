@@ -143,8 +143,8 @@ class Market:
         # self.__clients[client_data['sid']] = client_data['id']
         self.__status['active_participants'] = min(self.__status['active_participants'] + 1,
                                                    len(self.__participants))
-        self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']),
-                              {'market_id': self.market_id,
+        self.__client.publish('/'.join([self.market_id, client_data['id'], 'market_info']),
+                              {'id': self.market_id,
                                'sid': self.sid,
                                'timezone': self.__timing['timezone'],},
                               user_property=('to', client_data['sid']))
@@ -282,7 +282,7 @@ class Market:
 
         entry = {
             'uuid': cuid().generate(6),
-            'participant_id': message['participant_id'],
+            'participant_id': message['id'],
             # 'session_id': message['session_id'],
             'price': message['price'],
             'time_submission': self.__time(),
@@ -394,7 +394,7 @@ class Market:
 
         entry = {
             'uuid': cuid().generate(6),
-            'participant_id': message['participant_id'],
+            'participant_id': message['id'],
             # 'session_id': message['session_id'],
             'source': message['source'],
             'price': message['price'],
