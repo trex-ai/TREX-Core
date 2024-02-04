@@ -3,7 +3,9 @@ import datetime
 import time
 import os
 import signal
-import dataset
+# import dataset
+from collections import deque
+from statistics import mean
 from sqlalchemy_utils import database_exists
 
 # from _clients.sim_controller.training_controller import TrainingController
@@ -64,6 +66,7 @@ class Controller:
         self.__current_step = 0
         self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
         self.__total_steps = self.__generations * self.__end_step
+        self.__eta_buffer = deque(maxlen=10)
 
         self.make_participant_tracker()
 
@@ -364,11 +367,12 @@ class Controller:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start
+            self.__eta_buffer.append(step_time)
             # total_steps = self.__generations * self.__end_step
             # elapsed_steps_gen = self.__current_step +
             elapsed_steps = self.__current_step + self.__generation * self.__end_step
             steps_to_go = self.__total_steps - elapsed_steps
-            eta_s = steps_to_go * step_time / report_steps
+            eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
 
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
@@ -409,7 +413,7 @@ class Controller:
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time()
+            await self.__print_step_time(1)
             self.__current_step += 1
 
             message = {
