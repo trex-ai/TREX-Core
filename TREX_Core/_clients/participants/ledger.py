@@ -20,7 +20,7 @@ class Ledger:
             confirmation ([type]): [description]
         """
 
-        entry = self.bids_hold.pop(entry_id)
+        entry = self.bids_hold.pop(entry_id, None)
         if not entry:
             return
         time_delivery = entry.pop('time_delivery')
@@ -35,7 +35,7 @@ class Ledger:
             confirmation ([type]): [description]
         """
 
-        entry = self.asks_hold.pop(entry_id)
+        entry = self.asks_hold.pop(entry_id, None)
         if not entry:
             return
         time_delivery = entry.pop('time_delivery')
