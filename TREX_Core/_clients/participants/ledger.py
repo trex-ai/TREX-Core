@@ -52,44 +52,48 @@ class Ledger:
         # print(confirmation, self.bids, self.asks)
         # todo: add validity checks, and feedback messages for invalid settlements
         # print(confirmation)
-        time_delivery = tuple(confirmation['time_delivery'])
+
+        commit_id = confirmation[0]
+        entry_id = confirmation[1]
+        source = confirmation[2]
+        quantity = confirmation[3]
+        time_delivery = tuple(confirmation[4])
+
+        if time_delivery not in self.settled:
+            self.settled[time_delivery] = {'bids': {}, 'asks': {}}
         # if 'buyer_id' in confirmation and confirmation['buyer_id'] == self.__participant_id:
             # make sure settled bid exists in local record as well
-        if time_delivery in self.bids and confirmation['id'] in self.bids[time_delivery]:
+        entry_list = []
+        if time_delivery in self.bids and entry_id in self.bids[time_delivery]:
+            entry_list = ['bids', self.bids]
+        elif time_delivery in self.asks and entry_id in self.asks[time_delivery]:
+            entry_list = ['asks', self.asks]
             # print(confirmation)
-            if time_delivery not in self.settled:
-                self.settled[time_delivery] = {'bids': {},
-                                               'asks': {}}
-            self.settled[time_delivery]['bids'][confirmation['id']] = {
-                'source': confirmation['source'],
-                'price': self.bids[time_delivery][confirmation['id']]['price'],
-                # 'price': confirmation['price'],
-                'quantity': confirmation['quantity']
-            }
-            # update local bid entry
-            self.bids[time_delivery][confirmation['id']]['quantity'] -= confirmation['quantity']
-            if self.bids[time_delivery][confirmation['id']]['quantity'] <= 0:
-                self.bids[time_delivery].pop(confirmation['id'])
+
+        self.settled[time_delivery][entry_list[0]][commit_id] = {
+            'source': source,
+            'price': entry_list[1][time_delivery][entry_id]['price'],
+            'quantity': quantity
+        }
+        # update local bid entry
+        entry_list[1][time_delivery][entry_id]['quantity'] -= quantity
+        if entry_list[1][time_delivery][entry_id]['quantity'] <= 0:
+            entry_list[1][time_delivery].pop(entry_id)
 
         # elif 'seller_id' in confirmation and confirmation['seller_id'] == self.__participant_id:
         #     print(confirmation)
-        elif time_delivery in self.asks and confirmation['id'] in self.asks[time_delivery]:
-
-            if time_delivery not in self.settled:
-                self.settled[time_delivery] = {'bids': {},
-                                               'asks': {}}
-
-            self.settled[time_delivery]['asks'][confirmation['id']] = {
-                'source': confirmation['source'],
-                'price': self.asks[time_delivery][confirmation['id']]['price'],
-                # 'price': confirmation['price'],
-                'quantity': confirmation['quantity']
-            }
-            # update local ask entry
-            self.asks[time_delivery][confirmation['id']]['quantity'] -= confirmation['quantity']
-            if self.asks[time_delivery][confirmation['id']]['quantity'] <= 0:
-                self.asks[time_delivery].pop(confirmation['id'])
-        return confirmation['commit_id']
+        # elif time_delivery in self.asks and confirmation['id'] in self.asks[time_delivery]:
+        #     self.settled[time_delivery]['asks'][confirmation['id']] = {
+        #         'source': confirmation['source'],
+        #         'price': self.asks[time_delivery][confirmation['id']]['price'],
+        #         # 'price': confirmation['price'],
+        #         'quantity': confirmation['quantity']
+        #     }
+        #     # update local ask entry
+        #     self.asks[time_delivery][confirmation['id']]['quantity'] -= confirmation['quantity']
+        #     if self.asks[time_delivery][confirmation['id']]['quantity'] <= 0:
+        #         self.asks[time_delivery].pop(confirmation['id'])
+        return commit_id
 
     async def get_settled_info(self, time_interval, **kwargs):
         """Summarizes ledger data for a certain time interval

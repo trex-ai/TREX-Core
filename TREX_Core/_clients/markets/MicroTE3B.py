@@ -613,23 +613,21 @@ class Market:
         # if buyer == 'grid' or seller == 'grid':
         # if buy_price is not None and sell_price is not None:
         #     return
-        buyer_message = {
-            'commit_id': commit_id,
-            'id': bid['id'],
-            'source': ask['source'],
-            'quantity': quantity,
-            # 'buy_price': settlement_price_buy,
-            'time_delivery': time_delivery
-        }
+        buyer_message = [
+            commit_id,
+            bid['id'],
+            ask['source'],
+            quantity,
+            time_delivery
+        ]
 
-        seller_message = {
-            'commit_id': commit_id,
-            'id': ask['id'],
-            'source': ask['source'],
-            'quantity': quantity,
-            # 'sell_price': settlement_price_sell,
-            'time_delivery': time_delivery
-        }
+        seller_message = [
+            commit_id,
+            ask['id'],
+            ask['source'],
+            quantity,
+            time_delivery
+        ]
         # self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
         # self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
         self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message,
