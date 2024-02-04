@@ -63,6 +63,7 @@ class Controller:
 
         self.__current_step = 0
         self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
+        self.__total_steps = self.__generations * self.__end_step
 
         self.make_participant_tracker()
 
@@ -363,10 +364,18 @@ class Controller:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start
-            eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
+            # total_steps = self.__generations * self.__end_step
+            # elapsed_steps_gen = self.__current_step +
+            elapsed_steps = self.__current_step + self.__generation * self.__end_step
+            steps_to_go = self.__total_steps - elapsed_steps
+            eta_s = steps_to_go * step_time / report_steps
+
+
+            # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', generation', self.__generation, '/', self.__generations,
-                  ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
+                  ', generation: ', self.__generation, '/', self.__generations,
+                  ', step: ', self.__current_step, '/', self.__end_step)
+                  # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 0), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
             self.timer_start = datetime.datetime.now().timestamp()
 
