@@ -50,7 +50,6 @@ class NSDefault:
 
     async def on_update_market_info(self, message):
         client_data = json.loads(message)
-        print(client_data)
         if client_data['id'] == self.participant.market_id:
             self.participant.market_sid = client_data['sid']
             self.participant.timezone = client_data['timezone']
