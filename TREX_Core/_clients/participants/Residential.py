@@ -402,10 +402,7 @@ class Participant:
 
         self.__meter = await self.__allocate_energy(time_interval)
         # await self.__client.emit('meter_data', self.__meter)
-        message = {
-            'participant_id': self.participant_id,
-            'meter': self.__meter
-        }
+        message = [self.participant_id, self.__meter]
         self.__client.publish('/'.join([self.market_id, 'meter']), message,
                               user_property=('to', self.market_sid),
                               topic_alias=5)
