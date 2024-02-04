@@ -178,7 +178,7 @@ class Participant:
             time_delivery = self.__timing['next_settle']
 
         bid_entry = {
-            'participant_id': self.participant_id,
+            'id': self.participant_id,
             'quantity': kwargs['quantity'],  # Wh
             'price': kwargs['price'],  # $/kWh
             'time_delivery': time_delivery
@@ -201,7 +201,7 @@ class Participant:
             time_delivery = self.__timing['next_settle']
 
         ask_entry = {
-            'participant_id': self.participant_id,
+            'id': self.participant_id,
             'quantity': kwargs['quantity'],  # Wh
             'price': kwargs['price'],  # $/kWh
             'source': kwargs['source'],
