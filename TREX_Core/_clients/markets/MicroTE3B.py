@@ -696,8 +696,9 @@ class Market:
         # TODO: add data validation later
         # print(message)
         participant_id = message[0]
-        meter = message[1]
-        time_delivery = tuple(meter['time_interval'])
+        time_delivery = tuple(message[1])
+        meter = message[2]
+
         self.__participants[participant_id]['meter'][time_delivery] = meter
         self.__status['round_metered'] += 1
 
