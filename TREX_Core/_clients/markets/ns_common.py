@@ -68,7 +68,7 @@ class NSDefault():
                 await self.on_ask(payload)
             case 'settlement_delivered':
                 await self.on_settlement_delivered(payload)
-            case 'meter_data':
+            case 'meter':
                 # print("METER DATA")
                 await self.on_meter_data(payload)
             # simulation related events

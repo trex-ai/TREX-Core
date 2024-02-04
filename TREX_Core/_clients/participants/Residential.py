@@ -406,7 +406,7 @@ class Participant:
             'participant_id': self.participant_id,
             'meter': self.__meter
         }
-        self.__client.publish('/'.join([self.market_id, 'meter_data']), message,
+        self.__client.publish('/'.join([self.market_id, 'meter']), message,
                               user_property=('to', self.market_sid),
                               topic_alias=5)
         return True
