@@ -63,22 +63,25 @@ class Ledger:
             self.settled[time_delivery] = {'bids': {}, 'asks': {}}
         # if 'buyer_id' in confirmation and confirmation['buyer_id'] == self.__participant_id:
             # make sure settled bid exists in local record as well
-        entry_list = []
         if time_delivery in self.bids and entry_id in self.bids[time_delivery]:
-            entry_list = ['bids', self.bids]
+            list_name = 'bids'
+            entry_list = self.bids
         elif time_delivery in self.asks and entry_id in self.asks[time_delivery]:
-            entry_list = ['asks', self.asks]
+            list_name = 'asks'
+            entry_list = self.asks
             # print(confirmation)
+        else:
+            return
 
-        self.settled[time_delivery][entry_list[0]][commit_id] = {
+        self.settled[time_delivery][list_name][commit_id] = {
             'source': source,
-            'price': entry_list[1][time_delivery][entry_id]['price'],
+            'price': entry_list[time_delivery][entry_id]['price'],
             'quantity': quantity
         }
         # update local bid entry
-        entry_list[1][time_delivery][entry_id]['quantity'] -= quantity
-        if entry_list[1][time_delivery][entry_id]['quantity'] <= 0:
-            entry_list[1][time_delivery].pop(entry_id)
+        entry_list[time_delivery][entry_id]['quantity'] -= quantity
+        if entry_list[time_delivery][entry_id]['quantity'] <= 0:
+            entry_list[time_delivery].pop(entry_id)
 
         # elif 'seller_id' in confirmation and confirmation['seller_id'] == self.__participant_id:
         #     print(confirmation)
