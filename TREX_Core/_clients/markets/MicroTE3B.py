@@ -270,9 +270,13 @@ class Market:
                 - 'time_delivery'
 
         """
+        entry_id = message[0]
+        participant_id = message[1]
+        quantity = message[2]
+        price = message[3]
 
         # entry validity check step 1: quantity must be positive
-        if message[1] <= 0:
+        if quantity <= 0:
             # raise Exception('quantity must be a positive integer')
             return
             # return message['participant_id'], {'uuid': None}
@@ -291,11 +295,10 @@ class Market:
         # }
 
         entry = {
-            'uuid': cuid().generate(6),
-            'participant_id': message[0],
-            'quantity': message[1],
-            'price': message[2],
-            'source': message[3],
+            'id': entry_id,
+            'participant_id': participant_id,
+            'quantity': quantity,
+            'price': price,
             'time_submission': self.__time(),
 
             # 'lock': False
@@ -315,19 +318,19 @@ class Market:
         # add open entry
         self.__open[time_delivery]['bid'].append(entry)
 
-        # reply = {
-        #     'uuid': entry['uuid'],
-        #     'time_submission': entry['time_submission'],
-        #     'price': entry['price'],
-        #     'quantity': entry['quantity'],
-        #     'time_delivery': time_delivery
-        # }
+        # reply = [
+        #     entry['id'],
+        #     entry['time_submission'],
+        #     entry['price'],
+        #     entry['quantity'],
+        #     time_delivery
+        # ]
         # reply = {
         #     'uuid': entry['uuid']
         # }
 
-        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
-        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
+        self.__client.publish('/'.join([self.market_id, participant_id, 'bid_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -386,15 +389,19 @@ class Market:
         # if entry_type not in {'bid', 'ask'}:
         #     # raise Exception('invalid action')
         #     return message['session_id'], {'uuid': None}
-
+        entry_id = message[0]
+        participant_id = message[1]
+        quantity = message[2]
+        price = message[3]
+        source = message[5]
         # entry validity check step 1: quantity must be positive
-        if message[1] <= 0:
+        if quantity <= 0:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
             return
 
         # entry validity check step 2: source must be classifiable
-        source_type = await self.__classify_source(message[3])
+        source_type = await self.__classify_source(source)
         if not source_type:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
@@ -415,11 +422,11 @@ class Market:
         # }
 
         entry = {
-            'uuid': cuid().generate(6),
-            'participant_id': message[0],
-            'quantity': message[1],
-            'price': message[2],
-            'source': message[3],
+            'id': entry_id,
+            'participant_id': participant_id,
+            'quantity': quantity,
+            'price': price,
+            'source': source,
             'time_submission': self.__time(),
 
             # 'lock': False
@@ -447,8 +454,17 @@ class Market:
         #     'quantity': entry['quantity'],
         #     'time_delivery': time_delivery
         # }
-        # self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
-        #                       user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # reply = entry_id
+        # reply = [
+        #     entry['id'],
+        #     entry['time_submission'],
+        #     entry['price'],
+        #     entry['quantity'],
+        #     time_delivery,
+        #     entry['source']
+        # ]
+        self.__client.publish('/'.join([self.market_id, participant_id, 'ask_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
 
         # return message['session_id'], reply
 
@@ -599,19 +615,19 @@ class Market:
         #     return
         buyer_message = {
             'commit_id': commit_id,
-            # 'bid_id': bid['uuid'],
+            'id': bid['id'],
             'source': ask['source'],
             'quantity': quantity,
-            'buy_price': settlement_price_buy,
+            # 'buy_price': settlement_price_buy,
             'time_delivery': time_delivery
         }
 
         seller_message = {
             'commit_id': commit_id,
-            # 'ask_id': ask['uuid'],
+            'id': ask['id'],
             'source': ask['source'],
             'quantity': quantity,
-            'sell_price': settlement_price_sell,
+            # 'sell_price': settlement_price_sell,
             'time_delivery': time_delivery
         }
         # self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)

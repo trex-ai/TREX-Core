@@ -9,6 +9,7 @@ import os
 import signal
 from TREX_Core._clients.participants import ledger
 from TREX_Core._utils import db_utils, utils
+from cuid2 import Cuid
 
 
 class Participant:
@@ -183,12 +184,18 @@ class Participant:
         #     'price': kwargs['price'],  # $/kWh
         #     'time_delivery': time_delivery
         # }
-
-        bid_entry = [self.participant_id,
+        entry_id = Cuid().generate(6)
+        bid_entry = [entry_id,
+                     self.participant_id,
                      kwargs['quantity'],  # Wh
                      kwargs['price'],  # $/kWh
-                     kwargs['source'],
                      time_delivery]
+
+        self.__ledger.bids_hold[entry_id] = {
+            'price': kwargs['price'],
+            'quantity': kwargs['quantity'],
+            'time_delivery': time_delivery,
+        }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
         # await self.__client.emit('bid', bid_entry)
         self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry,
@@ -213,13 +220,21 @@ class Participant:
         #     'source': kwargs['source'],
         #     'time_delivery': time_delivery
         # }
+        entry_id = Cuid().generate(6)
+        ask_entry = [
+            entry_id,
+            self.participant_id,
+            kwargs['quantity'],  # Wh
+            kwargs['price'],  # $/kWh
+            time_delivery,
+            kwargs['source']]
 
-        ask_entry = [self.participant_id,
-                     kwargs['quantity'],  # Wh
-                     kwargs['price'],  # $/kWh
-                     kwargs['source'],
-                     time_delivery]
-        # await self.__client.emit('ask', ask_entry)
+        self.__ledger.asks_hold[entry_id] = {
+            'source': kwargs['source'],
+            'price': kwargs['price'],
+            'quantity': kwargs['quantity'],
+            'time_delivery': time_delivery
+        }
         self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry,
                               user_property=('to', self.market_sid))
 
@@ -230,6 +245,7 @@ class Participant:
         await self.__ledger.bid_success(message)
 
     async def settle_success(self, message):
+        # print(message)
         commit_id = await self.__ledger.settle_success(message)
         if commit_id == message['commit_id']:
             self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), {self.participant_id: commit_id},

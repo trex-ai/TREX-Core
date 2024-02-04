@@ -17,9 +17,9 @@ class NSDefault:
                 await self.on_update_market_info(payload)
             case 'start_round':
                 await self.on_start_round(payload)
-            case 'ask_success':
+            case 'ask_ack':
                 await self.on_ask_success(payload)
-            case 'bid_success':
+            case 'bid_ack':
                 await self.on_bid_success(payload)
             case 'settled':
                 # print('settled?')
@@ -62,11 +62,11 @@ class NSDefault:
         await self.participant.start_round(message)
 
     async def on_ask_success(self, message):
-        message = json.loads(message)
+        # message = json.loads(message)
         await self.participant.ask_success(message)
 
     async def on_bid_success(self, message):
-        message = json.loads(message)
+        # message = json.loads(message)
         await self.participant.bid_success(message)
 
     async def on_settled(self, message):
