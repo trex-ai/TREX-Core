@@ -272,7 +272,7 @@ class Market:
         """
 
         # entry validity check step 1: quantity must be positive
-        if message['quantity'] <= 0:
+        if message[1] <= 0:
             # raise Exception('quantity must be a positive integer')
             return
             # return message['participant_id'], {'uuid': None}
@@ -388,13 +388,13 @@ class Market:
         #     return message['session_id'], {'uuid': None}
 
         # entry validity check step 1: quantity must be positive
-        if message['quantity'] <= 0:
+        if message[1] <= 0:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
             return
 
         # entry validity check step 2: source must be classifiable
-        source_type = await self.__classify_source(message['source'])
+        source_type = await self.__classify_source(message[3])
         if not source_type:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
