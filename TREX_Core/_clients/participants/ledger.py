@@ -52,9 +52,15 @@ class Ledger:
         # print(confirmation, self.bids, self.asks)
         # todo: add validity checks, and feedback messages for invalid settlements
         # print(confirmation)
-
         commit_id = confirmation[0]
         entry_id = confirmation[1]
+
+        # print(confirmation, self.asks_hold, self.bids_hold)
+        if entry_id in self.asks_hold:
+            await self.ask_success(entry_id)
+        elif entry_id in self.bids_hold:
+            await self.bid_success(entry_id)
+
         source = confirmation[2]
         quantity = confirmation[3]
         time_delivery = tuple(confirmation[4])
@@ -157,8 +163,8 @@ class Ledger:
         return transactions
     
     async def clear_history(self, time_interval):
-        self.bids_hold.clear()
-        self.asks_hold.clear()
+        # self.bids_hold.clear()
+        # self.asks_hold.clear()
         self.bids.pop(time_interval, None)
         self.asks.pop(time_interval, None)
         self.settled.pop(time_interval, None)
