@@ -57,7 +57,9 @@ class Market:
             # settle takes 1 step after bid/ask submision
         }
 
-        self.__db = {}
+        self.__db = dict()
+        self.__db['path'] = kwargs['output_db']
+        # self.__output_db = kwargs['output_db']
         self.save_transactions = True
         self.market_id = market_id
         self.sid = kwargs.get('sid', market_id)
@@ -97,20 +99,22 @@ class Market:
         """
         self.__timing['mode'] = mode
 
-    async def open_db(self, db_string, table_name):
+    async def open_db(self, table_name, db_string=None):
         if not self.save_transactions:
             return
+        if not db_string:
+            db_string = self.__db['path']
+        # self.__db['path'] = db_string
+        # self.__db['table_name'] = table_name
 
-        self.__db['path'] = db_string
-        self.__db['table_name'] = table_name
-
-        if 'table' not in self.__db or self.__db['table'] is None:
-            table_name = self.__db.pop('table_name') + '_market'
-            await db_utils.create_table(
-                db_string=db_string,
-                table_type='market2',
-                table_name=table_name)
-            self.__db['table'] = db_utils.get_table(db_string, table_name)
+        # if 'table' not in self.__db or self.__db['table'] is None:
+        # table_name = self.__db.pop('table_name') + '_market'
+        table_name += '_market'
+        await db_utils.create_table(
+            db_string=db_string,
+            table_type='market2',
+            table_name=table_name)
+        self.__db['table'] = db_utils.get_table(db_string, table_name)
 
     # async def register(self):
     #     """Function that attempts to register Market client with socket.io server in the market namespace
@@ -913,6 +917,8 @@ class Market:
 
             # await self.__client.emit(event='return_extra_transactions',
             #                          data=extra_transactions)
+
+            # TODO: do not send extra if there is none
             topic = '/'.join([self.market_id, participant_id, 'extra_transaction'])
             self.__client.publish(topic, extra_transactions,
                                   user_property=('to', self.__participants[participant_id]['sid']))
@@ -1196,7 +1202,7 @@ class Market:
         # raise SystemExit
 
     async def reset_market(self):
-        self.__db.clear()
+        # self.__db.clear()
         self.transactions_count = 0
         self.__open.clear()
         self.__settled.clear()

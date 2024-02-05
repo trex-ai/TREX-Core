@@ -397,23 +397,23 @@ class Controller:
         # Beginning new generation
         if self.__current_step == 0:
             print('STARTING SIMULATION')
-            message = {
-                'generation': self.__generation,
-                'db_string': self.__config['study']['output_database'],
-                # 'input_path': self.status['input_path'],
-                # 'output_path': self.status['output_path'],
-                'market_id': self.__config['market']['id'],
-            }
-            if hasattr(self, 'hyperparameters_idx'):
-                message["market_id"] += "-hps" + str(self.hyperparameters_idx)
+            # message = {
+            #     'generation': self.__generation
+            #     # 'db_string': self.__config['study']['output_database'],
+            #     # 'input_path': self.status['input_path'],
+            #     # 'output_path': self.status['output_path'],
+            #     # 'market_id': self.__config['market']['id'],
+            # }
+            # if hasattr(self, 'hyperparameters_idx'):
+            #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__generations,
                                   user_property=('to', '^all'))
             self.status['generation_ended'] = False
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time(1)
+            await self.__print_step_time()
             self.__current_step += 1
 
             message = {

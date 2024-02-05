@@ -126,9 +126,9 @@ class NSDefault():
         await self.market.step(message['duration'], sim_params=message)
 
     async def on_start_generation(self, message):
-        message = json.loads(message)
-        table_name = str(message['generation']) + '_' + message['market_id']
-        await self.market.open_db(message['db_string'], table_name)
+        # message = json.loads(message)
+        table_name = str(message) + '_' + self.market.market_id
+        await self.market.open_db(table_name)
 
     async def on_end_generation(self, message):
         await self.market.end_sim_generation()
