@@ -256,9 +256,9 @@ class Participant:
     async def __update_time(self, message):
         # print(message)
         # synchronizes time with market
-        start_time = message['time']
-        duration = message['duration']
-        close_steps = message['close_steps']
+        start_time = message[0]
+        duration = message[1]
+        close_steps = message[2]
         end_time = start_time + duration
         # last_round = self.__timing['current_round'].copy()
 
@@ -328,8 +328,9 @@ class Participant:
             message ([type]): [description]
         """
         # start of current time step
+        market_info = message[3]
         await self.__update_time(message)
-        await self.__update_market_info(message['market_info'])
+        await self.__update_market_info(market_info)
         await self.__ledger.clear_history(self.__timing['stale_round'])
         self.__market_info.pop(self.__timing['stale_round'], None)
         # print(self.__market_info)

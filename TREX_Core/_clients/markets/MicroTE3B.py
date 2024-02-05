@@ -207,12 +207,18 @@ class Market:
             'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
         }
 
-        start_msg = {
-            'time': start_time,
-            'duration': duration,
-            'close_steps': self.__timing['close_steps'],
-            'market_info': market_info,
-        }
+        # start_msg = {
+        #     'time': start_time,
+        #     'duration': duration,
+        #     'close_steps': self.__timing['close_steps'],
+        #     'market_info': market_info,
+        # }
+        start_msg = [
+            start_time,
+            duration,
+            self.__timing['close_steps'],
+            market_info
+        ]
 
         # start_msg = {
         #     'time': start_time,
