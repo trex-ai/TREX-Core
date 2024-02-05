@@ -68,7 +68,8 @@ class Ledger:
             entry_list = ['bids', self.bids]
         elif time_delivery in self.asks and entry_id in self.asks[time_delivery]:
             entry_list = ['asks', self.asks]
-            # print(confirmation)
+        else:
+            print(confirmation)
 
         self.settled[time_delivery][entry_list[0]][commit_id] = {
             'source': source,
@@ -156,14 +157,14 @@ class Ledger:
         return transactions
     
     async def clear_history(self, time_interval):
+        self.bids_hold.clear()
+        self.asks_hold.clear()
         self.bids.pop(time_interval, None)
         self.asks.pop(time_interval, None)
         self.settled.pop(time_interval, None)
         self.extra.pop(time_interval, None)
 
     def reset(self):
-        self.bids_hold.clear()
-        self.asks_hold.clear()
         self.bids.clear()
         self.asks.clear()
         self.settled.clear()
