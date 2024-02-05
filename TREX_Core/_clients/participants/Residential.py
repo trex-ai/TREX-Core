@@ -192,7 +192,7 @@ class Participant:
                 'time_purchase': time_delivery[1],
                 'time_consumption': time_delivery[1]
             }
-            grid_transactions['sell'][idx] = transaction_record.copy()
+            grid_transactions['buy'][idx] = transaction_record.copy()
 
         self.__ledger.extra[time_delivery] = message
         self.__extra_transactions.clear()
