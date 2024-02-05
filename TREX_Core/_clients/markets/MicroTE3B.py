@@ -897,7 +897,15 @@ class Market:
                     transactions.append(transaction_record.copy())
                     self.__participants[participant_id]['meter'][time_delivery]['generation'][
                         source] -= residual_generation
-                    extra_transactions['grid']['sell'].append(transaction_record.copy())
+
+                    simple_transaction_record = [
+                        residual_generation,  # quantity
+                        self.__grid.sell_price(),  # price
+                        source
+                    ]
+
+                    extra_transactions['grid']['sell'].append(simple_transaction_record.copy())
+                    # extra_transactions['grid']['sell'].append(transaction_record.copy())
             # buy residual consumption (other) from grid
             residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
                 'ext']
@@ -916,7 +924,13 @@ class Market:
                 transactions.append(transaction_record.copy())
                 self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
                     'ext'] -= residual_consumption
-                extra_transactions['grid']['buy'].append(transaction_record.copy())
+
+                simple_transaction_record = [
+                    residual_consumption,   # quantity
+                    self.__grid.buy_price()     # price
+                ]
+
+                extra_transactions['grid']['buy'].append(simple_transaction_record)
 
             if participant_id in scrubbed_financial_transactions:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]
@@ -925,9 +939,12 @@ class Market:
             #                          data=extra_transactions)
 
             # TODO: do not send extra if there is none
-            topic = '/'.join([self.market_id, participant_id, 'extra_transaction'])
-            self.__client.publish(topic, extra_transactions,
-                                  user_property=('to', self.__participants[participant_id]['sid']))
+            if (len(extra_transactions['grid']['buy']) > 0
+                    or len(extra_transactions['grid']['sell']) > 0
+                    or 'financial' in extra_transactions):
+                topic = '/'.join([self.market_id, participant_id, 'extra_transaction'])
+                self.__client.publish(topic, extra_transactions,
+                                      user_property=('to', self.__participants[participant_id]['sid']))
 
         if self.save_transactions:
             self.__transactions.extend(transactions)
