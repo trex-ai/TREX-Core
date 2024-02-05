@@ -897,7 +897,15 @@ class Market:
                     transactions.append(transaction_record.copy())
                     self.__participants[participant_id]['meter'][time_delivery]['generation'][
                         source] -= residual_generation
-                    extra_transactions['grid']['sell'].append(transaction_record.copy())
+
+                    simple_transaction_record = [
+                        residual_generation,  # quantity
+                        self.__grid.sell_price(),  # price
+                        source
+                    ]
+
+                    extra_transactions['grid']['sell'].append(simple_transaction_record.copy())
+                    # extra_transactions['grid']['sell'].append(transaction_record.copy())
             # buy residual consumption (other) from grid
             residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
                 'ext']
@@ -916,7 +924,13 @@ class Market:
                 transactions.append(transaction_record.copy())
                 self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
                     'ext'] -= residual_consumption
-                extra_transactions['grid']['buy'].append(transaction_record.copy())
+
+                simple_transaction_record = [
+                    residual_consumption,   # quantity
+                    self.__grid.buy_price()     # price
+                ]
+
+                extra_transactions['grid']['buy'].append(simple_transaction_record)
 
             if participant_id in scrubbed_financial_transactions:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]

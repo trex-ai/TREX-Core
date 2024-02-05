@@ -161,6 +161,39 @@ class Participant:
 
     async def update_extra_transactions(self, message):
         time_delivery = tuple(message.pop('time_delivery'))
+        # TODO: recreate the simplified extra transactions here
+
+        grid_transactions = message['grid']
+        for idx in range(len(grid_transactions['sell'])):
+            transaction = grid_transactions['sell'][idx]
+            transaction_record = {
+                'quantity': transaction[0],
+                'seller_id': self.participant_id,
+                'buyer_id': 'grid',
+                'energy_source': transaction[2],
+                'settlement_price_sell': transaction[1],
+                'settlement_price_buy': transaction[1],
+                'time_creation': time_delivery[0],
+                'time_purchase': time_delivery[1],
+                'time_consumption': time_delivery[1]
+            }
+            grid_transactions['sell'][idx] = transaction_record.copy()
+
+        for idx in range(len(grid_transactions['buy'])):
+            transaction = grid_transactions['buy'][idx]
+            transaction_record = {
+                'quantity': transaction[0],
+                'seller_id': 'grid',
+                'buyer_id': self.participant_id,
+                'energy_source': 'grid',
+                'settlement_price_sell': transaction[1],
+                'settlement_price_buy': transaction[1],
+                'time_creation': time_delivery[0],
+                'time_purchase': time_delivery[1],
+                'time_consumption': time_delivery[1]
+            }
+            grid_transactions['sell'][idx] = transaction_record.copy()
+
         self.__ledger.extra[time_delivery] = message
         self.__extra_transactions.clear()
         self.__extra_transactions.update(message)
