@@ -338,9 +338,9 @@ class Market:
         # reply = {
         #     'uuid': entry['uuid']
         # }
-        #
-        # self.__client.publish('/'.join([self.market_id, participant_id, 'bid_ack']), entry_id,
-        #                       user_property=('to', self.__participants[participant_id]['sid']))
+
+        self.__client.publish('/'.join([self.market_id, participant_id, 'bid_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -473,8 +473,8 @@ class Market:
         #     time_delivery,
         #     entry['source']
         # ]
-        # self.__client.publish('/'.join([self.market_id, participant_id, 'ask_ack']), entry_id,
-        #                       user_property=('to', self.__participants[participant_id]['sid']))
+        self.__client.publish('/'.join([self.market_id, participant_id, 'ask_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
 
         # return message['session_id'], reply
 
