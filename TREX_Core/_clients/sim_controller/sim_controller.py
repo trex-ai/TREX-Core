@@ -66,7 +66,7 @@ class Controller:
         self.__current_step = 0
         self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
         self.__total_steps = self.__generations * self.__end_step
-        self.__eta_buffer = deque(maxlen=10)
+        self.__eta_buffer = deque(maxlen=20)
 
         self.make_participant_tracker()
 
@@ -377,10 +377,10 @@ class Controller:
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', generation: ', self.__generation, '/', self.__generations,
+                  ', generation: ', self.__generation+1, '/', self.__generations+1,
                   ', step: ', self.__current_step, '/', self.__end_step)
                   # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
-            print('step time:', round(step_time, 0), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
+            print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
             self.timer_start = datetime.datetime.now().timestamp()
 
     async def step(self):
