@@ -370,7 +370,7 @@ class Controller:
             self.__eta_buffer.append(step_time)
             # total_steps = self.__generations * self.__end_step
             # elapsed_steps_gen = self.__current_step +
-            elapsed_steps = self.__current_step + self.__generation * self.__end_step
+            elapsed_steps = self.__current_step + (self.__generation-1) * self.__end_step
             steps_to_go = self.__total_steps - elapsed_steps
             eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
 
@@ -407,7 +407,7 @@ class Controller:
             # if hasattr(self, 'hyperparameters_idx'):
             #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__generations,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__generation,
                                   user_property=('to', '^all'))
             self.status['generation_ended'] = False
 
