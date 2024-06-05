@@ -9,13 +9,14 @@ import os
 import signal
 from TREX_Core._clients.participants import ledger
 from TREX_Core._utils import db_utils, utils
+from cuid2 import Cuid
 
 
 class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, db_path, trader_params, storage_params, **kwargs):
+    def __init__(self, sio_client, participant_id, market_id, db_path, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -37,7 +38,7 @@ class Participant:
         self.__timing = {}
 
         # Initialize trader variables and functions
-        trader_params = json.loads(trader_params)
+        trader_params = kwargs.get('trader')
         trader_fns = {
             'id': self.participant_id,
             'market_id': self.market_id,
@@ -50,8 +51,8 @@ class Participant:
             'meter': self.__meter
         }
 
-        if storage_params:
-            storage_params = json.loads(storage_params)
+        storage_params = kwargs.get('storage')
+        if storage_params is not None:
             storage_type = storage_params.pop('type', None)
             # self.storage_fns = {
             #     'id': self.participant_id,
@@ -75,12 +76,14 @@ class Participant:
         self.trader = Trader(trader_fns=trader_fns, **trader_params)
 
         self.__profile_params = {
-            'generation_scale': kwargs['generation_scale'] if 'generation_scale' in kwargs else 1,
-            'load_scale': kwargs['load_scale'] if 'load_scale' in kwargs else 1
+            'generation_scale': kwargs.get('generation', {}).get('scale', 1),
+            'load_scale': kwargs.get('load', {}).get('scale', 1)
         }
         synthetic_profile = trader_params.pop('use_synthetic_profile', None)
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
+
+        # print(trader_type, storage_params,  self.__profile_params)
 
         # if 'market_ns' in kwargs:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
@@ -158,6 +161,39 @@ class Participant:
 
     async def update_extra_transactions(self, message):
         time_delivery = tuple(message.pop('time_delivery'))
+        # TODO: recreate the simplified extra transactions here
+
+        grid_transactions = message['grid']
+        for idx in range(len(grid_transactions['sell'])):
+            transaction = grid_transactions['sell'][idx]
+            transaction_record = {
+                'quantity': transaction[0],
+                'seller_id': self.participant_id,
+                'buyer_id': 'grid',
+                'energy_source': transaction[2],
+                'settlement_price_sell': transaction[1],
+                'settlement_price_buy': transaction[1],
+                'time_creation': time_delivery[0],
+                'time_purchase': time_delivery[1],
+                'time_consumption': time_delivery[1]
+            }
+            grid_transactions['sell'][idx] = transaction_record.copy()
+
+        for idx in range(len(grid_transactions['buy'])):
+            transaction = grid_transactions['buy'][idx]
+            transaction_record = {
+                'quantity': transaction[0],
+                'seller_id': 'grid',
+                'buyer_id': self.participant_id,
+                'energy_source': 'grid',
+                'settlement_price_sell': transaction[1],
+                'settlement_price_buy': transaction[1],
+                'time_creation': time_delivery[0],
+                'time_purchase': time_delivery[1],
+                'time_consumption': time_delivery[1]
+            }
+            grid_transactions['buy'][idx] = transaction_record.copy()
+
         self.__ledger.extra[time_delivery] = message
         self.__extra_transactions.clear()
         self.__extra_transactions.update(message)
@@ -175,11 +211,23 @@ class Participant:
         if time_delivery is None:
             time_delivery = self.__timing['next_settle']
 
-        bid_entry = {
-            'participant_id': self.participant_id,
-            'quantity': kwargs['quantity'],  # Wh
-            'price': kwargs['price'],  # $/kWh
-            'time_delivery': time_delivery
+        # bid_entry = {
+        #     'id': self.participant_id,
+        #     'quantity': kwargs['quantity'],  # Wh
+        #     'price': kwargs['price'],  # $/kWh
+        #     'time_delivery': time_delivery
+        # }
+        entry_id = Cuid().generate(6)
+        bid_entry = [entry_id,
+                     self.participant_id,
+                     kwargs['quantity'],  # Wh
+                     kwargs['price'],  # $/kWh
+                     time_delivery]
+
+        self.__ledger.bids_hold[entry_id] = {
+            'price': kwargs['price'],
+            'quantity': kwargs['quantity'],
+            'time_delivery': time_delivery,
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
         # await self.__client.emit('bid', bid_entry)
@@ -198,14 +246,28 @@ class Participant:
         if time_delivery is None:
             time_delivery = self.__timing['next_settle']
 
-        ask_entry = {
-            'participant_id': self.participant_id,
-            'quantity': kwargs['quantity'],  # Wh
-            'price': kwargs['price'],  # $/kWh
+        # ask_entry = {
+        #     'id': self.participant_id,
+        #     'quantity': kwargs['quantity'],  # Wh
+        #     'price': kwargs['price'],  # $/kWh
+        #     'source': kwargs['source'],
+        #     'time_delivery': time_delivery
+        # }
+        entry_id = Cuid().generate(6)
+        ask_entry = [
+            entry_id,
+            self.participant_id,
+            kwargs['quantity'],  # Wh
+            kwargs['price'],  # $/kWh
+            time_delivery,
+            kwargs['source']]
+
+        self.__ledger.asks_hold[entry_id] = {
             'source': kwargs['source'],
+            'price': kwargs['price'],
+            'quantity': kwargs['quantity'],
             'time_delivery': time_delivery
         }
-        # await self.__client.emit('ask', ask_entry)
         self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry,
                               user_property=('to', self.market_sid))
 
@@ -216,28 +278,81 @@ class Participant:
         await self.__ledger.bid_success(message)
 
     async def settle_success(self, message):
+        # print(message)
         commit_id = await self.__ledger.settle_success(message)
-        if commit_id == message['commit_id']:
-            self.__client.publish('/'.join([self.market_id, 'settlement_delivered']), commit_id,
-                                  user_property=('to', self.market_sid))
+        # if commit_id == message['commit_id']:
+        self.__client.publish('/'.join([self.market_id, 'settlement_delivered']),
+                              {self.participant_id: commit_id},
+                              user_property=('to', self.market_sid))
         # return message['commit_id']
 
     async def __update_time(self, message):
+        # print(message)
         # synchronizes time with market
-        duration = message['duration']
-        start_time = message['time']
+        start_time = message[0]
+        duration = message[1]
+        close_steps = message[2]
+        end_time = start_time + duration
+        # last_round = self.__timing['current_round'].copy()
+
         self.__timing.update({
-            'timezone': message['timezone'],
-            'duration': duration,
-            'last_round': tuple(message['last_round']),
-            'current_round': tuple(message['current_round']),
-            'last_settle': tuple(message['last_settle']),
-            'next_settle': tuple(message['next_settle']),
+            'timezone': self.timezone,
+            # 'duration': duration,
+            'last_round': (start_time - duration, start_time),
+            'current_round': (start_time, end_time),
+            'last_settle': (start_time + duration * (close_steps - 1), start_time + duration * close_steps),
+            'next_settle': (start_time + duration * close_steps, start_time + duration * (close_steps + 1)),
             'stale_round': (start_time - duration * 10, start_time - duration * 9)
         })
 
+        # 'last_round': self.__timing['last_round'],
+        # 'current_round': self.__timing['current_round'],
+        # 'last_settle': self.__timing['last_settle'],
+        # 'next_settle': self.__timing['next_settle'],
+        #
+        # 'last_round': self.__timing['current_round'],
+        # 'current_round': (start_time, end_time),
+        # 'last_settle': (start_time + duration * (self.__timing['close_steps'] - 1),
+        #                 start_time + duration * self.__timing['close_steps']),
+        # 'next_settle': (start_time + duration * self.__timing['close_steps'],
+        #                 start_time + duration * (self.__timing['close_steps'] + 1))
+
+        # self.__timing.update({
+        #     'timezone': message['timezone'],
+        #     'duration': duration,
+        #     'last_round': tuple(message['last_round']),
+        #     'current_round': tuple(message['current_round']),
+        #     'last_settle': tuple(message['last_settle']),
+        #     'next_settle': tuple(message['next_settle']),
+        #     'stale_round': (start_time - duration * 10, start_time - duration * 9)
+        # })
+
+    async def __update_market_info(self, message):
+
+        market_info = {
+            self.__timing['current_round']: {
+                'grid': {
+                    'buy_price': message['current_round'][0],
+                    'sell_price': message['current_round'][1]
+                }
+            },
+            self.__timing['next_settle']: {
+                'grid': {
+                    'buy_price': message['next_settle'][0],
+                    'sell_price': message['next_settle'][0]
+                }
+            },
+        }
+        self.__market_info.update(market_info)
+
+        # market_info = {
+        #     'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+        #     'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
+        # }
+
 
     async def start_round(self, message):
+
         """Sequence of actions during each round
         Currently only for simulation mode.
         Real time mode needs slight modifications.
@@ -246,10 +361,11 @@ class Participant:
             message ([type]): [description]
         """
         # start of current time step
+        market_info = message[3]
         await self.__update_time(message)
-        self.__market_info.update(message['market_info'])
+        await self.__update_market_info(market_info)
         await self.__ledger.clear_history(self.__timing['stale_round'])
-        self.__market_info.pop(str(self.__timing['stale_round']), None)
+        self.__market_info.pop(self.__timing['stale_round'], None)
         # print(self.__market_info)
         # agent_act tells what actions controller should perform
         # controller should perform those actions accordingly, but will have the option not to
@@ -349,12 +465,11 @@ class Participant:
 
         self.__meter = await self.__allocate_energy(time_interval)
         # await self.__client.emit('meter_data', self.__meter)
-        message = {
-            'participant_id': self.participant_id,
-            'meter': self.__meter
-        }
-        self.__client.publish('/'.join([self.market_id, 'meter_data']), message,
-                              user_property=('to', self.market_sid))
+        time_interval = self.__meter.pop('time_interval')
+        message = [self.participant_id, time_interval, self.__meter]
+        self.__client.publish('/'.join([self.market_id, 'meter']), message,
+                              user_property=('to', self.market_sid),
+                              topic_alias=5)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -379,7 +494,7 @@ class Participant:
                 'solar': 0,
                 'bess': 0
             },
-            'consumption': {
+            'load': {
                 # consumption keeps track of self consumption by source
                 # other denotes energy flowing in from the outside
                 'bess': {
@@ -388,7 +503,7 @@ class Participant:
                 'other': {
                     'solar': 0,  # solar from self
                     'bess': 0,  # bess from self
-                    'external': 0
+                    'ext': 0
                 }
             }
         }
@@ -418,7 +533,7 @@ class Participant:
 
         # step 3. get readings from meter (profile)
         solar_generation, residual_consumption = await self.__read_profile(time_interval)
-
+        # print(self.participant_id, time_interval, solar_generation, residual_consumption)
         # step 4. allocate energy
         # use solar for settlement
         residual_solar = max(0, solar_generation - settled_solar)
@@ -430,40 +545,40 @@ class Participant:
         # use residual solar to charge battery (if battery was charged)
         if residual_solar > 0 and bess_charge > 0:
             if residual_solar <= bess_charge:
-                meter['consumption']['bess']['solar'] += residual_solar
+                meter['load']['bess']['solar'] += residual_solar
                 bess_charge -= residual_solar
                 residual_solar -= residual_solar
             elif residual_solar > bess_charge:
-                meter['consumption']['bess']['solar'] += bess_charge
+                meter['load']['bess']['solar'] += bess_charge
                 residual_solar -= bess_charge
                 bess_charge -= bess_charge
 
         # use residual solar for other loads
         if residual_solar > 0:
             if residual_solar <= residual_consumption:
-                meter['consumption']['other']['solar'] += residual_solar
+                meter['load']['other']['solar'] += residual_solar
                 residual_consumption -= residual_solar
                 residual_solar -= residual_solar
             elif residual_solar > residual_consumption:
-                meter['consumption']['other']['solar'] += residual_consumption
+                meter['load']['other']['solar'] += residual_consumption
                 residual_solar -= residual_consumption
                 residual_consumption -= residual_consumption
 
         # if battery was discharged
         if bess_discharge > 0:
             if bess_discharge <= residual_consumption:
-                meter['consumption']['other']['bess'] += bess_discharge
+                meter['load']['other']['bess'] += bess_discharge
                 residual_consumption -= bess_discharge
                 bess_discharge -= bess_discharge
             elif bess_discharge > residual_consumption:
-                meter['consumption']['other']['bess'] += residual_consumption
+                meter['load']['other']['bess'] += residual_consumption
                 bess_discharge -= residual_consumption
                 residual_consumption -= residual_consumption
 
         meter['generation']['solar'] += residual_solar
         meter['generation']['bess'] += bess_discharge
-        meter['consumption']['other']['external'] += residual_consumption
-        meter['consumption']['other']['external'] += bess_charge
+        meter['load']['other']['ext'] += residual_consumption
+        meter['load']['other']['ext'] += bess_charge
 
         return meter
 

@@ -50,7 +50,7 @@ class Client:
         client.subscribe("/".join([market_id, 'bid']), qos=0)
         client.subscribe("/".join([market_id, 'ask']), qos=0)
         client.subscribe("/".join([market_id, 'settlement_delivered']), qos=0)
-        client.subscribe("/".join([market_id, 'meter_data']), qos=0)
+        client.subscribe("/".join([market_id, 'meter']), qos=0)
 
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
@@ -79,6 +79,7 @@ class Client:
 
         # await self.msg_queue.put(msg)
         await self.ns.process_message(message)
+        return 0
     # @tenacity.retry(wait=tenacity.wait_fixed(1))
     # async def start_client(self):
     #     await self.sio_client.connect(self.server_address)

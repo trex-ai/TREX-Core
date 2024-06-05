@@ -68,7 +68,7 @@ class NSDefault():
                 await self.on_ask(payload)
             case 'settlement_delivered':
                 await self.on_settlement_delivered(payload)
-            case 'meter_data':
+            case 'meter':
                 # print("METER DATA")
                 await self.on_meter_data(payload)
             # simulation related events
@@ -104,8 +104,9 @@ class NSDefault():
         ask = json.loads(ask)
         return await self.market.submit_ask(ask)
 
-    async def on_settlement_delivered(self, commit_id):
-        await self.market.settlement_delivered(commit_id)
+    async def on_settlement_delivered(self, message):
+        message = json.loads(message)
+        await self.market.settlement_delivered(message)
 
     async def on_meter_data(self, message):
         # print("meter data")
@@ -125,9 +126,9 @@ class NSDefault():
         await self.market.step(message['duration'], sim_params=message)
 
     async def on_start_generation(self, message):
-        message = json.loads(message)
-        table_name = str(message['generation']) + '_' + message['market_id']
-        await self.market.open_db(message['db_string'], table_name)
+        # message = json.loads(message)
+        table_name = str(message) + '_' + self.market.market_id
+        await self.market.open_db(table_name)
 
     async def on_end_generation(self, message):
         await self.market.end_sim_generation()

@@ -57,7 +57,9 @@ class Market:
             # settle takes 1 step after bid/ask submision
         }
 
-        self.__db = {}
+        self.__db = dict()
+        self.__db['path'] = kwargs['output_db']
+        # self.__output_db = kwargs['output_db']
         self.save_transactions = True
         self.market_id = market_id
         self.sid = kwargs.get('sid', market_id)
@@ -97,20 +99,22 @@ class Market:
         """
         self.__timing['mode'] = mode
 
-    async def open_db(self, db_string, table_name):
+    async def open_db(self, table_name, db_string=None):
         if not self.save_transactions:
             return
+        if not db_string:
+            db_string = self.__db['path']
+        # self.__db['path'] = db_string
+        # self.__db['table_name'] = table_name
 
-        self.__db['path'] = db_string
-        self.__db['table_name'] = table_name
-
-        if 'table' not in self.__db or self.__db['table'] is None:
-            table_name = self.__db.pop('table_name') + '_market'
-            await db_utils.create_table(
-                db_string=db_string,
-                table_type='market2',
-                table_name=table_name)
-            self.__db['table'] = db_utils.get_table(db_string, table_name)
+        # if 'table' not in self.__db or self.__db['table'] is None:
+        # table_name = self.__db.pop('table_name') + '_market'
+        table_name += '_market'
+        await db_utils.create_table(
+            db_string=db_string,
+            table_type='market2',
+            table_name=table_name)
+        self.__db['table'] = db_utils.get_table(db_string, table_name)
 
     # async def register(self):
     #     """Function that attempts to register Market client with socket.io server in the market namespace
@@ -143,9 +147,10 @@ class Market:
         # self.__clients[client_data['sid']] = client_data['id']
         self.__status['active_participants'] = min(self.__status['active_participants'] + 1,
                                                    len(self.__participants))
-        self.__client.publish('/'.join([self.market_id, client_data['id'], 'update_market_info']),
-                              {'market_id': self.market_id,
-                               'sid': self.sid},
+        self.__client.publish('/'.join([self.market_id, client_data['id'], 'market_info']),
+                              {'id': self.market_id,
+                               'sid': self.sid,
+                               'timezone': self.__timing['timezone'],},
                               user_property=('to', client_data['sid']))
         # return self.market_id, client_data['sid']
 
@@ -182,34 +187,53 @@ class Market:
         """
         start_time = self.__time()
         self.__reset_status()
+        # market_info = {
+        #     str(self.__timing['current_round']): {
+        #         'grid': {
+        #             'buy_price': self.__grid.buy_price(),
+        #             'sell_price': self.__grid.sell_price()
+        #         }
+        #     },
+        #     str(self.__timing['next_settle']): {
+        #         'grid': {
+        #             'buy_price': self.__grid.buy_price(),
+        #             'sell_price': self.__grid.sell_price()
+        #         }
+        #     },
+        # }
+
         market_info = {
-            str(self.__timing['current_round']): {
-                'grid': {
-                    'buy_price': self.__grid.buy_price(),
-                    'sell_price': self.__grid.sell_price()
-                }
-            },
-            str(self.__timing['next_settle']): {
-                'grid': {
-                    'buy_price': self.__grid.buy_price(),
-                    'sell_price': self.__grid.sell_price()
-                }
-            },
+            'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+            'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
         }
 
-        start_msg = {
-            'time': start_time,
-            'duration': duration,
-            'timezone': self.__timing['timezone'],
-            'last_round': self.__timing['last_round'],
-            'current_round': self.__timing['current_round'],
-            'last_settle': self.__timing['last_settle'],
-            'next_settle': self.__timing['next_settle'],
-            'market_info': market_info,
-        }
+        # start_msg = {
+        #     'time': start_time,
+        #     'duration': duration,
+        #     'close_steps': self.__timing['close_steps'],
+        #     'market_info': market_info,
+        # }
+        start_msg = [
+            start_time,
+            duration,
+            self.__timing['close_steps'],
+            market_info
+        ]
+
+        # start_msg = {
+        #     'time': start_time,
+        #     'duration': duration,
+        #     'timezone': self.__timing['timezone'],
+        #     'last_round': self.__timing['last_round'],
+        #     'current_round': self.__timing['current_round'],
+        #     'last_settle': self.__timing['last_settle'],
+        #     'next_settle': self.__timing['next_settle'],
+        #     'market_info': market_info,
+        # }
         # await self.__client.emit('start_round', start_msg)
         self.__client.publish('/'.join([self.market_id, 'start_round']), start_msg,
-                              user_property=('to', '^all'))
+                              user_property=('to', '^all'),
+                              topic_alias=1)
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -256,9 +280,13 @@ class Market:
                 - 'time_delivery'
 
         """
+        entry_id = message[0]
+        participant_id = message[1]
+        quantity = message[2]
+        price = message[3]
 
         # entry validity check step 1: quantity must be positive
-        if message['quantity'] <= 0:
+        if quantity <= 0:
             # raise Exception('quantity must be a positive integer')
             return
             # return message['participant_id'], {'uuid': None}
@@ -266,18 +294,28 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
+        # entry = {
+        #     'uuid': cuid().generate(6),
+        #     'participant_id': message['id'],
+        #     # 'session_id': message['session_id'],
+        #     'price': message['price'],
+        #     'time_submission': self.__time(),
+        #     'quantity': message['quantity'],
+        #     # 'lock': False
+        # }
+
         entry = {
-            'uuid': cuid().generate(),
-            'participant_id': message['participant_id'],
-            # 'session_id': message['session_id'],
-            'price': message['price'],
+            'id': entry_id,
+            'participant_id': participant_id,
+            'quantity': quantity,
+            'price': price,
             'time_submission': self.__time(),
-            'quantity': message['quantity'],
-            'lock': False
+
+            # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
-        time_delivery = tuple(message['time_delivery'])
+        time_delivery = tuple(message[4])
         if time_delivery not in self.__open:
             self.__open[time_delivery] = {
                 'bid': []
@@ -290,16 +328,19 @@ class Market:
         # add open entry
         self.__open[time_delivery]['bid'].append(entry)
 
-        reply = {
-            'uuid': entry['uuid'],
-            'time_submission': entry['time_submission'],
-            'price': entry['price'],
-            'quantity': entry['quantity'],
-            'time_delivery': time_delivery
-        }
+        # reply = [
+        #     entry['id'],
+        #     entry['time_submission'],
+        #     entry['price'],
+        #     entry['quantity'],
+        #     time_delivery
+        # ]
+        # reply = {
+        #     'uuid': entry['uuid']
+        # }
 
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'bid_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        self.__client.publish('/'.join([self.market_id, participant_id, 'bid_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
         # return message['participant_id'], reply
 
     async def submit_ask(self, message: dict):
@@ -358,15 +399,19 @@ class Market:
         # if entry_type not in {'bid', 'ask'}:
         #     # raise Exception('invalid action')
         #     return message['session_id'], {'uuid': None}
-
+        entry_id = message[0]
+        participant_id = message[1]
+        quantity = message[2]
+        price = message[3]
+        source = message[5]
         # entry validity check step 1: quantity must be positive
-        if message['quantity'] <= 0:
+        if quantity <= 0:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
             return
 
         # entry validity check step 2: source must be classifiable
-        source_type = await self.__classify_source(message['source'])
+        source_type = await self.__classify_source(source)
         if not source_type:
             # raise Exception('quantity must be a positive integer')
             # return message['session_id'], {'uuid': None}
@@ -375,19 +420,30 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
+        # entry = {
+        #     'uuid': cuid().generate(6),
+        #     'participant_id': message['id'],
+        #     # 'session_id': message['session_id'],
+        #     'source': message['source'],
+        #     'price': message['price'],
+        #     'time_submission': self.__time(),
+        #     'quantity': message['quantity'],
+        #     # 'lock': False
+        # }
+
         entry = {
-            'uuid': cuid().generate(),
-            'participant_id': message['participant_id'],
-            # 'session_id': message['session_id'],
-            'source': message['source'],
-            'price': message['price'],
+            'id': entry_id,
+            'participant_id': participant_id,
+            'quantity': quantity,
+            'price': price,
+            'source': source,
             'time_submission': self.__time(),
-            'quantity': message['quantity'],
-            'lock': False
+
+            # 'lock': False
         }
 
         # create a new time slot container if the time slot doesn't exist
-        time_delivery = tuple(message['time_delivery'])
+        time_delivery = tuple(message[4])
         if time_delivery not in self.__open:
             self.__open[time_delivery] = {
                 'ask': []
@@ -400,16 +456,25 @@ class Market:
         # add open entry
         self.__open[time_delivery]['ask'].append(entry)
 
-        reply = {
-            'uuid': entry['uuid'],
-            'time_submission': entry['time_submission'],
-            'source': entry['source'],
-            'price': entry['price'],
-            'quantity': entry['quantity'],
-            'time_delivery': time_delivery
-        }
-        self.__client.publish('/'.join([self.market_id, message['participant_id'], 'ask_success']), reply,
-                              user_property=('to', self.__participants[message['participant_id']]['sid']))
+        # reply = {
+        #     'uuid': entry['uuid'],
+        #     'time_submission': entry['time_submission'],
+        #     'source': entry['source'],
+        #     'price': entry['price'],
+        #     'quantity': entry['quantity'],
+        #     'time_delivery': time_delivery
+        # }
+        # reply = entry_id
+        # reply = [
+        #     entry['id'],
+        #     entry['time_submission'],
+        #     entry['price'],
+        #     entry['quantity'],
+        #     time_delivery,
+        #     entry['source']
+        # ]
+        self.__client.publish('/'.join([self.market_id, participant_id, 'ask_ack']), entry_id,
+                              user_property=('to', self.__participants[participant_id]['sid']))
 
         # return message['session_id'], reply
 
@@ -467,24 +532,24 @@ class Market:
             # if bid['source'] != ask['source']:
             #     continue
 
-            if bid['lock'] or ask['lock']:
-                continue
+            # if bid['lock'] or ask['lock']:
+            #     continue
 
             if bid['quantity'] <= 0 or ask['quantity'] <= 0:
                 continue
 
-            if bid['participant_id'] not in self.__participants:
-                bid['lock'] = True
-                continue
-
-            if ask['participant_id'] not in self.__participants:
-                ask['lock'] = True
-                continue
+            # if bid['participant_id'] not in self.__participants:
+            #     bid['lock'] = True
+            #     continue
+            #
+            # if ask['participant_id'] not in self.__participants:
+            #     ask['lock'] = True
+            #     continue
 
             # Settle highest price bids with lowest price asks
             await self.__settle(bid, ask, time_delivery)
 
-    async def __settle(self, bid: dict, ask: dict, time_delivery: tuple, settlement_method=None, locking=False):
+    async def __settle(self, bid: dict, ask: dict, time_delivery: tuple):
         """Performs settlement for bid/ask pairs found during the matching process.
 
         If bid/ask are valid, the bid/ask quantities are adjusted, a commitment record is created, and a settlement confirmation is sent to both participants.
@@ -521,12 +586,12 @@ class Market:
         if quantity <= 0:
             return
 
-        if locking:
-            # lock the bid and ask until confirmations are received
-            ask['lock'] = True
-            bid['lock'] = True
+        # if locking:
+        #     # lock the bid and ask until confirmations are received
+        #     ask['lock'] = True
+        #     bid['lock'] = True
 
-        commit_id = cuid().generate()
+        commit_id = cuid().generate(6)
         settlement_time = self.__timing['current_round'][1]
         settlement_price_sell = ask['price']
         settlement_price_buy = bid['price']
@@ -552,29 +617,27 @@ class Market:
             'seller_id': ask['participant_id'],
             'bid': bid,
             'buyer_id': bid['participant_id'],
-            'lock': locking
+            # 'lock': locking
         }
 
         # if buyer == 'grid' or seller == 'grid':
         # if buy_price is not None and sell_price is not None:
         #     return
-        buyer_message = {
-            'commit_id': commit_id,
-            'bid_id': bid['uuid'],
-            'source': ask['source'],
-            'quantity': quantity,
-            'buy_price': settlement_price_buy,
-            'time_delivery': time_delivery
-        }
+        buyer_message = [
+            commit_id,
+            bid['id'],
+            ask['source'],
+            quantity,
+            time_delivery
+        ]
 
-        seller_message = {
-            'commit_id': commit_id,
-            'ask_id': ask['uuid'],
-            'source': ask['source'],
-            'quantity': quantity,
-            'sell_price': settlement_price_sell,
-            'time_delivery': time_delivery
-        }
+        seller_message = [
+            commit_id,
+            ask['id'],
+            ask['source'],
+            quantity,
+            time_delivery
+        ]
         # self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'send_settlement']), buyer_message)
         # self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'send_settlement']), seller_message)
         self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message,
@@ -587,8 +650,9 @@ class Market:
         self.__status['round_settled'].append(commit_id)
 
     # after settlement confirmation, update bid and ask quantities
-    async def settlement_delivered(self, commit_id):
+    async def settlement_delivered(self, message):
         # self.__status['round_settle_delivered'].append(commit_id)
+        commit_id = message.pop(next(iter(message)))
         if commit_id not in self.__status['round_settle_delivered']:
             self.__status['round_settle_delivered'][commit_id] = 1
         else:
@@ -641,9 +705,11 @@ class Market:
 
         # TODO: add data validation later
         # print(message)
-        participant_id = message['participant_id']
-        time_delivery = tuple(message['meter']['time_interval'])
-        self.__participants[participant_id]['meter'][time_delivery] = message['meter']
+        participant_id = message[0]
+        time_delivery = tuple(message[1])
+        meter = message[2]
+
+        self.__participants[participant_id]['meter'][time_delivery] = meter
         self.__status['round_metered'] += 1
 
     async def __process_settlements(self, time_delivery, source_type):
@@ -662,7 +728,7 @@ class Market:
 
                 # Extract settlements involving buyer and seller (that are not locked)
                 relevant_settlements = {k: v for (k, v) in settlements.items() if
-                                        settlements[k]['lock'] is False and
+                                        # settlements[k]['lock'] is False and
                                         settlements[k]['buyer_id'] == buyer and
                                         settlements[k]['seller_id'] == seller}
 
@@ -679,13 +745,13 @@ class Market:
                         residual_generation = self.__participants[seller]['meter'][time_delivery]['generation'][
                             energy_source]
                         residual_consumption = \
-                            self.__participants[buyer]['meter'][time_delivery]['consumption']['other']['external']
+                            self.__participants[buyer]['meter'][time_delivery]['load']['other']['ext']
 
                         # check to see if physical generation is less than settled quantity
                         # extra_purchase = 0
                         deficit_generation = max(0, settled_quantity - residual_generation)
                         # Add on the amount that needed to be bought from the grid?
-                        # self.__participants[buyer]['meter']['consumption']['other']['external'] += deficit_generation
+                        # self.__participants[buyer]['meter']['consumption']['other']['ext'] += deficit_generation
                         # if not deficit_generation:
                         # check if settled quantity is greater than residual consumption
                         # if settled amount is greater than residual generation, then figure out
@@ -782,11 +848,11 @@ class Market:
                 continue
 
             # self consumption
-            for load in self.__participants[participant_id]['meter'][time_delivery]['consumption']:
-                for source in self.__participants[participant_id]['meter'][time_delivery]['consumption'][load]:
+            for load in self.__participants[participant_id]['meter'][time_delivery]['load']:
+                for source in self.__participants[participant_id]['meter'][time_delivery]['load'][load]:
                     if source in self.__participants[participant_id]['meter'][time_delivery]['generation']:
                         # assuming everything is perfectly sub metered
-                        quantity = self.__participants[participant_id]['meter'][time_delivery]['consumption'][load][
+                        quantity = self.__participants[participant_id]['meter'][time_delivery]['load'][load][
                             source]
 
                         if quantity > 0:
@@ -802,11 +868,11 @@ class Market:
                                 'time_consumption': time_delivery[1]
                             }
                             transactions.append(transaction_record.copy())
-                            self.__participants[participant_id]['meter'][time_delivery]['consumption'][load][
+                            self.__participants[participant_id]['meter'][time_delivery]['load'][load][
                                 source] -= quantity
 
             extra_transactions = {
-                'participant': participant_id,
+                # 'participant': participant_id,
                 'time_delivery': time_delivery,
                 'grid': {
                     'buy': [],
@@ -831,10 +897,18 @@ class Market:
                     transactions.append(transaction_record.copy())
                     self.__participants[participant_id]['meter'][time_delivery]['generation'][
                         source] -= residual_generation
-                    extra_transactions['grid']['sell'].append(transaction_record.copy())
+
+                    simple_transaction_record = [
+                        residual_generation,  # quantity
+                        self.__grid.sell_price(),  # price
+                        source
+                    ]
+
+                    extra_transactions['grid']['sell'].append(simple_transaction_record.copy())
+                    # extra_transactions['grid']['sell'].append(transaction_record.copy())
             # buy residual consumption (other) from grid
-            residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['consumption']['other'][
-                'external']
+            residual_consumption = self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
+                'ext']
             if residual_consumption > 0:
                 transaction_record = {
                     'quantity': residual_consumption,
@@ -848,18 +922,29 @@ class Market:
                     'time_consumption': time_delivery[1]
                 }
                 transactions.append(transaction_record.copy())
-                self.__participants[participant_id]['meter'][time_delivery]['consumption']['other'][
-                    'external'] -= residual_consumption
-                extra_transactions['grid']['buy'].append(transaction_record.copy())
+                self.__participants[participant_id]['meter'][time_delivery]['load']['other'][
+                    'ext'] -= residual_consumption
+
+                simple_transaction_record = [
+                    residual_consumption,   # quantity
+                    self.__grid.buy_price()     # price
+                ]
+
+                extra_transactions['grid']['buy'].append(simple_transaction_record)
 
             if participant_id in scrubbed_financial_transactions:
                 extra_transactions['financial'] = scrubbed_financial_transactions[participant_id]
 
             # await self.__client.emit(event='return_extra_transactions',
             #                          data=extra_transactions)
-            topic = '/'.join([self.market_id, participant_id, 'return_extra_transactions'])
-            self.__client.publish(topic, extra_transactions,
-                                  user_property=('to', self.__participants[participant_id]['sid']))
+
+            # TODO: do not send extra if there is none
+            if (len(extra_transactions['grid']['buy']) > 0
+                    or len(extra_transactions['grid']['sell']) > 0
+                    or 'financial' in extra_transactions):
+                topic = '/'.join([self.market_id, participant_id, 'extra_transaction'])
+                self.__client.publish(topic, extra_transactions,
+                                      user_property=('to', self.__participants[participant_id]['sid']))
 
         if self.save_transactions:
             self.__transactions.extend(transactions)
@@ -898,7 +983,7 @@ class Market:
             })
             physical_qty = physical_record['quantity']
             self.__participants[seller_id]['meter'][time_delivery]['generation'][energy_source] -= physical_qty
-            self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other']['external'] -= physical_qty
+            self.__participants[buyer_id]['meter'][time_delivery]['load']['other']['ext'] -= physical_qty
             physical_transactions.append(physical_record)
         # settled for more than consumed
         elif extra_purchase:
@@ -917,8 +1002,8 @@ class Market:
             if physical_record['quantity']:
                 physical_qty = physical_record['quantity']
                 self.__participants[seller_id]['meter'][time_delivery]['generation'][energy_source] -= physical_qty
-                self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other'][
-                    'external'] -= physical_qty
+                self.__participants[buyer_id]['meter'][time_delivery]['load']['other'][
+                    'ext'] -= physical_qty
                 physical_transactions.append(physical_record)
 
         elif deficit_generation:
@@ -955,8 +1040,8 @@ class Market:
                         'time_consumption': time_delivery[1]
                     }
                     self.__participants[seller_id]['meter'][time_delivery]['generation']['bess'] -= bess_compensation
-                    self.__participants[buyer_id]['meter'][time_delivery]['consumption']['other'][
-                        'external'] -= bess_compensation
+                    self.__participants[buyer_id]['meter'][time_delivery]['load']['other'][
+                        'ext'] -= bess_compensation
                     deficit_generation -= bess_compensation
                     physical_transactions.append(compensation_record)
 
@@ -1140,7 +1225,7 @@ class Market:
         # raise SystemExit
 
     async def reset_market(self):
-        self.__db.clear()
+        # self.__db.clear()
         self.transactions_count = 0
         self.__open.clear()
         self.__settled.clear()

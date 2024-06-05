@@ -58,6 +58,7 @@ class Client:
         }
         # await self.msg_queue.put(message)
         await self.ns.process_message(message)
+        return 0
 
     # @tenacity.retry(wait=tenacity.wait_fixed(1) + tenacity.wait_random(0, 2))
     # async def start_client(self):

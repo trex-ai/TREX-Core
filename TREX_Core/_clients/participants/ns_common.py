@@ -13,18 +13,18 @@ class NSDefault:
 
         match topic_event:
             # market related events
-            case 'update_market_info':
+            case 'market_info':
                 await self.on_update_market_info(payload)
             case 'start_round':
                 await self.on_start_round(payload)
-            case 'ask_success':
+            case 'ask_ack':
                 await self.on_ask_success(payload)
-            case 'bid_success':
+            case 'bid_ack':
                 await self.on_bid_success(payload)
             case 'settled':
                 # print('settled?')
                 await self.on_settled(payload)
-            case 'return_extra_transactions':
+            case 'extra_transaction':
                 await self.on_return_extra_transactions(payload)
             # simulation related events
             case 'is_participant_joined':
@@ -50,8 +50,9 @@ class NSDefault:
 
     async def on_update_market_info(self, message):
         client_data = json.loads(message)
-        if client_data['market_id'] == self.participant.market_id:
+        if client_data['id'] == self.participant.market_id:
             self.participant.market_sid = client_data['sid']
+            self.participant.timezone = client_data['timezone']
             self.participant.market_connected = True
             # self.participant.busy = False
 
@@ -61,11 +62,11 @@ class NSDefault:
         await self.participant.start_round(message)
 
     async def on_ask_success(self, message):
-        message = json.loads(message)
+        # message = json.loads(message)
         await self.participant.ask_success(message)
 
     async def on_bid_success(self, message):
-        message = json.loads(message)
+        # message = json.loads(message)
         await self.participant.bid_success(message)
 
     async def on_settled(self, message):
@@ -90,9 +91,9 @@ class NSDefault:
             self.participant.storage.reset(soc_pct=0)
         # self.participant.trader.output_path = message['output_path']
 
-        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
-            table_name = str(message['generation']) + '_' + message['market_id'] + '_metrics'
-            self.participant.trader.metrics.update_db_info(message['db_string'], table_name)
+        # if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+        #     table_name = str(message['generation']) + '_' + message['market_id'] + '_metrics'
+        #     self.participant.trader.metrics.update_db_info(message['db_string'], table_name)
 
     async def on_end_generation(self, message):
         # print("eog msg", message)

@@ -3,7 +3,9 @@ import datetime
 import time
 import os
 import signal
-import dataset
+# import dataset
+from collections import deque
+from statistics import mean
 from sqlalchemy_utils import database_exists
 
 # from _clients.sim_controller.training_controller import TrainingController
@@ -40,7 +42,7 @@ class Controller:
                                  not self.__config['participants'][participant]['trader']['learning']]
         self.__participants = {}
         self.__turn_control = {
-            'total': None,
+            'total': 0,
             'online': 0,
             'ready': 0,
             # 'weights_loaded': 0,
@@ -63,6 +65,8 @@ class Controller:
 
         self.__current_step = 0
         self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
+        self.__total_steps = self.__generations * self.__end_step
+        self.__eta_buffer = deque(maxlen=20)
 
         self.make_participant_tracker()
 
@@ -226,14 +230,17 @@ class Controller:
 
     # Update tracker when participant is active
     async def participant_online(self, participant_id, online):
-        if participant_id in self.__participants:
-            self.__participants[participant_id]['online'] = online
-            if online:
-                self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
-            else:
-                self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
-                self.status['sim_interrupted'] = True
-                self.status['sim_started'] = False
+        if not self.__participants.get(participant_id):
+            return
+        if not self.__participants[participant_id]['online'] ^ online:
+            return
+        self.__participants[participant_id]['online'] = online
+        if online:
+            self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
+        else:
+            self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
+            self.status['sim_interrupted'] = True
+            self.status['sim_started'] = False
         if self.__turn_control['online'] < self.__turn_control['total']:
             self.status['participants_online'] = False
         else:
@@ -247,9 +254,9 @@ class Controller:
             if not self.status['registered_on_server']:
                 continue
 
-            if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 600:
+            if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
                 self.status['last_step_clock'] = time.time()
-                # print(self.status)
+                print(self.status)
 
                 #TODO: One of the most likely scensarios for sim to get stuck is that a participant
                 # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
@@ -260,7 +267,9 @@ class Controller:
                     'duration': self.__time_step_s,
                     'update': False
                 }
-                await self.__client.emit('start_round_simulation', message)
+                # await self.__client.emit('start_round_simulation', message)
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
+                                      user_property=('to', '^all'))
 
             if self.status['sim_started']:
                 continue
@@ -310,13 +319,13 @@ class Controller:
                 continue
 
             #for now, only load weights for validation
-            if self.__config['study']['type'] == 'validation':
-                market_id = 'training'
-                if not self.status['participants_weights_loaded']:
-                    db = dataset.connect(self.__config['study']['output_database'])
-                    for participant_id in self.__participants:
-                        await self.__load_weights(db, self.__generation, market_id, participant_id)
-                    continue
+            # if self.__config['study']['type'] == 'validation':
+            #     market_id = 'training'
+            #     if not self.status['participants_weights_loaded']:
+            #         db = dataset.connect(self.__config['study']['output_database'])
+            #         for participant_id in self.__participants:
+            #             await self.__load_weights(db, self.__generation, market_id, participant_id)
+            #         continue
 
             if self.status['sim_interrupted']:
                 print('drop drop')
@@ -349,19 +358,29 @@ class Controller:
     #     }
     #     await self.__client.emit('load_weights', message)
 
-    async def __print_step_time(self):
+    async def __print_step_time(self, report_steps=None):
         # if not self.__current_step:
         #     print('starting generation', self.__generation)
-
-        if self.__current_step % self.__day_steps == 0 and self.__current_step:
+        if not report_steps:
+            report_steps = self.__end_step
+        if self.__current_step % report_steps == 0 and self.__current_step:
             # Print time information for time step/ expected runtime
             end = datetime.datetime.now().timestamp()
             step_time = end - self.timer_start
-            eta_s = round((self.__end_step - self.__current_step) / self.__day_steps * step_time)
+            self.__eta_buffer.append(step_time)
+            # total_steps = self.__generations * self.__end_step
+            # elapsed_steps_gen = self.__current_step +
+            elapsed_steps = self.__current_step + (self.__generation-1) * self.__end_step
+            steps_to_go = self.__total_steps - elapsed_steps
+            eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
+
+
+            # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', generation', self.__generation, '/', self.__generations,
-                  ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
-            print('step time:', round(step_time, 0), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
+                  ', generation: ', self.__generation+1, '/', self.__generations+1,
+                  ', step: ', self.__current_step, '/', self.__end_step)
+                  # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
+            print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
             self.timer_start = datetime.datetime.now().timestamp()
 
     async def step(self):
@@ -378,17 +397,17 @@ class Controller:
         # Beginning new generation
         if self.__current_step == 0:
             print('STARTING SIMULATION')
-            message = {
-                'generation': self.__generation,
-                'db_string': self.__config['study']['output_database'],
-                # 'input_path': self.status['input_path'],
-                # 'output_path': self.status['output_path'],
-                'market_id': self.__config['market']['id'],
-            }
-            if hasattr(self, 'hyperparameters_idx'):
-                message["market_id"] += "-hps" + str(self.hyperparameters_idx)
+            # message = {
+            #     'generation': self.__generation
+            #     # 'db_string': self.__config['study']['output_database'],
+            #     # 'input_path': self.status['input_path'],
+            #     # 'output_path': self.status['output_path'],
+            #     # 'market_id': self.__config['market']['id'],
+            # }
+            # if hasattr(self, 'hyperparameters_idx'):
+            #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), message,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__generation,
                                   user_property=('to', '^all'))
             self.status['generation_ended'] = False
 
@@ -404,6 +423,7 @@ class Controller:
             }
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
+            # print(self.__current_step, self.__end_step)
             self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
                                   user_property=('to', '^all'))
         # end of generation
