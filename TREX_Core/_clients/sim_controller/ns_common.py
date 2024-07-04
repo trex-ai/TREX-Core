@@ -25,6 +25,8 @@ class NSDefault():
                 await self.on_participant_ready(payload)
             case 'market_ready':
                 await self.on_market_ready(payload)
+            case 'participant_disconnected':
+                await self.on_participant_disconnected(payload)
 
     async def on_connect(self):
         await self.controller.register()

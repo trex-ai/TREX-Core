@@ -226,7 +226,7 @@ class Runner:
 
         if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
-                config['study']['generations'] = 2
+                config['study']['generations'] = 1
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:
@@ -364,6 +364,7 @@ class Runner:
             print('CONFIG NOT COMPATIBLE')
             return
         if len(launch_list) == 1:
+            print(launch_list)
             self.run_subprocess(launch_list[0])
         else:
             from multiprocessing import Pool

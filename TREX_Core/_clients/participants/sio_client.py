@@ -2,7 +2,7 @@ import asyncio
 # from asyncio import Queue
 import os
 import json
-
+import gmqtt
 from gmqtt import Client as MQTTClient
 from TREX_Core._clients.participants.ns_common import NSDefault
 
@@ -20,7 +20,10 @@ class Client:
     def __init__(self, server_address, participant_id, market_id, db_path, **kwargs):
         # Initialize client related data
         self.server_address = server_address
-        self.sio_client = MQTTClient(cuid(length=10).generate())
+        # last will message
+        will_message = gmqtt.Message('/'.join([market_id, 'simulation', 'participant_disconnected']), '',
+                                     will_delay_interval=10)
+        self.sio_client = MQTTClient(cuid(length=10).generate(), will_message=will_message)
 
         Participant = importlib.import_module('TREX_Core._clients.participants.' + kwargs.get('type')).Participant
         self.participant = Participant(sio_client=self.sio_client,
@@ -55,6 +58,9 @@ class Client:
         client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         # await keep_alive()
+
+    # self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_disconnected']), self.participant_id,
+    #                       user_property=('to', self.market_sid))
     def on_disconnect(self, client, packet, exc=None):
         self.ns.on_disconnect()
         print(self.participant.participant_id, 'disconnected')

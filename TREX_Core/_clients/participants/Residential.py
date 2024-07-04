@@ -297,7 +297,8 @@ class Participant:
 
         self.__timing.update({
             'timezone': self.timezone,
-            # 'duration': duration,
+            # 'timezone': message['timezone'],
+            'duration': duration,
             'last_round': (start_time - duration, start_time),
             'current_round': (start_time, end_time),
             'last_settle': (start_time + duration * (close_steps - 1), start_time + duration * close_steps),

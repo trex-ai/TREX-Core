@@ -44,7 +44,7 @@ class Storage:
     """
 
     def __init__(self, capacity=7000, power=3300, efficiency=0.95, monthly_sdr=0.05):
-        self.timing = None
+        self.timing = dict()
 
         # Capacity is usable capacity. Limited to the linear region in the C/D curve
         # actual capacity might be larger but it is irrelevant
@@ -81,6 +81,7 @@ class Storage:
 
     # Check that time interval is a multiple of time durations
     def __time_interval_is_valid(self, time_interval: tuple):
+        # print(self.timing)
         duration = self.timing['duration']
         if (time_interval[1] - time_interval[0]) % duration != 0:
             # make sure duration is a multiple of round duration
