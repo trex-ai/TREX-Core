@@ -135,5 +135,6 @@ class NSDefault():
 
     async def on_end_simulation(self):
         self.market.run = False
+        await self.market.end_sim_generation(last_generation=True)
         await self.market.kill()
         # print(self.market.run)

@@ -17,7 +17,7 @@ STOP = asyncio.Event()
 class Client:
     """A socket.io client wrapper for participants
     """
-    def __init__(self, server_address, participant_id, market_id, db_path, **kwargs):
+    def __init__(self, server_address, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
         # Initialize client related data
         self.server_address = server_address
         # last will message
@@ -29,7 +29,8 @@ class Client:
         self.participant = Participant(sio_client=self.sio_client,
                                        participant_id=participant_id,
                                        market_id=market_id,
-                                       db_path=db_path,
+                                       profile_db_path=profile_db_path,
+                                       output_db_path=output_db_path,
                                        # trader_params=trader_params,
                                        # storage_params=storage_params,
                                        **kwargs)
@@ -123,7 +124,8 @@ if __name__ == '__main__':
     parser.add_argument('--market_id', help='')
     parser.add_argument('--host', default="localhost", help='')
     parser.add_argument('--port', default=42069, help='')
-    parser.add_argument('--db_path', default=None, help='')
+    parser.add_argument('--profile_db_path', default=None, help='')
+    parser.add_argument('--output_db_path', default=None, help='')
     # parser.add_argument('--trader', default=None, help='')
     # parser.add_argument('--storage', default=None, help='')
     # parser.add_argument('--generation_scale', default=1, help='')
@@ -137,7 +139,8 @@ if __name__ == '__main__':
                     # participant_type=args.type,
                     participant_id=args.id,
                     market_id=args.market_id,
-                    db_path=args.db_path,
+                    profile_db_path=args.profile_db_path,
+                    output_db_path=args.output_db_path,
                     # trader_params=args.trader,
                     # storage_params=args.storage,
                     # generation_scale=float(args.generation_scale),

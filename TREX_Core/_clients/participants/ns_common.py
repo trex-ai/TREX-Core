@@ -1,6 +1,7 @@
 # import socketio
 import json
 import asyncio
+import numpy as np
 
 class NSDefault:
     def __init__(self, participant):
@@ -91,9 +92,12 @@ class NSDefault:
             self.participant.storage.reset(soc_pct=0)
         # self.participant.trader.output_path = message['output_path']
 
-        # if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
-        #     table_name = str(message['generation']) + '_' + message['market_id'] + '_metrics'
-        #     self.participant.trader.metrics.update_db_info(message['db_string'], table_name)
+        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+            # print(message)
+            output_db_str = self.participant.output_db_path
+            market_id = self.participant.market_id
+            table_name = f'{message}_{market_id}_metrics'
+            self.participant.trader.metrics.update_db_info(output_db_str, table_name)
 
     async def on_end_generation(self, message):
         # print("eog msg", message)
@@ -104,6 +108,7 @@ class NSDefault:
             message ([type]): [description]
         """
         if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+            await asyncio.sleep(np.random.uniform(3, 30))
             await self.participant.trader.metrics.save()
             self.participant.trader.metrics.reset()
 

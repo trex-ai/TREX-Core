@@ -466,10 +466,12 @@ class Controller:
                 'market_id': self.__config['market']['id']
             }
             # await self.__client.emit('end_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message,
-                                  user_property=('to', '^all'))
-
-            if self.__generation > self.__generations:
+            # await self.delay(20)
+            if self.__generation <= self.__generations:
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message,
+                                      user_property=('to', '^all'))
+            else:
+                # self.__generation > self.__generations:
                 # if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
                 #     self.__generation = self.set_initial_generation()
                 #     self.__current_step = 0
@@ -484,6 +486,7 @@ class Controller:
                 # if self.status['sim_ended']:
                 print('end_simulation', self.__generation-1, self.__generations)
                 # await self.__client.emit('end_simulation')
+                # await self.delay(20)
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',
                                       user_property=('to', '^all'))
                 await self.delay(1)

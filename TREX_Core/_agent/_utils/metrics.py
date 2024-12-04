@@ -12,6 +12,7 @@ class Metrics:
         self.__db = {}
         self.__metrics = {}
         self.__metrics_meta = {}
+        # self.__transactions_count = 0
 
     def add(self, metric_name:str, column_type):
         if metric_name not in self.__metrics:
@@ -41,6 +42,7 @@ class Metrics:
 
     def reset(self):
         self.__db.clear()
+        self.__transactions_count = 0
         for metric_name in self.__metrics:
             self.__metrics[metric_name].clear()
 
@@ -68,7 +70,16 @@ class Metrics:
             metrics = {key: value for key, value in self.__metrics.items() if value}
             metrics = [dict(zip(metrics, t)) for t in zip(*metrics.values())]
             self.__metrics = {key: value[metrics_len:] for key, value in self.__metrics.items()}
-            asyncio.create_task(db_utils.dump_data(metrics, self.__db['path'], self.__db['table']))
+            await asyncio.create_task(db_utils.dump_data(metrics, self.__db['path'], self.__db['table']))
+            await self.__ensure_transactions_complete(metrics_len)
+
+    @tenacity.retry(wait=tenacity.wait_random(1, 5))
+    async def __ensure_transactions_complete(self, metrics_len):
+        table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
+        print(table_len, metrics_len)
+        if table_len < metrics_len:
+            raise Exception
+        return True
             
     async def fetch_one(self, timestamp):
         if 'db' not in self.__db:

@@ -30,7 +30,7 @@ def get_table(db_string, table_name, engine=None):
         return None
 
     metadata = MetaData()
-    table = sqlalchemy.Table(table_name, metadata, autoload=True, autoload_with=engine)
+    table = sqlalchemy.Table(table_name, metadata, autoload_with=engine)
     return table
 
 def get_table_len(db_string, table):

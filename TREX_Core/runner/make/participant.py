@@ -31,7 +31,8 @@ def cli(configs, participant_id):
 
     args.append('--id=' + participant_id)
     args.append('--market_id=' + configs['market']['id'])
-    args.append('--db_path=' + configs['study']['profiles_db_location'])
+    args.append('--profile_db_path=' + configs['study']['profiles_db_location'])
+    args.append('--output_db_path=' + configs['study']['output_database'])
     # args.append('--trader=' + json.dumps(participant_configs['trader']))
 
     # if 'storage' in participant_configs:

@@ -16,7 +16,7 @@ class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, db_path, **kwargs):
+    def __init__(self, sio_client, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -26,10 +26,12 @@ class Participant:
         self.sid = kwargs.get('sid', market_id)
         self.__client = sio_client
         self.client = sio_client
-        self.__profile = {
-            'db_path': db_path
-        }
 
+        self.__profile = {
+            'db_path': profile_db_path
+        }
+        self.output_db_path = output_db_path
+        # print(self.output_db_path)
         # Initialize market variables
         self.__ledger = ledger.Ledger(self.participant_id)
         self.__extra_transactions = {}
@@ -62,7 +64,7 @@ class Participant:
             self.storage.timing = self.__timing
             trader_fns['storage'] = {
                 'info': self.storage.get_info,
-                'check_schedule': self.storage.check_schedule,
+                'check_schedule': self.storage.check_schedule
                 # 'schedule_energy': self.storage.schedule_energy
             }
 

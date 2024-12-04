@@ -1232,12 +1232,13 @@ class Market:
         for participant in self.__participants:
             self.__participants[participant]['meter'].clear()
 
-    async def end_sim_generation(self):
+    async def end_sim_generation(self, last_generation=False):
         await self.record_transactions(delay=False)
         await self.__ensure_transactions_complete()
-        await self.reset_market()
-        # await self.__client.emit('market_ready')
-        self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
+        if not last_generation:
+            await self.reset_market()
+            # await self.__client.emit('market_ready')
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'market_ready']), '')
 
     async def market_is_online(self):
         self.__client.publish('/'.join([self.market_id, 'simulation', 'market_online']), '')
