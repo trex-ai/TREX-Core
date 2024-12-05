@@ -76,7 +76,8 @@ class Metrics:
     @tenacity.retry(wait=tenacity.wait_random(1, 5))
     async def __ensure_transactions_complete(self, metrics_len):
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-        print(table_len, metrics_len)
+        # numbers don't match all the time for some reason
+        print('comparing recorded metrics vs number of metrics', table_len, metrics_len)
         if table_len < metrics_len:
             raise Exception
         return True

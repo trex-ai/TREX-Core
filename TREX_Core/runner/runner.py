@@ -1,5 +1,5 @@
 import commentjson
-import dataset
+# import dataset
 import itertools
 import json
 import multiprocessing
@@ -11,7 +11,9 @@ import sqlalchemy
 import sys
 # import numpy as np
 from packaging import version
-from sqlalchemy import create_engine, MetaData, Column
+
+from sqlalchemy import create_engine, MetaData, Column, func, insert
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
 from TREX_Core._utils import utils, db_utils
@@ -136,30 +138,48 @@ class Runner:
         # sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
         # if not os.path.exists(sim_path):
         #     os.mkdir(sim_path)
-
-        engine = create_engine(config['study']['output_database'])
+        db_string = config['study']['output_database']
+        engine = create_engine(db_string)
         if not sqlalchemy.inspect(engine).has_table('metadata'):
-            self.__create_metadata_table(config['study']['output_database'])
-        db = dataset.connect(config['study']['output_database'])
-        metadata_table = db['metadata']
+            self.__create_metadata_table(db_string)
+
+        table = db_utils.get_table(db_string, 'metadata', engine)
+        data = list()
+
+        # db = dataset.connect(config['study']['output_database'])
+        # metadata_table = db['metadata']
         for generation in range(config['study']['generations']):
+            start_time = self.__get_start_time(generation)
+            data.append({
+                'start_timestamp': start_time,
+                'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
+            })
             # check if metadata is in table
             # if not, then add to table
-            if not metadata_table.find_one(generation=generation):
-                start_time = self.__get_start_time(generation)
-                metadata = {
-                    'start_timestamp': start_time,
-                    'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
-                }
-                metadata_table.insert(dict(generation=generation, data=metadata))
+            # if not metadata_table.find_one(generation=generation):
+            #     start_time = self.__get_start_time(generation)
+            #     metadata = {
+            #         'start_timestamp': start_time,
+            #         'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
+            #     }
+            #         metadata_table.insert(dict(generation=generation, data=metadata))
+        with Session(engine) as session:
+            session.execute(insert(table), data)
+            session.commit()
 
     def __create_sim_db(self, db_string, config):
         if not database_exists(db_string):
-            db_utils.create_db(db_string)
+            engine = create_engine(db_string)
+            db_utils.create_db(db_string=db_string, engine=engine)
             self.__create_configs_table(db_string)
-            db = dataset.connect(db_string)
-            configs_table = db['configs']
-            configs_table.insert({'id': 0, 'data': config})
+
+            table = db_utils.get_table(db_string, 'configs', engine)
+            with Session(engine) as session:
+                session.execute(insert(table), ({'id': 0, 'data': config}))
+                session.commit()
+            # db = dataset.connect(db_string)
+            # configs_table = db['configs']
+            # configs_table.insert({'id': 0, 'data': config})
 
     def __create_table(self, db_string, table):
         engine = create_engine(db_string)
@@ -226,7 +246,7 @@ class Runner:
 
         if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
-                config['study']['generations'] = 1
+                config['study']['generations'] = 2
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:

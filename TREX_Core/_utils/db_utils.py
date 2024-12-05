@@ -6,8 +6,9 @@ from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.orm import sessionmaker
 import databases
 
-def create_db(db_string):
-    engine = create_engine(db_string)
+def create_db(db_string, engine=None):
+    if not engine:
+        engine = create_engine(db_string)
     if not database_exists(engine.url):
         create_database(engine.url)
     return database_exists(engine.url)
@@ -33,22 +34,25 @@ def get_table(db_string, table_name, engine=None):
     table = sqlalchemy.Table(table_name, metadata, autoload_with=engine)
     return table
 
-def get_table_len(db_string, table):
-    engine = create_engine(db_string)
+def get_table_len(db_string, table, engine=None):
+    if not engine:
+        engine = create_engine(db_string)
     Session = sessionmaker(bind=engine)
     session = Session()
     rows = session.query(table).count()
     return rows
     # return engine.scalar(table.count())
 
-def drop_table(db_string, table_name):
-    engine = create_engine(db_string)
+def drop_table(db_string, table_name, engine=None):
+    if not engine:
+        engine = create_engine(db_string)
     table = get_table(db_string, table_name, engine)
     if table is not None:
         table.drop(engine)
 
-async def create_table(db_string, table_type, table_name=None, **kwargs):
-    engine = create_engine(db_string)
+async def create_table(db_string, table_type, table_name=None, engine=None, **kwargs):
+    if not engine:
+        engine = create_engine(db_string)
     if not database_exists(engine.url):
         create_db(db_string)
 

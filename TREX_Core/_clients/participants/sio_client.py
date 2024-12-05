@@ -21,7 +21,7 @@ class Client:
         # Initialize client related data
         self.server_address = server_address
         # last will message
-        will_message = gmqtt.Message('/'.join([market_id, 'simulation', 'participant_disconnected']), '',
+        will_message = gmqtt.Message('/'.join([market_id, 'simulation', 'participant_disconnected']), participant_id,
                                      will_delay_interval=10)
         self.sio_client = MQTTClient(cuid(length=10).generate(), will_message=will_message)
 
