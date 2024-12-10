@@ -1,12 +1,8 @@
 import commentjson
-# import dataset
 import itertools
 import json
 import multiprocessing
 import os
-import random
-import socket
-# from TREX_Core._utils import jkson as json
 import sqlalchemy
 import sys
 # import numpy as np
