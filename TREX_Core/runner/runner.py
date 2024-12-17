@@ -8,7 +8,7 @@ import sys
 # import numpy as np
 from packaging import version
 
-from sqlalchemy import create_engine, MetaData, Column, func, insert
+from sqlalchemy import create_engine, MetaData, Column, func, insert, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
@@ -19,8 +19,9 @@ class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.config_file_name = config
-        self.configs = self.__get_config(config, resume, **kwargs)
+        self.configs = self.__get_config(config, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
+        # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
 
@@ -36,7 +37,7 @@ class Runner:
             json_file = commentjson.load(f)
         return json_file
 
-    def __get_config(self, config_name: str, resume, **kwargs):
+    def __get_config(self, config_name: str, **kwargs):
         config_file = '_configs/' + config_name + '.json'
         config = self.__load_json_file(config_file)
 
@@ -171,6 +172,7 @@ class Runner:
 
             table = db_utils.get_table(db_string, 'configs', engine)
             with Session(engine) as session:
+                # session.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
                 session.execute(insert(table), ({'id': 0, 'data': config}))
                 session.commit()
             # db = dataset.connect(db_string)
@@ -403,6 +405,7 @@ class Runner:
 
         # import multiprocessing
         from multiprocessing import Pool
+        # from ray.util.multiprocessing import Pool
 
         # db_purged = False
         simulations_list = []

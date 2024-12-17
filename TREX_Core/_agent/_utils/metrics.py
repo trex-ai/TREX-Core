@@ -70,6 +70,7 @@ class Metrics:
             metrics = {key: value for key, value in self.__metrics.items() if value}
             metrics = [dict(zip(metrics, t)) for t in zip(*metrics.values())]
             self.__metrics = {key: value[metrics_len:] for key, value in self.__metrics.items()}
+            # await db_utils.dump_data(metrics, self.__db['path'], self.__db['table'])
             await asyncio.create_task(db_utils.dump_data(metrics, self.__db['path'], self.__db['table']))
             await self.__ensure_transactions_complete(metrics_len)
 

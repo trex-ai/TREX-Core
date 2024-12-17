@@ -50,8 +50,8 @@ class Controller:
             'ended': 0,
         }
 
-        self.__generations = self.__config['study']['generations'] - 1
-        self.__generation = self.set_initial_generation()
+        self.__episodes = self.__config['study']['generations'] - 1
+        self.__episode = self.set_initial_generation()
 
         self.__start_time = self.get_start_time()
         self.__time = self.__start_time
@@ -65,7 +65,7 @@ class Controller:
 
         self.__current_step = 0
         self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-        self.__total_steps = self.__generations * self.__end_step
+        self.__total_steps = self.__episodes * self.__end_step
         self.__eta_buffer = deque(maxlen=20)
 
         self.make_participant_tracker()
@@ -79,7 +79,7 @@ class Controller:
             'market_id': self.market_id,
             'sim_started': False,
             'sim_ended': False,
-            'generation_ended': False,
+            'episode_ended': False,
             'current_step': self.__current_step,
             'last_step_clock': None,
             'running_generations': 0,
@@ -254,7 +254,7 @@ class Controller:
             if not self.status['registered_on_server']:
                 continue
 
-            if not self.status['generation_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
+            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
                 self.status['last_step_clock'] = time.time()
                 print(self.status)
 
@@ -370,14 +370,14 @@ class Controller:
             self.__eta_buffer.append(step_time)
             # total_steps = self.__generations * self.__end_step
             # elapsed_steps_gen = self.__current_step +
-            elapsed_steps = self.__current_step + (self.__generation-1) * self.__end_step
+            elapsed_steps = self.__current_step + (self.__episode - 1) * self.__end_step
             steps_to_go = self.__total_steps - elapsed_steps
             eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
 
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', generation: ', self.__generation+1, '/', self.__generations+1,
+                  ', generation: ', self.__episode + 1, '/', self.__episodes + 1,
                   ', step: ', self.__current_step, '/', self.__end_step)
                   # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
@@ -407,13 +407,13 @@ class Controller:
             # if hasattr(self, 'hyperparameters_idx'):
             #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__generation,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__episode,
                                   user_property=('to', '^all'))
-            self.status['generation_ended'] = False
+            self.status['episode_ended'] = False
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time()
+            await self.__print_step_time(1440)
             self.__current_step += 1
 
             message = {
@@ -443,15 +443,15 @@ class Controller:
             # self.status['participants_weights_saved'] = False
             # self.status['participants_weights_loaded'] = False
 
-            self.status['generation_ended'] = True
+            self.status['episode_ended'] = True
             # await db_utils.update_metadata(self.__config['study']['output_database'],
             #                                self.__generation,
             #                                {self.__config['market']['id']: True})
 
             # end simulation if the final generation is done, else reset step and stuff
-            if self.__generation <= self.__generations:
-                print('generation', self.__generation, 'complete')
-                self.__generation += 1
+            if self.__episode <= self.__episodes:
+                print('episode', self.__episode, 'complete')
+                self.__episode += 1
                 self.status['running_generations'] += 1
                 self.__current_step = 0
                 self.__start_time = self.get_start_time()
@@ -462,12 +462,12 @@ class Controller:
             message = {
                 # 'output_path': self.status['output_path'],
                 'db_path': self.__config['study']['output_database'],
-                'generation': self.__generation - 1,
+                'generation': self.__episode - 1,
                 'market_id': self.__config['market']['id']
             }
             # await self.__client.emit('end_generation', message)
             # await self.delay(20)
-            if self.__generation <= self.__generations:
+            if self.__episode <= self.__episodes:
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message,
                                       user_property=('to', '^all'))
             else:
@@ -484,7 +484,7 @@ class Controller:
                 self.status['sim_ended'] = True
                 # TODO: add function to reset sim for next hyperparameter set
                 # if self.status['sim_ended']:
-                print('end_simulation', self.__generation-1, self.__generations)
+                print('end_simulation', self.__episode - 1, self.__episodes)
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',

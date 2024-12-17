@@ -7,7 +7,7 @@
       "start_datetime": "2018-07-01 0:0:0",
       "start_datetime_sequence": "sequential",
       "timezone": "America/Vancouver",
-      "days": 1,
+      "days": 10,
       "generations": 10,
       "sim_root": "simulations/"
     },
