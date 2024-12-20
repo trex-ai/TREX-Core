@@ -98,7 +98,7 @@ class Client:
         client.on_message = self.on_message
 
         # client.set_auth_credentials(token, None)
-        await client.connect(self.server_address)
+        await client.connect(self.server_address, keepalive=60)
         await STOP.wait()
         # await asyncio.wait()
         # await client.disconnect()
@@ -138,14 +138,13 @@ class Client:
             # tg.create_task(self.market.loop())
 
 if __name__ == '__main__':
-    import socket
     import argparse
     import importlib
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')
-    parser.add_argument('--port', default=42069, help='')
-    parser.add_argument('--configs')
+    parser.add_argument('--port', default=1883, help='')
+    parser.add_argument('--config')
     args = parser.parse_args()
     # server_address = ''.join(['http://', args.host, ':', str(args.port)])
     server_address = args.host

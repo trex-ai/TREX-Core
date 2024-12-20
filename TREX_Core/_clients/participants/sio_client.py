@@ -88,7 +88,7 @@ class Client:
 
         # client.set_auth_credentials(token, None)
         # print(self.server_address)
-        await client.connect(self.server_address)
+        await client.connect(self.server_address, keepalive=60)
         await STOP.wait()
 
     async def run(self):
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     parser.add_argument('--id', help='')
     parser.add_argument('--market_id', help='')
     parser.add_argument('--host', default="localhost", help='')
-    parser.add_argument('--port', default=42069, help='')
+    parser.add_argument('--port', default=1883, help='')
     parser.add_argument('--profile_db_path', default=None, help='')
     parser.add_argument('--output_db_path', default=None, help='')
     # parser.add_argument('--trader', default=None, help='')

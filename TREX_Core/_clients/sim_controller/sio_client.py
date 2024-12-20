@@ -76,7 +76,7 @@ class Client:
         client.on_message = self.on_message
 
         # client.set_auth_credentials(token, None)
-        await client.connect(self.server_address)
+        await client.connect(self.server_address, keepalive=60)
         await STOP.wait()
 
 
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')
-    parser.add_argument('--port', default=42069, help='')
+    parser.add_argument('--port', default=1883, help='')
     parser.add_argument('--config', default='', help='')
     args = parser.parse_args()
 

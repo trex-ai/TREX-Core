@@ -28,6 +28,6 @@ def cli(configs):
     if port:
         args.append('--port=' + port)
 
-    args.append('--configs=' + json.dumps(market_configs))
+    args.append('--config=' + json.dumps(market_configs))
     print(script_path)
     return (script_path, args)
