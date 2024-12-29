@@ -27,6 +27,8 @@ class NSDefault():
                 await self.on_market_ready(payload)
             case 'participant_disconnected':
                 await self.on_participant_disconnected(payload)
+            case 'policy_sever_ready':
+                await self.on_policy_server_ready(payload)
 
     async def on_connect(self):
         await self.controller.register()
@@ -63,6 +65,9 @@ class NSDefault():
 
     async def on_market_ready(self, message):
         self.controller.status['market_ready'] = True
+
+    async def on_policy_server_ready(self, message):
+        self.controller.status['policy_server_ready'] = True
 
     # async def on_end_simulation(self, message):
     #     raise SystemExit

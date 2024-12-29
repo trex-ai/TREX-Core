@@ -40,6 +40,12 @@ class Controller:
         self.__static_agents = [participant for participant in self.__config['participants'] if
                                 'learning' not in self.__config['participants'][participant]['trader'] or
                                  not self.__config['participants'][participant]['trader']['learning']]
+
+        self.__policy_clients = [participant for participant in self.__config['participants'] if
+                                 self.__config['participants'][participant]['trader']['type'] == 'policy_client']
+        self.__has_policy_clients = len(self.__policy_clients) > 0
+        # TODO: do handshake if policy server is needed somewhere in monitor
+
         self.__participants = {}
         self.__turn_control = {
             'total': 0,
@@ -95,6 +101,8 @@ class Controller:
             'turn_control': self.__turn_control,
             'market_turn_end': False,
         }
+        if self.__has_policy_clients:
+            self.status['policy_sever_ready'] = False
         # self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
@@ -286,6 +294,9 @@ class Controller:
                 continue
 
             if not self.status['market_ready']:
+                continue
+
+            if self.__has_policy_clients and not self.status['policy_sever_ready']:
                 continue
 
             # await self.update_sim_paths()
