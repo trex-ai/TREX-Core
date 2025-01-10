@@ -74,6 +74,16 @@ class Runner:
         db_string = config['study']['output_db_location'] + '/' + study_name
         if 'output_database' not in config['study'] or not config['study']['output_database']:
             config['study']['output_database'] = db_string
+
+        # # TODO: temporarily add method to manually define profile step size until auto detection works
+        # if 'time_step_size' in config['study']:
+        #     self.__time_step_s = config['study']['time_step_size']
+        # else:
+        #     self.__time_step_s = 60
+        # self.__day_steps = int(1440 / (self.__time_step_s / 60))
+        #
+        # self.__current_step = 0
+        # self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
         #
         # if 'purge' in kwargs and kwargs['purge']:
         #     if database_exists(db_string):

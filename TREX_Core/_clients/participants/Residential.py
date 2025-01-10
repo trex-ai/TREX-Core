@@ -27,6 +27,7 @@ class Participant:
         self.__client = sio_client
         self.client = sio_client
 
+
         self.__profile = {
             'db_path': profile_db_path
         }
@@ -42,6 +43,7 @@ class Participant:
         # Initialize trader variables and functions
         trader_params = kwargs.get('trader')
         trader_fns = {
+            'client': self.__client,
             'id': self.participant_id,
             'market_id': self.market_id,
             'timing': self.__timing,

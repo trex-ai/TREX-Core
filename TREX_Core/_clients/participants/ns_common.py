@@ -36,6 +36,8 @@ class NSDefault:
                 await self.on_end_generation(payload)
             case 'end_simulation':
                 await self.on_end_simulation()
+            case 'get_actions_return':
+                await self.on_get_actions_return(payload)
 
     async def on_connect(self):
         # print('connected')
@@ -49,38 +51,38 @@ class NSDefault:
         self.participant.busy = True
         # print("participant disconnected")
 
-    async def on_update_market_info(self, message):
-        client_data = json.loads(message)
+    async def on_update_market_info(self, payload):
+        client_data = json.loads(payload)
         if client_data['id'] == self.participant.market_id:
             self.participant.market_sid = client_data['sid']
             self.participant.timezone = client_data['timezone']
             self.participant.market_connected = True
             # self.participant.busy = False
 
-    async def on_start_round(self, message):
-        message = json.loads(message)
+    async def on_start_round(self, payload):
+        payload = json.loads(payload)
         # print(message)
-        await self.participant.start_round(message)
+        await self.participant.start_round(payload)
 
-    async def on_ask_success(self, message):
+    async def on_ask_success(self, payload):
         # message = json.loads(message)
-        await self.participant.ask_success(message)
+        await self.participant.ask_success(payload)
 
-    async def on_bid_success(self, message):
+    async def on_bid_success(self, payload):
         # message = json.loads(message)
-        await self.participant.bid_success(message)
+        await self.participant.bid_success(payload)
 
-    async def on_settled(self, message):
-        message = json.loads(message)
-        await self.participant.settle_success(message)
+    async def on_settled(self, payload):
+        payload = json.loads(payload)
+        await self.participant.settle_success(payload)
 
-    async def on_return_extra_transactions(self, message):
-        message = json.loads(message)
-        await self.participant.update_extra_transactions(message)
+    async def on_return_extra_transactions(self, payload):
+        payload = json.loads(payload)
+        await self.participant.update_extra_transactions(payload)
 
-    async def on_is_participant_joined(self, message):
+    async def on_is_participant_joined(self, payload):
         await self.participant.is_participant_joined()
-    async def on_start_generation(self, message):
+    async def on_start_generation(self, payload):
         """Event triggers actions to be taken before the start of a simulation
 
         Args:
@@ -96,12 +98,12 @@ class NSDefault:
             # print(message)
             output_db_str = self.participant.output_db_path
             market_id = self.participant.market_id
-            table_name = f'{message}_{market_id}_metrics'
+            table_name = f'{payload}_{market_id}_metrics'
             self.participant.trader.metrics.update_db_info(output_db_str, table_name)
 
-    async def on_end_generation(self, message):
+    async def on_end_generation(self, payload):
         # print("eog msg", message)
-        message = json.loads(message)
+        payload = json.loads(payload)
         """Event triggers actions to be taken at the end of a simulation
 
         Args:
@@ -117,7 +119,7 @@ class NSDefault:
         #     await self.participant.trader.save_weights(**message)
 
         if hasattr(self.participant.trader, 'reset'):
-            await self.participant.trader.reset(**message)
+            await self.participant.trader.reset(**payload)
 
         # await self.participant.client.emit(event='participant_ready',
         #                                    data={self.participant.participant_id: True})
@@ -131,3 +133,8 @@ class NSDefault:
         # print('end_simulation')
         self.participant.run = False
         await self.participant.kill()
+
+    async def on_get_actions_return(self, payload):
+        payload = json.loads(payload)
+        # print(message)
+        await self.participant.trader.get_actions_return(payload)

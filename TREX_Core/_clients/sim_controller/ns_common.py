@@ -68,6 +68,7 @@ class NSDefault():
 
     async def on_policy_server_ready(self, message):
         self.controller.status['policy_server_ready'] = True
+        await self.controller.update_turn_status(message)
 
     # async def on_end_simulation(self, message):
     #     raise SystemExit

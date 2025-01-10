@@ -102,7 +102,8 @@ class Controller:
             'market_turn_end': False,
         }
         if self.__has_policy_clients:
-            self.status['policy_sever_ready'] = False
+            # self.status['policy_sever_online'] = False
+            self.status['policy_server_ready'] = False
         # self.training_controller = TrainingController(self.__config, self.status)
 
     async def delay(self, s):
@@ -197,6 +198,10 @@ class Controller:
 
         if self.__turn_control['ended'] < self.__turn_control['total']:
             return
+
+        if self.__has_policy_clients and not self.status['policy_server_ready']:
+            return
+
         if self.status['market_turn_end']:
             await self.__advance_turn()
         # pprint(self.status)
@@ -206,6 +211,9 @@ class Controller:
         for participant_id in self.__participants:
             self.__participants[participant_id]['turn_end'] = False
         self.__turn_control['ended'] = 0
+
+        if self.__has_policy_clients:
+            self.status['policy_server_ready'] = False
 
     async def __advance_turn(self):
         # Once all participants have gone through their turn,
@@ -264,20 +272,20 @@ class Controller:
 
             if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
                 self.status['last_step_clock'] = time.time()
-                print(self.status)
+                pprint(self.status)
 
                 #TODO: One of the most likely scensarios for sim to get stuck is that a participant
                 # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
                 # In the event that this happens, a set of checks need to be performed to resume where the agent abruptly died.
 
-                message = {
-                    'time': self.__time,
-                    'duration': self.__time_step_s,
-                    'update': False
-                }
-                # await self.__client.emit('start_round_simulation', message)
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
-                                      user_property=('to', '^all'))
+                # message = {
+                #     'time': self.__time,
+                #     'duration': self.__time_step_s,
+                #     'update': False
+                # }
+                # # await self.__client.emit('start_round_simulation', message)
+                # self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
+                #                       user_property=('to', '^all'))
 
             if self.status['sim_started']:
                 continue
@@ -296,7 +304,7 @@ class Controller:
             if not self.status['market_ready']:
                 continue
 
-            if self.__has_policy_clients and not self.status['policy_sever_ready']:
+            if self.__has_policy_clients and not self.status['policy_server_ready']:
                 continue
 
             # await self.update_sim_paths()
@@ -349,7 +357,9 @@ class Controller:
 
             self.status['sim_started'] = True
             self.status['monitor_timeout'] = 5
-            await self.step()
+
+            await self.__advance_turn()
+            # await self.step()
 
     # async def __load_weights(self, db, generation, market_id, participant_id):
     #     # db_string = self.__config['study']['output_database']

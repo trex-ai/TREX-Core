@@ -41,6 +41,7 @@ class Client:
         client.subscribe("/".join([market_id, 'simulation', 'end_round']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'participant_ready']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'market_ready']), qos=0)
+        client.subscribe("/".join([market_id, 'algorithm', 'policy_sever_ready']), qos=2)
 
     def on_disconnect(self, client, packet, exc=None):
         # self.ns.on_disconnect()

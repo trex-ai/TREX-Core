@@ -144,7 +144,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')
     parser.add_argument('--port', default=1883, help='')
-    parser.add_argument('--config')
+    parser.add_argument('--configs')
     args = parser.parse_args()
     # server_address = ''.join(['http://', args.host, ':', str(args.port)])
     server_address = args.host

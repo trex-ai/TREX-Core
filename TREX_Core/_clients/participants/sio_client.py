@@ -22,7 +22,7 @@ class Client:
         self.server_address = server_address
         # last will message
         will_message = gmqtt.Message('/'.join([market_id, 'simulation', 'participant_disconnected']), participant_id,
-                                     will_delay_interval=10)
+                                     will_delay_interval=5)
         self.sio_client = MQTTClient(cuid(length=10).generate(), will_message=will_message)
 
         Participant = importlib.import_module('TREX_Core._clients.participants.' + kwargs.get('type')).Participant
@@ -58,6 +58,8 @@ class Client:
         client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
+
+        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_actions_return']), qos=0)
         # await keep_alive()
 
     # self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_disconnected']), self.participant_id,
