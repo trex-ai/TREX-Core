@@ -1,4 +1,5 @@
 import json
+from pprint import pprint
 
 # import socketio
 
@@ -29,6 +30,8 @@ class NSDefault():
                 await self.on_participant_disconnected(payload)
             case 'policy_sever_ready':
                 await self.on_policy_server_ready(payload)
+            case 'sim_controller_status':
+                await self.on_sim_controller_status()
 
     async def on_connect(self):
         await self.controller.register()
@@ -69,6 +72,9 @@ class NSDefault():
     async def on_policy_server_ready(self, message):
         self.controller.status['policy_server_ready'] = True
         await self.controller.update_turn_status(message)
+
+    async def on_sim_controller_status(self):
+        pprint(self.controller.status)
 
     # async def on_end_simulation(self, message):
     #     raise SystemExit

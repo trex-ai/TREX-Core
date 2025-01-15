@@ -56,10 +56,10 @@ class Client:
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'is_participant_joined']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
 
-        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_actions_return']), qos=0)
+        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_actions_return']), qos=2)
         # await keep_alive()
 
     # self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_disconnected']), self.participant_id,

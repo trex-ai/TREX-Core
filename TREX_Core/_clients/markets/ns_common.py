@@ -76,7 +76,7 @@ class NSDefault():
                 await self.on_start_round(payload)
             case 'start_generation':
                 await self.on_start_generation(payload)
-            case 'end_generation':
+            case 'end_episode':
                 await self.on_end_generation(payload)
             case 'end_simulation':
                 await self.on_end_simulation()

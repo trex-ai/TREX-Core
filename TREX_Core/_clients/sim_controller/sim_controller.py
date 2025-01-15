@@ -57,7 +57,7 @@ class Controller:
         }
 
         self.__episodes = self.__config['study']['generations'] - 1
-        self.__episode = self.set_initial_generation()
+        self.__episode = self.set_initial_episode()
 
         self.__start_time = self.get_start_time()
         self.__time = self.__start_time
@@ -88,7 +88,7 @@ class Controller:
             'episode_ended': False,
             'current_step': self.__current_step,
             'last_step_clock': None,
-            'running_generations': 0,
+            'running_episodes': 0,
             'market_online': False,
             'market_ready': True,
             'sim_interrupted': False,
@@ -152,7 +152,7 @@ class Controller:
     # Set intial generation data folder
     # @tenacity.retry(wait=tenacity.wait_fixed(5)+tenacity.wait_random(0, 5))
     #TODO: update this to check all dbs
-    def set_initial_generation(self):
+    def set_initial_episode(self):
         db_string = self.__config['study']['output_database']
         if not database_exists(db_string):
             return 0
@@ -270,7 +270,7 @@ class Controller:
             if not self.status['registered_on_server']:
                 continue
 
-            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
+            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 60:
                 self.status['last_step_clock'] = time.time()
                 pprint(self.status)
 
@@ -398,7 +398,7 @@ class Controller:
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', generation: ', self.__episode + 1, '/', self.__episodes + 1,
+                  ', episode: ', self.__episode + 1, '/', self.__episodes + 1,
                   ', step: ', self.__current_step, '/', self.__end_step)
                   # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
@@ -415,7 +415,7 @@ class Controller:
         if not self.status['sim_started']:
             return
 
-        # Beginning new generation
+        # Beginning new episode
         if self.__current_step == 0:
             print('STARTING SIMULATION')
             # message = {
@@ -447,7 +447,7 @@ class Controller:
             # print(self.__current_step, self.__end_step)
             self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
                                   user_property=('to', '^all'))
-        # end of generation
+        # end of episode
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
                 'ready': 0
@@ -473,23 +473,23 @@ class Controller:
             if self.__episode <= self.__episodes:
                 print('episode', self.__episode, 'complete')
                 self.__episode += 1
-                self.status['running_generations'] += 1
+                self.status['running_episodes'] += 1
                 self.__current_step = 0
                 self.__start_time = self.get_start_time()
                 self.__time = self.__start_time
                 self.status['sim_started'] = False
                 self.status['market_ready'] = False
 
-            message = {
-                # 'output_path': self.status['output_path'],
-                'db_path': self.__config['study']['output_database'],
-                'generation': self.__episode - 1,
-                'market_id': self.__config['market']['id']
-            }
+                message = {
+                    # 'output_path': self.status['output_path'],
+                    'db_path': self.__config['study']['output_database'],
+                    'generation': self.__episode - 1,
+                    'market_id': self.__config['market']['id']
+                }
             # await self.__client.emit('end_generation', message)
             # await self.delay(20)
-            if self.__episode <= self.__episodes:
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_generation']), message,
+            # if self.__episode <= self.__episodes:
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_episode']), message,
                                       user_property=('to', '^all'))
             else:
                 # self.__generation > self.__generations:

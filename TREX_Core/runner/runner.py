@@ -19,7 +19,7 @@ class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.config_file_name = config
-        self.configs = self.__get_config(config, **kwargs)
+        self.configs = self._get_config(config, **kwargs)
         self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
@@ -32,17 +32,17 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
-    def __load_json_file(self, file_path):
+    def _load_json_file(self, file_path):
         with open(file_path) as f:
             json_file = commentjson.load(f)
         return json_file
 
-    def __get_config(self, config_name: str, **kwargs):
+    def _get_config(self, config_name: str, **kwargs):
         config_file = '_configs/' + config_name + '.json'
-        config = self.__load_json_file(config_file)
+        config = self._load_json_file(config_file)
 
         credentials_file = '_configs/_credentials.json'
-        credentials = self.__load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
+        credentials = self._load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
 
         if 'name' in config['study'] and config['study']['name']:
             study_name = config['study']['name'].replace(' ', '_')
@@ -76,6 +76,15 @@ class Runner:
             config['study']['output_database'] = db_string
 
         # # TODO: temporarily add method to manually define profile step size until auto detection works
+        # start_datetime = self.configs['study']['start_datetime']
+        # timezone = self.configs['study']['timezone']
+        # time_step_s = config['study']['time_step_size']
+        # day_steps = int(1440 / (time_step_s / 60))
+        # episode_steps = int(config['study']['days'] * day_steps) + 1
+        # start_timestamp = utils.timestr_to_timestamp(start_datetime, timezone)
+        # end_timestamp = start_timestamp + episode_steps
+
+
         # if 'time_step_size' in config['study']:
         #     self.__time_step_s = config['study']['time_step_size']
         # else:
@@ -410,7 +419,7 @@ class Runner:
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
         config_file = '_configs/' + self.config_file_name + '.json'
-        configs = self.__load_json_file(config_file)
+        configs = self._load_json_file(config_file)
         self.__create_sim_db(db_string, configs)
 
         # import multiprocessing
