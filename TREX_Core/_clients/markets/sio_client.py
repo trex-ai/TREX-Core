@@ -54,7 +54,7 @@ class Client:
 
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_generation']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_episode']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'is_market_online']), qos=0)

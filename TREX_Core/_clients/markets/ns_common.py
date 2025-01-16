@@ -74,7 +74,7 @@ class NSDefault():
             # simulation related events
             case 'start_round':
                 await self.on_start_round(payload)
-            case 'start_generation':
+            case 'start_episode':
                 await self.on_start_generation(payload)
             case 'end_episode':
                 await self.on_end_generation(payload)

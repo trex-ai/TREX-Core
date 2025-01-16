@@ -30,7 +30,7 @@ class NSDefault:
             # simulation related events
             case 'is_participant_joined':
                 await self.on_is_participant_joined(payload)
-            case 'start_generation':
+            case 'start_episode':
                 await self.on_start_generation(payload)
             case 'end_episode':
                 await self.on_end_generation(payload)

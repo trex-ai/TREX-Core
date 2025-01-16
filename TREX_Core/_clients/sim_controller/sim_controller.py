@@ -270,7 +270,8 @@ class Controller:
             if not self.status['registered_on_server']:
                 continue
 
-            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 60:
+            #TODO: maybe disable this at some point and just use mqtt to query status at any time
+            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
                 self.status['last_step_clock'] = time.time()
                 pprint(self.status)
 
@@ -428,7 +429,7 @@ class Controller:
             # if hasattr(self, 'hyperparameters_idx'):
             #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_generation']), self.__episode,
+            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_episode']), self.__episode,
                                   user_property=('to', '^all'))
             self.status['episode_ended'] = False
 
