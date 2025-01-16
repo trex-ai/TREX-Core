@@ -7,7 +7,7 @@ import os
 import signal
 import tenacity
 import time
-from cuid2 import Cuid as cuid
+from cuid2 import Cuid
 from operator import itemgetter
 
 from TREX_Core._clients.markets.Grid import Market as Grid
@@ -102,6 +102,7 @@ class Market:
     async def open_db(self, table_name, db_string=None):
         if not self.save_transactions:
             return
+
         if not db_string:
             db_string = self.__db['path']
         # self.__db['path'] = db_string
@@ -110,9 +111,8 @@ class Market:
         # if 'table' not in self.__db or self.__db['table'] is None:
         # table_name = self.__db.pop('table_name') + '_market'
         table_name += '_market'
-        await db_utils.create_table(
+        await db_utils.create_market_table(
             db_string=db_string,
-            table_type='market2',
             table_name=table_name)
         self.__db['table'] = db_utils.get_table(db_string, table_name)
 
@@ -591,7 +591,7 @@ class Market:
         #     ask['lock'] = True
         #     bid['lock'] = True
 
-        commit_id = cuid().generate(6)
+        commit_id = Cuid().generate(6)
         settlement_time = self.__timing['current_round'][1]
         settlement_price_sell = ask['price']
         settlement_price_buy = bid['price']

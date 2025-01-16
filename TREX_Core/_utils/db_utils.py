@@ -27,8 +27,9 @@ def get_table(db_string, table_name, engine=None):
     if not engine:
         engine = create_engine(db_string)
 
-    if not sqlalchemy.inspect(engine).has_table(table_name):
-        return None
+    # if not sqlalchemy.inspect(engine).has_table(table_name):
+    #     return None
+    # print(db_string, table_name)
 
     metadata = MetaData()
     table = sqlalchemy.Table(table_name, metadata, autoload_with=engine)
@@ -50,7 +51,7 @@ def drop_table(db_string, table_name, engine=None):
     if table is not None:
         table.drop(engine)
 
-async def create_table(db_string, table_type, table_name=None, engine=None, **kwargs):
+async def create_market_table(db_string, table_name=None, engine=None, **kwargs):
     if not engine:
         engine = create_engine(db_string)
     if not database_exists(engine.url):
@@ -60,46 +61,46 @@ async def create_table(db_string, table_type, table_name=None, engine=None, **kw
         return
 
     meta = MetaData()
-    if table_type == 'market':
-        table = sqlalchemy.Table(
-            table_name if table_name else table_type,
-            meta,
-            Column('id', sqlalchemy.Integer, primary_key=True),
-            Column('quantity', sqlalchemy.Integer),
-            Column('seller_id', sqlalchemy.String),
-            Column('buyer_id', sqlalchemy.String),
-            Column('energy_source', sqlalchemy.String),
-            Column('settlement_price', sqlalchemy.Float),
-            Column('fee_ask', sqlalchemy.Float),
-            Column('fee_bid', sqlalchemy.Float),
-            Column('time_creation', sqlalchemy.Integer),
-            Column('time_purchase', sqlalchemy.Integer),
-            Column('time_consumption', sqlalchemy.Integer))
+    # if table_type == 'market':
+    #     table = sqlalchemy.Table(
+    #         table_name if table_name else table_type,
+    #         meta,
+    #         Column('id', sqlalchemy.Integer, primary_key=True),
+    #         Column('quantity', sqlalchemy.Integer),
+    #         Column('seller_id', sqlalchemy.String),
+    #         Column('buyer_id', sqlalchemy.String),
+    #         Column('energy_source', sqlalchemy.String),
+    #         Column('settlement_price', sqlalchemy.Float),
+    #         Column('fee_ask', sqlalchemy.Float),
+    #         Column('fee_bid', sqlalchemy.Float),
+    #         Column('time_creation', sqlalchemy.Integer),
+    #         Column('time_purchase', sqlalchemy.Integer),
+    #         Column('time_consumption', sqlalchemy.Integer))
+    #
+    # # temporary for transition to MicroTE3
+    # elif table_type == 'market2':
+    table = sqlalchemy.Table(
+        table_name,
+        meta,
+        Column('id', sqlalchemy.Integer, primary_key=True),
+        Column('quantity', sqlalchemy.Integer),
+        Column('seller_id', sqlalchemy.String),
+        Column('buyer_id', sqlalchemy.String),
+        Column('energy_source', sqlalchemy.String),
+        Column('settlement_price_sell', sqlalchemy.Float),
+        Column('settlement_price_buy', sqlalchemy.Float),
+        Column('fee_ask', sqlalchemy.Float),
+        Column('fee_bid', sqlalchemy.Float),
+        Column('time_creation', sqlalchemy.Integer),
+        Column('time_purchase', sqlalchemy.Integer),
+        Column('time_consumption', sqlalchemy.Integer))
 
-    # temporary for transition to MicroTE3
-    elif table_type == 'market2':
-        table = sqlalchemy.Table(
-            table_name if table_name else table_type,
-            meta,
-            Column('id', sqlalchemy.Integer, primary_key=True),
-            Column('quantity', sqlalchemy.Integer),
-            Column('seller_id', sqlalchemy.String),
-            Column('buyer_id', sqlalchemy.String),
-            Column('energy_source', sqlalchemy.String),
-            Column('settlement_price_sell', sqlalchemy.Float),
-            Column('settlement_price_buy', sqlalchemy.Float),
-            Column('fee_ask', sqlalchemy.Float),
-            Column('fee_bid', sqlalchemy.Float),
-            Column('time_creation', sqlalchemy.Integer),
-            Column('time_purchase', sqlalchemy.Integer),
-            Column('time_consumption', sqlalchemy.Integer))
-
-    elif table_type == 'custom' and 'custom_table' in kwargs:
-        # must be a pre-defined sqlalchemy Table object
-        # TODO: add type check
-        table = kwargs['custom_table']
-    else:
-        return False
+    # elif table_type == 'custom' and 'custom_table' in kwargs:
+    #     # must be a pre-defined sqlalchemy Table object
+    #     # TODO: add type check
+    #     table = kwargs['custom_table']
+    # else:
+    #     return False
     table.create(engine, checkfirst=True)
     return True
 

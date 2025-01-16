@@ -435,7 +435,7 @@ class Controller:
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time(1440)
+            await self.__print_step_time(self.__end_step)
             self.__current_step += 1
 
             message = {
