@@ -4,7 +4,7 @@ import os
 import json
 import gmqtt
 from gmqtt import Client as MQTTClient
-from TREX_Core._clients.participants.ns_common import NSDefault
+from TREX_Core.participants.ns_common import NSDefault
 
 from cuid2 import Cuid as cuid
 
@@ -25,7 +25,7 @@ class Client:
                                      will_delay_interval=5)
         self.sio_client = MQTTClient(cuid(length=10).generate(), will_message=will_message)
 
-        Participant = importlib.import_module('TREX_Core._clients.participants.' + kwargs.get('type')).Participant
+        Participant = importlib.import_module('TREX_Core.participants.' + kwargs.get('type')).Participant
         self.participant = Participant(sio_client=self.sio_client,
                                        participant_id=participant_id,
                                        market_id=market_id,

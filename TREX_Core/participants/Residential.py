@@ -7,7 +7,7 @@ import databases
 import tenacity
 import os
 import signal
-from TREX_Core._clients.participants import ledger
+from TREX_Core.participants import ledger
 from TREX_Core._utils import db_utils, utils
 from cuid2 import Cuid
 

@@ -10,7 +10,7 @@ import time
 from cuid2 import Cuid
 from operator import itemgetter
 
-from TREX_Core._clients.markets.Grid import Market as Grid
+from TREX_Core.markets.Grid import Market as Grid
 from TREX_Core._utils import db_utils, source_classifier
 
 
@@ -1071,6 +1071,7 @@ class Market:
             # await self.__client.emit('end_round', data='')
 
             self.__client.publish('/'.join([self.market_id, 'simulation', 'end_round']), '')
+
 
     # async def loop(self):
     #     # change loop depending on sim mode or RT mode

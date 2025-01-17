@@ -28,7 +28,7 @@ class Client:
         try:
             Market = importlib.import_module('markets.' + market_configs['type']).Market
         except ImportError:
-            Market = importlib.import_module('TREX_Core._clients.markets.' + market_configs['type']).Market
+            Market = importlib.import_module('TREX_Core.markets.' + market_configs['type']).Market
 
         self.market = Market(client=self.client,
                              **market_configs,

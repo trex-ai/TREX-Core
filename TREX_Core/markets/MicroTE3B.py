@@ -2,7 +2,7 @@ import itertools
 from cuid2 import Cuid
 from operator import itemgetter
 
-from TREX_Core._clients.markets.base.DoubleAuction import Market as BaseMarket
+from TREX_Core.markets.base.DoubleAuction import Market as BaseMarket
 class Market(BaseMarket):
     """MicroTE is a futures trading based market design for transactive energy as part of TREX
 
@@ -171,12 +171,3 @@ class Market(BaseMarket):
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)
-
-    # after settlement confirmation, update bid and ask quantities
-    async def settlement_delivered(self, message):
-        # self.__status['round_settle_delivered'].append(commit_id)
-        commit_id = message.pop(next(iter(message)))
-        if commit_id not in self.__status['round_settle_delivered']:
-            self.__status['round_settle_delivered'][commit_id] = 1
-        else:
-            self.__status['round_settle_delivered'][commit_id] += 1
