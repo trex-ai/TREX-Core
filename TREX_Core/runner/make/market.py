@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 def cli(configs):
     path = __file__.split('runner')
-    script_path = path[0] + '_clients/markets/sio_client.py'
+    script_path = path[0] + '_clients/markets/client.py'
     # print(path)
 
     if 'server' not in configs:
