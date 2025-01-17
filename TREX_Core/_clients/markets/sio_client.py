@@ -152,7 +152,7 @@ class Client:
         await self.market.open_db(table_name)
 
     async def on_end_generation(self, message):
-        await self.market.end_sim_generation()
+        # await self.market.end_sim_generation()
         await self.market.record_transactions(delay=False)
         await self.market.ensure_transactions_complete()
         # if not last_generation:
@@ -161,7 +161,7 @@ class Client:
 
     async def on_end_simulation(self):
         self.market.run = False
-        await self.market.end_sim_generation()
+        # await self.market.end_sim_generation()
         await self.market.record_transactions(delay=False)
         await self.market.ensure_transactions_complete()
         await asyncio.sleep(5)
