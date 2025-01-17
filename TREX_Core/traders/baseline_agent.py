@@ -1,6 +1,6 @@
 import asyncio
 # import tenacity
-from TREX_Core._agent._utils.metrics import Metrics
+from TREX_Core.utils.metrics import Metrics
 
 
 class Trader:

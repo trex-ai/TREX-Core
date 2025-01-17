@@ -2,7 +2,7 @@ import random
 import tensorflow as tf
 from random import randint
 import numpy as np
-from TREX_Core._utils import utils
+from TREX_Core.utils import utils
 from collections import OrderedDict, Counter
 import itertools
 import scipy.signal

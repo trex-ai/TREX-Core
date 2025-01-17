@@ -75,7 +75,7 @@
         "scale": 1 // multiply the generation data from the profile database to be used in simulation
       },
       "storage": {  // (optional) Defines the storage system to be attached to a participant
-        "type": "Bess", // storage type, must exist in _devices
+        "type": "Bess", // storage type, must exist in devices
         "capacity": 27000,  // Usable capacity defined in Wh
         "power": 10000, // constant charge/discharge rate defined in W
         "efficiency": 0.95, // one way efficiency. round-trip efficiency is efficiency^2

@@ -9,7 +9,7 @@ from statistics import mean
 from sqlalchemy_utils import database_exists
 
 # from _clients.sim_controller.training_controller import TrainingController
-# from _utils import utils
+# from utils import utils
 
 from pprint import pprint
 

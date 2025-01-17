@@ -1,4 +1,4 @@
-from TREX_Core._utils import utils, db_utils
+from TREX_Core.utils import utils, db_utils
 import sqlalchemy
 from sqlalchemy import MetaData, Column
 import asyncio

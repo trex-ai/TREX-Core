@@ -1,4 +1,4 @@
-from TREX_Core._utils import utils
+from TREX_Core.utils import utils
 
 class TrainingController:
     """Training controller is a intended to provide very fine control of the trainin process, especially for generational training.

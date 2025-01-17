@@ -1,11 +1,9 @@
 # from _clients.participants.participants import Residential
 
-import tenacity
-from TREX_Core._agent._utils.metrics import Metrics
+from TREX_Core.utils.metrics import Metrics
 import asyncio
-from TREX_Core._utils import jkson as json
 # import serialize
-import TREX_Core._utils as utils
+import TREX_Core.utils as utils
 
 class Trader:
     def __init__(self, **kwargs):

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, MetaData, Column, func, insert, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
-from TREX_Core._utils import utils, db_utils
+from TREX_Core.utils import utils, db_utils
 
 
 class Runner:
@@ -38,10 +38,10 @@ class Runner:
         return json_file
 
     def _get_config(self, config_name: str, **kwargs):
-        config_file = '_configs/' + config_name + '.json'
+        config_file = 'configs/' + config_name + '.json'
         config = self._load_json_file(config_file)
 
-        credentials_file = '_configs/_credentials.json'
+        credentials_file = 'configs/_credentials.json'
         credentials = self._load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
 
         if 'name' in config['study'] and config['study']['name']:
@@ -418,7 +418,7 @@ class Runner:
         db_string = self.configs['study']['output_database']
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
-        config_file = '_configs/' + self.config_file_name + '.json'
+        config_file = 'configs/' + self.config_file_name + '.json'
         configs = self._load_json_file(config_file)
         self.__create_sim_db(db_string, configs)
 

@@ -1,14 +1,14 @@
 import ast
 import asyncio
 import importlib
-import json
+# import json
 
 import databases
 import tenacity
 import os
 import signal
 from TREX_Core.participants import ledger
-from TREX_Core._utils import db_utils, utils
+from TREX_Core.utils import db_utils, utils
 from cuid2 import Cuid
 
 
@@ -62,7 +62,7 @@ class Participant:
             #     'id': self.participant_id,
             #     'timing': self.__timing
             # }
-            self.storage = importlib.import_module('TREX_Core._devices.' + storage_type).Storage(**storage_params)
+            self.storage = importlib.import_module('TREX_Core.devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
             trader_fns['storage'] = {
                 'info': self.storage.get_info,

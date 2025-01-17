@@ -11,7 +11,7 @@ from cuid2 import Cuid
 from operator import itemgetter
 
 from TREX_Core.markets.Grid import Market as Grid
-from TREX_Core._utils import db_utils, source_classifier
+from TREX_Core.utils import db_utils, source_classifier
 
 
 class Market:
