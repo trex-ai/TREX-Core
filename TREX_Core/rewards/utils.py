@@ -1,6 +1,7 @@
 async def process_ledger(last_deliver, ledger, market_info):
     # strip out time from transactions and simplify for reward calculation
-    grid_prices = market_info[str(last_deliver)]['grid']
+    # print(last_deliver, market_info)
+    grid_prices = market_info[last_deliver]['grid']
 
     # market transactions uses a simplified transaction format
     # it is a dictionary containing lists of transactions ('bid/ask', quantity, price) for each source

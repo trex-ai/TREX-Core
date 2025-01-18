@@ -333,22 +333,29 @@ class Participant:
         # })
 
     async def __update_market_info(self, message):
+        # print(message)
+
+        current_round_info = message.pop('current_round')
+        next_settle_info = message.pop('next_settle')
 
         market_info = {
             self.__timing['current_round']: {
                 'grid': {
-                    'buy_price': message['current_round'][0],
-                    'sell_price': message['current_round'][1]
+                    'buy_price': current_round_info[0],
+                    'sell_price': current_round_info[1]
                 }
             },
             self.__timing['next_settle']: {
                 'grid': {
-                    'buy_price': message['next_settle'][0],
-                    'sell_price': message['next_settle'][0]
+                    'buy_price': next_settle_info[0],
+                    'sell_price': next_settle_info[1]
                 }
-            },
+            }
         }
+
+        market_info.update(message)
         self.__market_info.update(market_info)
+        # print(self.__market_info)
 
         # market_info = {
         #     'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),

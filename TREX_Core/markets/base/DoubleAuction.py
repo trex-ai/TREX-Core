@@ -167,6 +167,13 @@ class Market:
         self.__status['round_settled'].clear()
         self.__status['round_settle_delivered'].clear()
 
+    async def get_market_info(self):
+        market_info = {
+            'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+            'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
+        }
+        return market_info
+
     async def __start_round(self, duration):
         """
         Message all participants the start of the current round, as well as the duration
@@ -182,10 +189,11 @@ class Market:
         """
         start_time = self.__time()
         self.__reset_status()
-        market_info = {
-            'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
-            'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
-        }
+        market_info = await self.get_market_info()
+        # market_info = {
+        #     'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
+        #     'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
+        # }
         start_msg = [
             start_time,
             duration,
@@ -403,10 +411,7 @@ class Market:
         if time_delivery not in self.__open:
             return
 
-        if 'ask' not in self.__open[time_delivery]:
-            return
-
-        if 'bid' not in self.__open[time_delivery]:
+        if {'ask', 'bid'} > self.__open[time_delivery].keys():
             return
 
         # remove zero-quantity bid and ask entries
@@ -1057,20 +1062,20 @@ class Market:
     # Finish all processes and remove all unnecessary/ remaining records in preparation for a new time step, begin processes for next step
     async def step(self, timeout=60, sim_params=None):
         # timing for simulation mode and real-time mode a slightly different due to one with an explicit end condition. RT mode sequence is not too relevant at the moment will be added later.
-        if self.__timing['mode'] == 'sim':
-            await self.__update_time(sim_params)
-            if not self.__timing['current_round'][0] % 3600:
-                self.__grid.update_price(self.__timing['current_round'][0], self.__timing['timezone'])
-            await self.__start_round(duration=timeout)
-            await self.__match_all(self.__timing['last_settle'])
-            await self.__ensure_round_complete()
-            # print(self.__status)
-            # print('round complete?')
-            await self.__process_energy_exchange(self.__timing['current_round'])
-            await self.__clean_market(self.__timing['last_round'])
-            # await self.__client.emit('end_round', data='')
+        # if self.__timing['mode'] == 'sim':
+        await self.__update_time(sim_params)
+        if not self.__timing['current_round'][0] % 3600:
+            self.__grid.update_price(self.__timing['current_round'][0], self.__timing['timezone'])
+        await self.__start_round(duration=timeout)
+        await self.__match_all(self.__timing['last_settle'])
+        await self.__ensure_round_complete()
+        # print(self.__status)
+        # print('round complete?')
+        await self.__process_energy_exchange(self.__timing['current_round'])
+        await self.__clean_market(self.__timing['last_round'])
+        # await self.__client.emit('end_round', data='')
 
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'end_round']), '')
+            # self.__client.publish('/'.join([self.market_id, 'simulation', 'end_round']), '')
 
 
     # async def loop(self):

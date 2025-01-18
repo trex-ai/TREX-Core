@@ -1,7 +1,7 @@
 import itertools
 from cuid2 import Cuid
 from operator import itemgetter
-
+from typing import override
 from TREX_Core.markets.base.DoubleAuction import Market as BaseMarket
 class Market(BaseMarket):
     """MicroTE is a futures trading based market design for transactive energy as part of TREX
@@ -21,6 +21,7 @@ class Market(BaseMarket):
     def __init__(self, market_id, **kwargs):
         super().__init__(market_id, **kwargs)
 
+    @override
     async def __match(self, time_delivery):
         """Matches bids with asks for a single source type in a time slot
 
@@ -74,6 +75,7 @@ class Market(BaseMarket):
                 continue
             await self.__settle(bid, ask, time_delivery)
 
+    @override
     async def __settle(self, bid: dict, ask: dict, time_delivery: tuple):
         """Performs settlement for bid/ask pairs found during the matching process.
 

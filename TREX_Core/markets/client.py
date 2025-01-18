@@ -145,6 +145,7 @@ class Client:
     async def on_start_round(self, message):
         message = json.loads(message)
         await self.market.step(message['duration'], sim_params=message)
+        self.client.publish('/'.join([self.market.market_id, 'simulation', 'end_round']), '')
 
     async def on_start_generation(self, message):
         # message = json.loads(message)
