@@ -388,6 +388,7 @@ class Market:
 
         # add open entry
         self.__open[time_delivery]['ask'].append(entry)
+        # print(entry_id, participant_id, self.__participants[participant_id]['sid'])
         return entry_id, participant_id, self.__participants[participant_id]['sid']
 
     async def __match(self, time_delivery):
@@ -438,9 +439,9 @@ class Market:
 
             if bid['quantity'] <= 0 or ask['quantity'] <= 0:
                 continue
-            await self.__settle(bid, ask, time_delivery)
+            await self.settle(bid, ask, time_delivery)
 
-    async def __settle(self, bid: dict, ask: dict, time_delivery: tuple):
+    async def settle(self, bid: dict, ask: dict, time_delivery: tuple):
         """Performs settlement for bid/ask pairs found during the matching process.
 
         If bid/ask are valid, the bid/ask quantities are adjusted, a commitment record is created, and a settlement confirmation is sent to both participants.
@@ -508,7 +509,6 @@ class Market:
             'seller_id': ask['participant_id'],
             'bid': bid,
             'buyer_id': bid['participant_id'],
-            # 'lock': locking
         }
 
         # if buyer == 'grid' or seller == 'grid':
@@ -529,14 +529,14 @@ class Market:
             quantity,
             time_delivery
         ]
-        await self.__client.send_settled(bid['participant_id'], self.__participants[bid['participant_id']]['sid'],
-                                         buyer_message)
-        await self.__client.send_settled(ask['participant_id'], self.__participants[ask['participant_id']]['sid'],
-                                         seller_message)
-
+        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message,
+                            user_property=('to', self.__participants[bid['participant_id']]['sid']))
+        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message,
+                            user_property=('to', self.__participants[ask['participant_id']]['sid']))
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)
+        return quantity, settlement_price_buy, settlement_price_sell
 
     # after settlement confirmation, update bid and ask quantities
     async def settlement_delivered(self, message):

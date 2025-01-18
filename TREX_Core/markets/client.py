@@ -107,15 +107,21 @@ class Client:
 
     async def on_bid(self, bid):
         bid = json.loads(bid)
-        entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
-        self.client.publish('/'.join([self.market.market_id, participant_id, 'bid_ack']), entry_id,
-                            user_property=('to', participant_sid))
+        try:
+            entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
+            self.client.publish('/'.join([self.market.market_id, participant_id, 'bid_ack']), entry_id,
+                                user_property=('to', participant_sid))
+        except TypeError:
+            return
 
     async def on_ask(self, ask):
         ask = json.loads(ask)
-        entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
-        self.client.publish('/'.join([self.market.market_id, participant_id, 'ask_ack']), entry_id,
-                            user_property=('to', participant_sid))
+        try:
+            entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
+            self.client.publish('/'.join([self.market.market_id, participant_id, 'ask_ack']), entry_id,
+                                user_property=('to', participant_sid))
+        except TypeError:
+            return
 
     async def on_settlement_delivered(self, message):
         message = json.loads(message)
@@ -170,10 +176,6 @@ class Client:
         # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)
         raise SystemExit
-
-    async def send_settled(self, participant_id, participant_sid, message):
-        self.client.publish('/'.join([self.market.market_id, participant_id, 'settled']), message,
-                            user_property=('to', participant_sid))
 
     async def run_client(self, client):
         client.on_connect = self.on_connect
