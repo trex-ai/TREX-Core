@@ -15,12 +15,105 @@ from sqlalchemy_utils import database_exists, create_database, drop_database
 from TREX_Core.utils import utils, db_utils
 
 
+def get_config(config_name: str, **kwargs):
+    if 'root_dir' in kwargs:
+        root_dir = kwargs['root_dir']
+    else:
+        # root_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = ''
+    config_file = os.path.join(root_dir, 'configs', config_name+'.json')
+    config = _load_json_file(config_file)
+
+    # credentials_file = 'configs/_credentials.json'
+    credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
+    credentials = _load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
+
+    if 'name' in config['study'] and config['study']['name']:
+        study_name = config['study']['name'].replace(' ', '_')
+    else:
+        study_name = config_name
+
+    if credentials and ('profiles_db_location' not in config['study']):
+        config['study']['profiles_db_location'] = credentials['profiles_db_location']
+
+    if credentials and ('output_db_location' not in config['study']):
+        config['study']['output_db_location'] = credentials['output_db_location']
+
+    # engine = create_engine(db_string)
+
+    # if resume:
+    #     if 'db_string' in kwargs:
+    #         db_string = kwargs['db_string']
+    #     # look for existing db in db. if one exists, return it
+    #     if database_exists(db_string):
+    #         if sqlalchemy.inspect(engine).has_table('configs'):
+    #             db = dataset.connect(db_string)
+    #             configs_table = db['configs']
+    #             configs = configs_table.find_one(id=0)['data']
+    #             configs['study']['resume'] = resume
+    #             return configs
+    #
+    # # if not resume
+    config['study']['name'] = study_name
+    db_string = config['study']['output_db_location'] + '/' + study_name
+    if 'output_database' not in config['study'] or not config['study']['output_database']:
+        config['study']['output_database'] = db_string
+
+    # # TODO: temporarily add method to manually define profile step size until auto detection works
+    start_datetime = config['study']['start_datetime']
+    timezone = config['study']['timezone']
+    time_step_s = config['study']['time_step_size']
+    day_steps = int(1440 / (time_step_s / 60))
+    episodes = config['study']['generations'] - 1
+    episode_steps = int(config['study']['days'] * day_steps) + 1
+    total_steps = episodes * episode_steps
+    start_time = utils.timestr_to_timestamp(start_datetime, timezone)
+    end_time = start_time + episode_steps
+
+    config['study'].update(dict(
+        start_time=start_time,
+        end_time=end_time,
+        episodes=episodes,
+        episode_steps=episode_steps,
+        total_steps=total_steps,
+    ))
+
+    # if 'time_step_size' in config['study']:
+    #     self.__time_step_s = config['study']['time_step_size']
+    # else:
+    #     self.__time_step_s = 60
+    # self.__day_steps = int(1440 / (self.__time_step_s / 60))
+    #
+    # self.__current_step = 0
+    # self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
+    #
+    # if 'purge' in kwargs and kwargs['purge']:
+    #     if database_exists(db_string):
+    #         drop_database(db_string)
+    #
+    # if not database_exists(db_string):
+    #     db_utils.create_db(db_string)
+    #     self.__create_configs_table(db_string)
+    #     db = dataset.connect(db_string)
+    #     configs_table = db['configs']
+    #     configs_table.insert({'id': 0, 'data': config})
+    #
+    # config['study']['resume'] = False
+    # config['study']['resume'] = resume
+    return config
+
+def _load_json_file(file_path):
+    with open(file_path) as f:
+        json_file = commentjson.load(f)
+    return json_file
+
+
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.config_file_name = config
-        self.configs = self._get_config(config, **kwargs)
-        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
+        self.config = get_config(config, **kwargs)
+        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("3.7.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
@@ -32,82 +125,9 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
-    def _load_json_file(self, file_path):
-        with open(file_path) as f:
-            json_file = commentjson.load(f)
-        return json_file
-
-    def _get_config(self, config_name: str, **kwargs):
-        config_file = 'configs/' + config_name + '.json'
-        config = self._load_json_file(config_file)
-
-        credentials_file = 'configs/_credentials.json'
-        credentials = self._load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
-
-        if 'name' in config['study'] and config['study']['name']:
-            study_name = config['study']['name'].replace(' ', '_')
-        else:
-            study_name = config_name
-
-        if credentials and ('profiles_db_location' not in config['study']):
-            config['study']['profiles_db_location'] = credentials['profiles_db_location']
-
-        if credentials and ('output_db_location' not in config['study']):
-            config['study']['output_db_location'] = credentials['output_db_location']
-
-        # engine = create_engine(db_string)
-
-        # if resume:
-        #     if 'db_string' in kwargs:
-        #         db_string = kwargs['db_string']
-        #     # look for existing db in db. if one exists, return it
-        #     if database_exists(db_string):
-        #         if sqlalchemy.inspect(engine).has_table('configs'):
-        #             db = dataset.connect(db_string)
-        #             configs_table = db['configs']
-        #             configs = configs_table.find_one(id=0)['data']
-        #             configs['study']['resume'] = resume
-        #             return configs
-        #
-        # # if not resume
-        config['study']['name'] = study_name
-        db_string = config['study']['output_db_location'] + '/' + study_name
-        if 'output_database' not in config['study'] or not config['study']['output_database']:
-            config['study']['output_database'] = db_string
-
-        # # TODO: temporarily add method to manually define profile step size until auto detection works
-        # start_datetime = self.configs['study']['start_datetime']
-        # timezone = self.configs['study']['timezone']
-        # time_step_s = config['study']['time_step_size']
-        # day_steps = int(1440 / (time_step_s / 60))
-        # episode_steps = int(config['study']['days'] * day_steps) + 1
-        # start_timestamp = utils.timestr_to_timestamp(start_datetime, timezone)
-        # end_timestamp = start_timestamp + episode_steps
 
 
-        # if 'time_step_size' in config['study']:
-        #     self.__time_step_s = config['study']['time_step_size']
-        # else:
-        #     self.__time_step_s = 60
-        # self.__day_steps = int(1440 / (self.__time_step_s / 60))
-        #
-        # self.__current_step = 0
-        # self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-        #
-        # if 'purge' in kwargs and kwargs['purge']:
-        #     if database_exists(db_string):
-        #         drop_database(db_string)
-        #
-        # if not database_exists(db_string):
-        #     db_utils.create_db(db_string)
-        #     self.__create_configs_table(db_string)
-        #     db = dataset.connect(db_string)
-        #     configs_table = db['configs']
-        #     configs_table.insert({'id': 0, 'data': config})
-        #
-        # config['study']['resume'] = False
-        # config['study']['resume'] = resume
-        return config
+
 
     # Give starting time for simulation
     def __get_start_time(self, generation):
@@ -115,8 +135,8 @@ class Runner:
         import math
         from dateutil.parser import parse as timeparse
         #  TODO: NEED TO CHECK ALL DATABASES TO ENSURE THAT THE TIME RANGE ARE GOOD
-        start_datetime = self.configs['study']['start_datetime']
-        start_timezone = self.configs['study']['timezone']
+        start_datetime = self.config['study']['start_datetime']
+        start_timezone = self.config['study']['timezone']
 
         # If start_datetime is a single time, set that as start time
         if isinstance(start_datetime, str):
@@ -168,7 +188,7 @@ class Runner:
             start_time = self.__get_start_time(generation)
             data.append({
                 'start_timestamp': start_time,
-                'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
+                'end_timestamp': int(start_time + self.config['study']['days'] * 1440)
             })
             # check if metadata is in table
             # if not, then add to table
@@ -226,13 +246,13 @@ class Runner:
         # if not self.__config_version_valid:
         #     return []
 
-        config = json.loads(json.dumps(self.configs))
+        config = json.loads(json.dumps(self.config))
 
-        if 'server' not in self.configs or 'host' not in self.configs['server'] or not self.configs['server']['host']:
+        if 'server' not in self.config or 'host' not in self.config['server'] or not self.config['server']['host']:
             # config['server']['host'] = socket.gethostbyname(socket.getfqdn())
             config['server']['host'] = "localhost"
 
-        if 'server' not in self.configs or 'port' not in self.configs['server'] or not self.configs['server']['port']:
+        if 'server' not in self.config or 'port' not in self.config['server'] or not self.config['server']['port']:
             config['server']['port'] = 42069
 
         # iterate ports until an available one is found, starting from the default or the preferred port
@@ -353,7 +373,7 @@ class Runner:
 
 
         if config is None:
-            config = self.configs
+            config = self.config
 
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
@@ -415,11 +435,11 @@ class Runner:
             print('CONFIG NOT COMPATIBLE')
             return
 
-        db_string = self.configs['study']['output_database']
+        db_string = self.config['study']['output_database']
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
         config_file = 'configs/' + self.config_file_name + '.json'
-        configs = self._load_json_file(config_file)
+        configs = _load_json_file(config_file)
         self.__create_sim_db(db_string, configs)
 
         # import multiprocessing

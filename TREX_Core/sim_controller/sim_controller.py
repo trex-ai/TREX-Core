@@ -51,27 +51,19 @@ class Controller:
             'total': 0,
             'online': 0,
             'ready': 0,
-            # 'weights_loaded': 0,
-            # 'weights_saved': 0,
             'ended': 0,
         }
 
-        self.__episodes = self.__config['study']['generations'] - 1
+        self.__episodes = config['study']['episodes']
         self.__episode = self.set_initial_episode()
 
-        self.__start_time = self.get_start_time()
+        self.__start_time = config['study']['start_time']
         self.__time = self.__start_time
 
-        # TODO: temporarily add method to manually define profile step size until auto detection works
-        if 'time_step_size' in config['study']:
-            self.__time_step_s = config['study']['time_step_size']
-        else:
-            self.__time_step_s = 60
-        self.__day_steps = int(1440 / (self.__time_step_s / 60))
-
+        self.__time_step_s = config['study']['time_step_size']
         self.__current_step = 0
-        self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-        self.__total_steps = self.__episodes * self.__end_step
+        self.__end_step = self.__config['study']['episode_steps']
+        self.__total_steps = self.__config['study']['total_steps']
         self.__eta_buffer = deque(maxlen=20)
 
         self.make_participant_tracker()
