@@ -298,6 +298,7 @@ class Controller:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_policy_server_online']), '')
                 continue
 
             # await self.update_sim_paths()
