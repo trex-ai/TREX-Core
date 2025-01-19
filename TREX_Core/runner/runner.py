@@ -15,7 +15,7 @@ from sqlalchemy_utils import database_exists, create_database, drop_database
 from TREX_Core.utils import utils, db_utils
 
 
-def get_config(config_name: str, **kwargs):
+def get_config(config_name: str, original=False, **kwargs):
     if 'root_dir' in kwargs:
         root_dir = kwargs['root_dir']
     else:
@@ -23,6 +23,9 @@ def get_config(config_name: str, **kwargs):
         root_dir = ''
     config_file = os.path.join(root_dir, 'configs', config_name+'.json')
     config = _load_json_file(config_file)
+
+    if original:
+        return config
 
     # credentials_file = 'configs/_credentials.json'
     credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
@@ -112,7 +115,8 @@ class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.config_file_name = config
-        self.config = get_config(config, **kwargs)
+        self.config_original = get_config(config, original=True)
+        self.config = get_config(config)
         self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("3.7.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
@@ -438,9 +442,9 @@ class Runner:
         db_string = self.config['study']['output_database']
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
-        config_file = 'configs/' + self.config_file_name + '.json'
-        configs = _load_json_file(config_file)
-        self.__create_sim_db(db_string, configs)
+        # config_file = 'configs/' + self.config_file_name + '.json'
+        # configs = _load_json_file(config_file)
+        self.__create_sim_db(db_string, self.config_original)
 
         # import multiprocessing
         from multiprocessing import Pool
