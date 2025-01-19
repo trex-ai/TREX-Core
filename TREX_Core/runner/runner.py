@@ -19,8 +19,7 @@ def get_config(config_name: str, original=False, **kwargs):
     if 'root_dir' in kwargs:
         root_dir = kwargs['root_dir']
     else:
-        # root_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = ''
+        root_dir = os.getcwd()
     config_file = os.path.join(root_dir, 'configs', config_name+'.json')
     config = _load_json_file(config_file)
 
@@ -285,6 +284,10 @@ class Runner:
                                  'learning' in config['participants'][participant]['trader'] and
                                  config['participants'][participant]['trader']['learning']]
 
+        policy_clients = [participant for participant in config['participants'] if
+                         config['participants'][participant]['trader']['type'] == 'policy_client']
+        has_policy_clients = len(policy_clients) > 0
+
         if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
                 config['study']['generations'] = 2
@@ -295,33 +298,18 @@ class Runner:
                     'learning': False,
                     'type': 'baseline_agent'
                 })
+            config.pop('policy_server', None)
 
         if simulation_type == 'training':
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
-            # if 'target' in kwargs:
-            #     if not kwargs['target'] in config['participants']:
-            #         return []
-            #
-            #     config['market']['id'] += '-' + kwargs['target']
-            #     for participant in learning_participants:
-            #         config['participants'][participant]['trader']['learning'] = False
-            #     config['participants'][kwargs['target']]['trader']['learning'] = True
-            # else:
-            # if 'hyperparameters' in kwargs:
-            #     config['training']['hyperparameters'] = kwargs["hyperparameters"]
-            # print(kwargs)
-            # print(config['training']['hyperparameters'])
-            # if hyperparameter is defined for the trader, then
-            # overwrite default hyperparameter with one to be searched
-            # for hyperparameter in config['training']['hyperparameters']:
-            #     if hyperparameter in config['participants'][participant]['trader']:
-            #         config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
-
             for participant in learning_participants:
                 config['participants'][participant]['trader']['learning'] = True
                 config['participants'][participant]['trader']['study_name'] = config['study']['name']
+
+            if not has_policy_clients or 'policy_server' not in config:
+                config.pop('policy_server', None)
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -330,51 +318,12 @@ class Runner:
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
 
-        # if 'hyperparameters' in kwargs:
-        #     config['training']['hyperparameters'] = kwargs['hyperparameters']
-
-        # change simulation name to include hyperparameters
-        # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
-        #                                           key, value in config['training']['hyperparameters'].items()])
-        # TODO: make default name the first
-        # hyperparameters_formatted_str = "hps_"+str(kwargs['hyperparameters'][0]['idx'])
-        # For hyperparameter search, each permutation may need its own database
-        # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
-        # config['market']['id'] += '-' + hyperparameters_formatted_str
-        # config['study']['name'] += '-' + hyperparameters_formatted_str
-        # db_string = config['study']['output_db_location'] + '/' + config['study']['name']
-        # config['study']['output_database'] = db_string
-
         return config
-
-    # def __find_hyperparameters_permutations(self):
-    #     # find permutations of hyperparameters
-    #     hyperparameters = self.configs['training']['hyperparameters']
-    #     for hyperparameter in hyperparameters:
-    #         parameters = hyperparameters[hyperparameter]
-    #         if isinstance(parameters, dict):
-    #             # round hyperparameter to 4 decimal places
-    #             hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
-    #         # elif isinstance(parameters, list):
-    #         #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
-    #         elif isinstance(parameters, int) or isinstance(parameters, float):
-    #             hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
-    #     hp_keys, hp_values = zip(*hyperparameters.items())
-    #     hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
-    #
-    #     # add index to list
-    #     # there may be a more efficient way to do this
-    #     # but since it's only done once and the list is usually not super long
-    #     # this should be OK
-    #     for idx in range(len(hp_permutations)):
-    #         hp_permutations[idx].update({"idx": idx})
-    #     return hp_permutations
 
     def make_launch_list(self, config=None, skip: tuple = ()):
         from importlib import import_module
         import TREX_Core.runner.make.sim_controller as sim_controller
         import TREX_Core.runner.make.participant as participant
-
 
         if config is None:
             config = self.config
@@ -406,6 +355,8 @@ class Runner:
         for p_id in config['participants']:
             if p_id not in exclude:
                 launch_list.append(participant.cli(config, p_id))
+
+        # print(launch_list)
         return launch_list
 
     def run_subprocess(self, args: list, delay=0, **kwargs):

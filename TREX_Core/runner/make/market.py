@@ -29,5 +29,5 @@ def cli(configs):
         args.append('--port=' + port)
 
     args.append('--config=' + json.dumps(market_configs))
-    print(script_path)
+    # print(script_path)
     return (script_path, args)

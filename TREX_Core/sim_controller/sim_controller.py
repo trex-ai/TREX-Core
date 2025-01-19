@@ -263,13 +263,13 @@ class Controller:
                 continue
 
             #TODO: maybe disable this at some point and just use mqtt to query status at any time
-            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
-                self.status['last_step_clock'] = time.time()
-                pprint(self.status)
+            # if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
+            #     self.status['last_step_clock'] = time.time()
+            #     pprint(self.status)
 
-                #TODO: One of the most likely scensarios for sim to get stuck is that a participant
-                # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
-                # In the event that this happens, a set of checks need to be performed to resume where the agent abruptly died.
+            #TODO: One of the most likely scensarios for sim to get stuck is that a participant
+            # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
+            # In the event that this happens, a set of checks need to be performed to resume where the agent abruptly died.
 
                 # message = {
                 #     'time': self.__time,
