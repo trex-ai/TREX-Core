@@ -477,7 +477,7 @@ class Controller:
                 message = {
                     # 'output_path': self.status['output_path'],
                     'db_path': self.__config['study']['output_database'],
-                    'generation': self.__episode - 1,
+                    'episode': self.__episode - 1,
                     'market_id': self.__config['market']['id']
                 }
             # await self.__client.emit('end_generation', message)

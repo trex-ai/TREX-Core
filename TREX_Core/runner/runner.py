@@ -93,7 +93,7 @@ def get_config(config_name: str, original=False, **kwargs):
 
     # time_step_s = config['study']['time_step_size']
     day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
-    episodes = config['study']['generations'] - 1
+    episodes = config['study']['episodes'] - 1
     episode_steps = int(config['study']['days'] * day_steps) + 1
     total_steps = episodes * episode_steps
     end_time = start_time + episode_steps
@@ -121,7 +121,7 @@ class Runner:
         self.config_file_name = config
         self.config_original = get_config(config, original=True)
         self.config = get_config(config)
-        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("3.7.0"))
+        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("5.0.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
@@ -134,7 +134,7 @@ class Runner:
         #     r.call(self.__make_sim_path)
 
     # Give starting time for simulation
-    def __get_start_time(self, generation):
+    def __get_start_time(self, episode):
         import pytz
         from dateutil.parser import parse as timeparse
         #  TODO: NEED TO CHECK ALL DATABASES TO ENSURE THAT THE TIME RANGE ARE GOOD
@@ -187,8 +187,8 @@ class Runner:
 
         # db = dataset.connect(config['study']['output_database'])
         # metadata_table = db['metadata']
-        for generation in range(config['study']['generations']):
-            start_time = self.__get_start_time(generation)
+        for episode in range(config['study']['episodes']):
+            start_time = self.__get_start_time(episode)
             data.append({
                 'start_timestamp': start_time,
                 'end_timestamp': int(start_time + self.config['study']['days'] * 1440)
@@ -240,7 +240,7 @@ class Runner:
         table = sqlalchemy.Table(
             'metadata',
             MetaData(),
-            Column('generation', sqlalchemy.Integer, primary_key=True),
+            Column('episode', sqlalchemy.Integer, primary_key=True),
             Column('data', sqlalchemy.JSON)
         )
         self.__create_table(db_string, table)
@@ -290,7 +290,7 @@ class Runner:
 
         if simulation_type == 'baseline':
             if isinstance(config['study']['start_datetime'], str):
-                config['study']['generations'] = 2
+                config['study']['episodes'] = 2
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:

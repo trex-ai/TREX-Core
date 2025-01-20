@@ -31,9 +31,9 @@ class NSDefault:
             case 'is_participant_joined':
                 await self.on_is_participant_joined(payload)
             case 'start_episode':
-                await self.on_start_generation(payload)
+                await self.on_start_episode(payload)
             case 'end_episode':
-                await self.on_end_generation(payload)
+                await self.on_end_episode(payload)
             case 'end_simulation':
                 await self.on_end_simulation()
             case 'get_actions_return':
@@ -82,7 +82,7 @@ class NSDefault:
 
     async def on_is_participant_joined(self, payload):
         await self.participant.is_participant_joined()
-    async def on_start_generation(self, payload):
+    async def on_start_episode(self, payload):
         """Event triggers actions to be taken before the start of a simulation
 
         Args:
@@ -101,7 +101,7 @@ class NSDefault:
             table_name = f'{payload}_{market_id}_metrics'
             self.participant.trader.metrics.update_db_info(output_db_str, table_name)
 
-    async def on_end_generation(self, payload):
+    async def on_end_episode(self, payload):
         # print("eog msg", message)
         payload = json.loads(payload)
         """Event triggers actions to be taken at the end of a simulation
