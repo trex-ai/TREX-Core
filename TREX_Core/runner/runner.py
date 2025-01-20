@@ -1,15 +1,13 @@
-import commentjson
-import itertools
 import json
-import multiprocessing
 import os
-import sqlalchemy
 import sys
-# import numpy as np
-from packaging import version
 
-from sqlalchemy import create_engine, MetaData, Column, func, insert, text
-from sqlalchemy.orm import sessionmaker, Session
+import commentjson
+import numpy as np
+import sqlalchemy
+from packaging import version
+from sqlalchemy import create_engine, MetaData, Column, insert, select
+from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
 from TREX_Core.utils import utils, db_utils
@@ -61,15 +59,43 @@ def get_config(config_name: str, original=False, **kwargs):
     if 'output_database' not in config['study'] or not config['study']['output_database']:
         config['study']['output_database'] = db_string
 
-    # # TODO: temporarily add method to manually define profile step size until auto detection works
     start_datetime = config['study']['start_datetime']
     timezone = config['study']['timezone']
-    time_step_s = config['study']['time_step_size']
-    day_steps = int(1440 / (time_step_s / 60))
+    start_time = utils.timestr_to_timestamp(start_datetime, timezone)
+
+    # rudimentary check for profile time intervals
+    energy_profile_names = set()
+    for participant in config['participants']:
+        if 'use_synthetic_profile' in config['participants'][participant]['trader']:
+            energy_profile_names.add(config['participants'][participant]['trader']['use_synthetic_profile'])
+        else:
+            energy_profile_names.add(participant)
+    # energy_profile_names = set(energy_profile_names)
+    random_check = utils.secure_random.choices(list(energy_profile_names), k=3)
+    interval_checks = list()
+    engine = create_engine(credentials['profiles_db_location'])
+    with Session(engine) as session:
+        for profile_name in random_check:
+            table = db_utils.get_table(credentials['profiles_db_location'], profile_name, engine)
+            stm = select(table.c.time).where(table.c.time >= start_time).fetch(10)
+            out = session.execute(stm).all()
+
+            out_array = np.array(out)
+            unique_intervals = np.unique((out_array - np.roll(out_array, 1))[1:])
+            if unique_intervals.size > 1:
+                raise ValueError(f'Profile {profile_name} time intervals are not consistent')
+            interval_checks.append(unique_intervals[0])
+    profile_set_interval_check = np.unique(interval_checks)
+    if profile_set_interval_check.size > 1:
+        raise ValueError(f'Profile set time intervals are not consistent')
+    config["study"]["time_step_size"] = int(profile_set_interval_check[0])
+    # print(config["study"]["time_step_size"])
+
+    # time_step_s = config['study']['time_step_size']
+    day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
     episodes = config['study']['generations'] - 1
     episode_steps = int(config['study']['days'] * day_steps) + 1
     total_steps = episodes * episode_steps
-    start_time = utils.timestr_to_timestamp(start_datetime, timezone)
     end_time = start_time + episode_steps
 
     config['study'].update(dict(
@@ -80,28 +106,7 @@ def get_config(config_name: str, original=False, **kwargs):
         total_steps=total_steps,
     ))
 
-    # if 'time_step_size' in config['study']:
-    #     self.__time_step_s = config['study']['time_step_size']
-    # else:
-    #     self.__time_step_s = 60
-    # self.__day_steps = int(1440 / (self.__time_step_s / 60))
-    #
-    # self.__current_step = 0
-    # self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-    #
-    # if 'purge' in kwargs and kwargs['purge']:
-    #     if database_exists(db_string):
-    #         drop_database(db_string)
-    #
-    # if not database_exists(db_string):
-    #     db_utils.create_db(db_string)
-    #     self.__create_configs_table(db_string)
-    #     db = dataset.connect(db_string)
-    #     configs_table = db['configs']
-    #     configs_table.insert({'id': 0, 'data': config})
-    #
-    # config['study']['resume'] = False
-    # config['study']['resume'] = resume
+
     return config
 
 def _load_json_file(file_path):
@@ -128,14 +133,9 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
-
-
-
-
     # Give starting time for simulation
     def __get_start_time(self, generation):
         import pytz
-        import math
         from dateutil.parser import parse as timeparse
         #  TODO: NEED TO CHECK ALL DATABASES TO ENSURE THAT THE TIME RANGE ARE GOOD
         start_datetime = self.config['study']['start_datetime']
