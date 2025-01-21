@@ -58,57 +58,6 @@ def get_config(config_name: str, original=False, **kwargs):
     db_string = config['study']['output_db_location'] + '/' + study_name
     if 'output_database' not in config['study'] or not config['study']['output_database']:
         config['study']['output_database'] = db_string
-
-    start_datetime = config['study']['start_datetime']
-    timezone = config['study']['timezone']
-    start_time = utils.timestr_to_timestamp(start_datetime, timezone)
-
-    # rudimentary check for profile time intervals
-    energy_profile_names = set()
-    for participant in config['participants']:
-        if 'use_synthetic_profile' in config['participants'][participant]['trader']:
-            energy_profile_names.add(config['participants'][participant]['trader']['use_synthetic_profile'])
-        else:
-            energy_profile_names.add(participant)
-    # energy_profile_names = set(energy_profile_names)
-    random_check = utils.secure_random.choices(list(energy_profile_names), k=3)
-    interval_checks = list()
-    engine = create_engine(credentials['profiles_db_location'])
-    with Session(engine) as session:
-        for profile_name in random_check:
-            table = db_utils.get_table(credentials['profiles_db_location'], profile_name, engine)
-            stm = select(table.c.time).where(table.c.time >= start_time).fetch(10)
-            out = session.execute(stm).all()
-
-            out_array = np.array(out)
-            unique_intervals = np.unique((out_array - np.roll(out_array, 1))[1:])
-            if unique_intervals.size > 1:
-                raise ValueError(f'Profile {profile_name} time intervals are not consistent')
-            interval_checks.append(unique_intervals[0])
-    profile_set_interval_check = np.unique(interval_checks)
-    if profile_set_interval_check.size > 1:
-        raise ValueError(f'Profile set time intervals are not consistent')
-    config["study"]["time_step_size"] = int(profile_set_interval_check[0])
-    # print(config["study"]["time_step_size"])
-
-    # time_step_s = config['study']['time_step_size']
-    day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
-    episodes = config['study']['episodes']
-    episode_steps = int(config['study']['days'] * day_steps) + 1
-    total_steps = episodes * episode_steps
-    end_time = start_time + episode_steps
-    print(day_steps, episodes, episode_steps, total_steps)
-
-
-    config['study'].update(dict(
-        start_time=start_time,
-        end_time=end_time,
-        episodes=episodes,
-        episode_steps=episode_steps,
-        total_steps=total_steps,
-    ))
-
-
     return config
 
 def _load_json_file(file_path):
@@ -291,8 +240,8 @@ class Runner:
         has_policy_clients = len(policy_clients) > 0
 
         if simulation_type == 'baseline':
-            if isinstance(config['study']['start_datetime'], str):
-                config['study']['episodes'] = 2
+            # if isinstance(config['study']['start_datetime'], str):
+            config['study']['episodes'] = 1
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:
@@ -319,6 +268,53 @@ class Runner:
 
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
+
+        start_datetime = config['study']['start_datetime']
+        timezone = config['study']['timezone']
+        start_time = utils.timestr_to_timestamp(start_datetime, timezone)
+
+        # rudimentary check for profile time intervals
+        energy_profile_names = set()
+        for participant in config['participants']:
+            if 'use_synthetic_profile' in config['participants'][participant]['trader']:
+                energy_profile_names.add(config['participants'][participant]['trader']['use_synthetic_profile'])
+            else:
+                energy_profile_names.add(participant)
+        # energy_profile_names = set(energy_profile_names)
+        random_check = utils.secure_random.sample(list(energy_profile_names), min(len(energy_profile_names), 5))
+        interval_checks = list()
+        engine = create_engine(config['study']['profiles_db_location'])
+        with Session(engine) as session:
+            for profile_name in random_check:
+                table = db_utils.get_table(config['study']['profiles_db_location'], profile_name, engine)
+                stm = select(table.c.time).where(table.c.time >= start_time).fetch(100)
+                out = session.execute(stm).all()
+                out_array = np.array(out)
+                unique_intervals = np.unique((out_array - np.roll(out_array, 1))[1:])
+                if unique_intervals.size > 1:
+                    raise ValueError(f'Profile {profile_name} time intervals are not consistent')
+                interval_checks.append(unique_intervals[0])
+        profile_set_interval_check = np.unique(interval_checks)
+        if profile_set_interval_check.size > 1:
+            raise ValueError(f'Profile set time intervals are not consistent')
+        config["study"]["time_step_size"] = int(profile_set_interval_check[0])
+        # print(config["study"]["time_step_size"])
+
+        # time_step_s = config['study']['time_step_size']
+        day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
+        episodes = config['study']['episodes']
+        episode_steps = int(config['study']['days'] * day_steps)
+        total_steps = episodes * episode_steps
+        end_time = start_time + episode_steps
+        # print(day_steps, episodes, episode_steps, total_steps)
+
+        config['study'].update(dict(
+            start_time=start_time,
+            end_time=end_time,
+            episodes=episodes,
+            episode_steps=episode_steps,
+            total_steps=total_steps,
+        ))
 
         return config
 
