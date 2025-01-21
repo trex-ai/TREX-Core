@@ -51,27 +51,20 @@ class Controller:
             'total': 0,
             'online': 0,
             'ready': 0,
-            # 'weights_loaded': 0,
-            # 'weights_saved': 0,
             'ended': 0,
         }
 
-        self.__episodes = self.__config['study']['generations'] - 1
-        self.__episode = self.set_initial_episode()
+        self.__episodes = config['study']['episodes']
+        self.__episode = 1
+        # self.__episode = self.set_initial_episode()
 
-        self.__start_time = self.get_start_time()
+        self.__start_time = config['study']['start_time']
         self.__time = self.__start_time
 
-        # TODO: temporarily add method to manually define profile step size until auto detection works
-        if 'time_step_size' in config['study']:
-            self.__time_step_s = config['study']['time_step_size']
-        else:
-            self.__time_step_s = 60
-        self.__day_steps = int(1440 / (self.__time_step_s / 60))
-
+        self.__time_step_s = config['study']['time_step_size']
         self.__current_step = 0
-        self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-        self.__total_steps = self.__episodes * self.__end_step
+        self.__end_step = self.__config['study']['episode_steps']
+        self.__total_steps = self.__config['study']['total_steps']
         self.__eta_buffer = deque(maxlen=20)
 
         self.make_participant_tracker()
@@ -271,13 +264,13 @@ class Controller:
                 continue
 
             #TODO: maybe disable this at some point and just use mqtt to query status at any time
-            if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
-                self.status['last_step_clock'] = time.time()
-                pprint(self.status)
+            # if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
+            #     self.status['last_step_clock'] = time.time()
+            #     pprint(self.status)
 
-                #TODO: One of the most likely scensarios for sim to get stuck is that a participant
-                # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
-                # In the event that this happens, a set of checks need to be performed to resume where the agent abruptly died.
+            #TODO: One of the most likely scensarios for sim to get stuck is that a participant
+            # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
+            # In the event that this happens, a set of checks need to be performed to resume where the agent abruptly died.
 
                 # message = {
                 #     'time': self.__time,
@@ -306,6 +299,7 @@ class Controller:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
+                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_policy_server_online']), '')
                 continue
 
             # await self.update_sim_paths()
@@ -394,12 +388,13 @@ class Controller:
             # elapsed_steps_gen = self.__current_step +
             elapsed_steps = self.__current_step + (self.__episode - 1) * self.__end_step
             steps_to_go = self.__total_steps - elapsed_steps
+            # print(self.__current_step, elapsed_steps, steps_to_go, self.__total_steps)
             eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
 
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', episode: ', self.__episode + 1, '/', self.__episodes + 1,
+                  ', episode: ', self.__episode, '/', self.__episodes,
                   ', step: ', self.__current_step, '/', self.__end_step)
                   # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))
@@ -471,7 +466,7 @@ class Controller:
             #                                {self.__config['market']['id']: True})
 
             # end simulation if the final generation is done, else reset step and stuff
-            if self.__episode <= self.__episodes:
+            if self.__episode < self.__episodes:
                 print('episode', self.__episode, 'complete')
                 self.__episode += 1
                 self.status['running_episodes'] += 1
@@ -484,7 +479,7 @@ class Controller:
                 message = {
                     # 'output_path': self.status['output_path'],
                     'db_path': self.__config['study']['output_database'],
-                    'generation': self.__episode - 1,
+                    'episode': self.__episode - 1,
                     'market_id': self.__config['market']['id']
                 }
             # await self.__client.emit('end_generation', message)
@@ -503,10 +498,11 @@ class Controller:
                 #     self.status['market_ready'] = False
                 #     self.status["hyperparameters_loaded"] = False
                 # else:
+                print('episode', self.__episode, 'complete')
                 self.status['sim_ended'] = True
                 # TODO: add function to reset sim for next hyperparameter set
                 # if self.status['sim_ended']:
-                print('end_simulation', self.__episode - 1, self.__episodes)
+                print('end_simulation', self.__episode, self.__episodes)
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',

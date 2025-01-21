@@ -1,26 +1,78 @@
-import commentjson
-import itertools
 import json
-import multiprocessing
 import os
-import sqlalchemy
 import sys
-# import numpy as np
-from packaging import version
 
-from sqlalchemy import create_engine, MetaData, Column, func, insert, text
-from sqlalchemy.orm import sessionmaker, Session
+import commentjson
+import numpy as np
+import sqlalchemy
+from packaging import version
+from sqlalchemy import create_engine, MetaData, Column, insert, select
+from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
 from TREX_Core.utils import utils, db_utils
+
+
+def get_config(config_name: str, original=False, **kwargs):
+    if 'root_dir' in kwargs:
+        root_dir = kwargs['root_dir']
+    else:
+        root_dir = os.getcwd()
+    config_file = os.path.join(root_dir, 'configs', config_name+'.json')
+    config = _load_json_file(config_file)
+
+    if original:
+        return config
+
+    # credentials_file = 'configs/_credentials.json'
+    credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
+    credentials = _load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
+
+    if 'name' in config['study'] and config['study']['name']:
+        study_name = config['study']['name'].replace(' ', '_')
+    else:
+        study_name = config_name
+
+    if credentials and ('profiles_db_location' not in config['study']):
+        config['study']['profiles_db_location'] = credentials['profiles_db_location']
+
+    if credentials and ('output_db_location' not in config['study']):
+        config['study']['output_db_location'] = credentials['output_db_location']
+
+    # engine = create_engine(db_string)
+
+    # if resume:
+    #     if 'db_string' in kwargs:
+    #         db_string = kwargs['db_string']
+    #     # look for existing db in db. if one exists, return it
+    #     if database_exists(db_string):
+    #         if sqlalchemy.inspect(engine).has_table('configs'):
+    #             db = dataset.connect(db_string)
+    #             configs_table = db['configs']
+    #             configs = configs_table.find_one(id=0)['data']
+    #             configs['study']['resume'] = resume
+    #             return configs
+    #
+    # # if not resume
+    config['study']['name'] = study_name
+    db_string = config['study']['output_db_location'] + '/' + study_name
+    if 'output_database' not in config['study'] or not config['study']['output_database']:
+        config['study']['output_database'] = db_string
+    return config
+
+def _load_json_file(file_path):
+    with open(file_path) as f:
+        json_file = commentjson.load(f)
+    return json_file
 
 
 class Runner:
     def __init__(self, config, resume=False, **kwargs):
         self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
         self.config_file_name = config
-        self.configs = self._get_config(config, **kwargs)
-        self.__config_version_valid = bool(version.parse(self.configs['version']) >= version.parse("3.7.0"))
+        self.config_original = get_config(config, original=True)
+        self.config = get_config(config)
+        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("5.0.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
@@ -32,91 +84,13 @@ class Runner:
         #         wait=tenacity.wait_fixed(1))
         #     r.call(self.__make_sim_path)
 
-    def _load_json_file(self, file_path):
-        with open(file_path) as f:
-            json_file = commentjson.load(f)
-        return json_file
-
-    def _get_config(self, config_name: str, **kwargs):
-        config_file = 'configs/' + config_name + '.json'
-        config = self._load_json_file(config_file)
-
-        credentials_file = 'configs/_credentials.json'
-        credentials = self._load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
-
-        if 'name' in config['study'] and config['study']['name']:
-            study_name = config['study']['name'].replace(' ', '_')
-        else:
-            study_name = config_name
-
-        if credentials and ('profiles_db_location' not in config['study']):
-            config['study']['profiles_db_location'] = credentials['profiles_db_location']
-
-        if credentials and ('output_db_location' not in config['study']):
-            config['study']['output_db_location'] = credentials['output_db_location']
-
-        # engine = create_engine(db_string)
-
-        # if resume:
-        #     if 'db_string' in kwargs:
-        #         db_string = kwargs['db_string']
-        #     # look for existing db in db. if one exists, return it
-        #     if database_exists(db_string):
-        #         if sqlalchemy.inspect(engine).has_table('configs'):
-        #             db = dataset.connect(db_string)
-        #             configs_table = db['configs']
-        #             configs = configs_table.find_one(id=0)['data']
-        #             configs['study']['resume'] = resume
-        #             return configs
-        #
-        # # if not resume
-        config['study']['name'] = study_name
-        db_string = config['study']['output_db_location'] + '/' + study_name
-        if 'output_database' not in config['study'] or not config['study']['output_database']:
-            config['study']['output_database'] = db_string
-
-        # # TODO: temporarily add method to manually define profile step size until auto detection works
-        # start_datetime = self.configs['study']['start_datetime']
-        # timezone = self.configs['study']['timezone']
-        # time_step_s = config['study']['time_step_size']
-        # day_steps = int(1440 / (time_step_s / 60))
-        # episode_steps = int(config['study']['days'] * day_steps) + 1
-        # start_timestamp = utils.timestr_to_timestamp(start_datetime, timezone)
-        # end_timestamp = start_timestamp + episode_steps
-
-
-        # if 'time_step_size' in config['study']:
-        #     self.__time_step_s = config['study']['time_step_size']
-        # else:
-        #     self.__time_step_s = 60
-        # self.__day_steps = int(1440 / (self.__time_step_s / 60))
-        #
-        # self.__current_step = 0
-        # self.__end_step = int(self.__config['study']['days'] * self.__day_steps) + 1
-        #
-        # if 'purge' in kwargs and kwargs['purge']:
-        #     if database_exists(db_string):
-        #         drop_database(db_string)
-        #
-        # if not database_exists(db_string):
-        #     db_utils.create_db(db_string)
-        #     self.__create_configs_table(db_string)
-        #     db = dataset.connect(db_string)
-        #     configs_table = db['configs']
-        #     configs_table.insert({'id': 0, 'data': config})
-        #
-        # config['study']['resume'] = False
-        # config['study']['resume'] = resume
-        return config
-
     # Give starting time for simulation
-    def __get_start_time(self, generation):
+    def __get_start_time(self, episode):
         import pytz
-        import math
         from dateutil.parser import parse as timeparse
         #  TODO: NEED TO CHECK ALL DATABASES TO ENSURE THAT THE TIME RANGE ARE GOOD
-        start_datetime = self.configs['study']['start_datetime']
-        start_timezone = self.configs['study']['timezone']
+        start_datetime = self.config['study']['start_datetime']
+        start_timezone = self.config['study']['timezone']
 
         # If start_datetime is a single time, set that as start time
         if isinstance(start_datetime, str):
@@ -164,11 +138,11 @@ class Runner:
 
         # db = dataset.connect(config['study']['output_database'])
         # metadata_table = db['metadata']
-        for generation in range(config['study']['generations']):
-            start_time = self.__get_start_time(generation)
+        for episode in range(config['study']['episodes']):
+            start_time = self.__get_start_time(episode)
             data.append({
                 'start_timestamp': start_time,
-                'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
+                'end_timestamp': int(start_time + self.config['study']['days'] * 1440)
             })
             # check if metadata is in table
             # if not, then add to table
@@ -217,7 +191,7 @@ class Runner:
         table = sqlalchemy.Table(
             'metadata',
             MetaData(),
-            Column('generation', sqlalchemy.Integer, primary_key=True),
+            Column('episode', sqlalchemy.Integer, primary_key=True),
             Column('data', sqlalchemy.JSON)
         )
         self.__create_table(db_string, table)
@@ -226,13 +200,13 @@ class Runner:
         # if not self.__config_version_valid:
         #     return []
 
-        config = json.loads(json.dumps(self.configs))
+        config = json.loads(json.dumps(self.config))
 
-        if 'server' not in self.configs or 'host' not in self.configs['server'] or not self.configs['server']['host']:
+        if 'server' not in self.config or 'host' not in self.config['server'] or not self.config['server']['host']:
             # config['server']['host'] = socket.gethostbyname(socket.getfqdn())
             config['server']['host'] = "localhost"
 
-        if 'server' not in self.configs or 'port' not in self.configs['server'] or not self.configs['server']['port']:
+        if 'server' not in self.config or 'port' not in self.config['server'] or not self.config['server']['port']:
             config['server']['port'] = 42069
 
         # iterate ports until an available one is found, starting from the default or the preferred port
@@ -261,9 +235,13 @@ class Runner:
                                  'learning' in config['participants'][participant]['trader'] and
                                  config['participants'][participant]['trader']['learning']]
 
+        policy_clients = [participant for participant in config['participants'] if
+                         config['participants'][participant]['trader']['type'] == 'policy_client']
+        has_policy_clients = len(policy_clients) > 0
+
         if simulation_type == 'baseline':
-            if isinstance(config['study']['start_datetime'], str):
-                config['study']['generations'] = 2
+            # if isinstance(config['study']['start_datetime'], str):
+            config['study']['episodes'] = 1
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
             for participant in config['participants']:
@@ -271,33 +249,18 @@ class Runner:
                     'learning': False,
                     'type': 'baseline_agent'
                 })
+            config.pop('policy_server', None)
 
         if simulation_type == 'training':
             config['market']['id'] = simulation_type
             config['market']['save_transactions'] = True
 
-            # if 'target' in kwargs:
-            #     if not kwargs['target'] in config['participants']:
-            #         return []
-            #
-            #     config['market']['id'] += '-' + kwargs['target']
-            #     for participant in learning_participants:
-            #         config['participants'][participant]['trader']['learning'] = False
-            #     config['participants'][kwargs['target']]['trader']['learning'] = True
-            # else:
-            # if 'hyperparameters' in kwargs:
-            #     config['training']['hyperparameters'] = kwargs["hyperparameters"]
-            # print(kwargs)
-            # print(config['training']['hyperparameters'])
-            # if hyperparameter is defined for the trader, then
-            # overwrite default hyperparameter with one to be searched
-            # for hyperparameter in config['training']['hyperparameters']:
-            #     if hyperparameter in config['participants'][participant]['trader']:
-            #         config['participants'][participant]['trader'][hyperparameter] = kwargs['hyperparameters'][hyperparameter]
-
             for participant in learning_participants:
                 config['participants'][participant]['trader']['learning'] = True
                 config['participants'][participant]['trader']['study_name'] = config['study']['name']
+
+            if not has_policy_clients or 'policy_server' not in config:
+                config.pop('policy_server', None)
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type
@@ -306,54 +269,62 @@ class Runner:
             for participant in config['participants']:
                 config['participants'][participant]['trader']['learning'] = False
 
-        # if 'hyperparameters' in kwargs:
-        #     config['training']['hyperparameters'] = kwargs['hyperparameters']
+        start_datetime = config['study']['start_datetime']
+        timezone = config['study']['timezone']
+        start_time = utils.timestr_to_timestamp(start_datetime, timezone)
 
-        # change simulation name to include hyperparameters
-        # hyperparameters_formatted_str = '-'.join([f'{key}-{value}' for
-        #                                           key, value in config['training']['hyperparameters'].items()])
-        # TODO: make default name the first
-        # hyperparameters_formatted_str = "hps_"+str(kwargs['hyperparameters'][0]['idx'])
-        # For hyperparameter search, each permutation may need its own database
-        # Making the clarifications in the market_id will very likely exceed PSQL's identifier length limit
-        # config['market']['id'] += '-' + hyperparameters_formatted_str
-        # config['study']['name'] += '-' + hyperparameters_formatted_str
-        # db_string = config['study']['output_db_location'] + '/' + config['study']['name']
-        # config['study']['output_database'] = db_string
+        # rudimentary check for profile time intervals
+        energy_profile_names = set()
+        for participant in config['participants']:
+            if 'use_synthetic_profile' in config['participants'][participant]['trader']:
+                energy_profile_names.add(config['participants'][participant]['trader']['use_synthetic_profile'])
+            else:
+                energy_profile_names.add(participant)
+        # energy_profile_names = set(energy_profile_names)
+        random_check = utils.secure_random.sample(list(energy_profile_names), min(len(energy_profile_names), 5))
+        interval_checks = list()
+        engine = create_engine(config['study']['profiles_db_location'])
+        with Session(engine) as session:
+            for profile_name in random_check:
+                table = db_utils.get_table(config['study']['profiles_db_location'], profile_name, engine)
+                stm = select(table.c.time).where(table.c.time >= start_time).fetch(100)
+                out = session.execute(stm).all()
+                out_array = np.array(out)
+                unique_intervals = np.unique((out_array - np.roll(out_array, 1))[1:])
+                if unique_intervals.size > 1:
+                    raise ValueError(f'Profile {profile_name} time intervals are not consistent')
+                interval_checks.append(unique_intervals[0])
+        profile_set_interval_check = np.unique(interval_checks)
+        if profile_set_interval_check.size > 1:
+            raise ValueError(f'Profile set time intervals are not consistent')
+        config["study"]["time_step_size"] = int(profile_set_interval_check[0])
+        # print(config["study"]["time_step_size"])
+
+        # time_step_s = config['study']['time_step_size']
+        day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
+        episodes = config['study']['episodes']
+        episode_steps = int(config['study']['days'] * day_steps)
+        total_steps = episodes * episode_steps
+        end_time = start_time + episode_steps
+        # print(day_steps, episodes, episode_steps, total_steps)
+
+        config['study'].update(dict(
+            start_time=start_time,
+            end_time=end_time,
+            episodes=episodes,
+            episode_steps=episode_steps,
+            total_steps=total_steps,
+        ))
 
         return config
-
-    # def __find_hyperparameters_permutations(self):
-    #     # find permutations of hyperparameters
-    #     hyperparameters = self.configs['training']['hyperparameters']
-    #     for hyperparameter in hyperparameters:
-    #         parameters = hyperparameters[hyperparameter]
-    #         if isinstance(parameters, dict):
-    #             # round hyperparameter to 4 decimal places
-    #             hyperparameters[hyperparameter] = list(set(np.round(np.linspace(**parameters), 4)))
-    #         # elif isinstance(parameters, list):
-    #         #    hyperparameters[hyperparameter] = hyperparameters[hyperparameter]
-    #         elif isinstance(parameters, int) or isinstance(parameters, float):
-    #             hyperparameters[hyperparameter] = [hyperparameters[hyperparameter]]
-    #     hp_keys, hp_values = zip(*hyperparameters.items())
-    #     hp_permutations = [dict(zip(hp_keys, v)) for v in itertools.product(*hp_values)]
-    #
-    #     # add index to list
-    #     # there may be a more efficient way to do this
-    #     # but since it's only done once and the list is usually not super long
-    #     # this should be OK
-    #     for idx in range(len(hp_permutations)):
-    #         hp_permutations[idx].update({"idx": idx})
-    #     return hp_permutations
 
     def make_launch_list(self, config=None, skip: tuple = ()):
         from importlib import import_module
         import TREX_Core.runner.make.sim_controller as sim_controller
         import TREX_Core.runner.make.participant as participant
 
-
         if config is None:
-            config = self.configs
+            config = self.config
 
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
@@ -382,6 +353,8 @@ class Runner:
         for p_id in config['participants']:
             if p_id not in exclude:
                 launch_list.append(participant.cli(config, p_id))
+
+        # print(launch_list)
         return launch_list
 
     def run_subprocess(self, args: list, delay=0, **kwargs):
@@ -415,12 +388,12 @@ class Runner:
             print('CONFIG NOT COMPATIBLE')
             return
 
-        db_string = self.configs['study']['output_database']
+        db_string = self.config['study']['output_database']
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
-        config_file = 'configs/' + self.config_file_name + '.json'
-        configs = self._load_json_file(config_file)
-        self.__create_sim_db(db_string, configs)
+        # config_file = 'configs/' + self.config_file_name + '.json'
+        # configs = _load_json_file(config_file)
+        self.__create_sim_db(db_string, self.config_original)
 
         # import multiprocessing
         from multiprocessing import Pool

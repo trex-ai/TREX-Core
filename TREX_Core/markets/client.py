@@ -97,9 +97,9 @@ class Client:
             case 'start_round':
                 await self.on_start_round(payload)
             case 'start_episode':
-                await self.on_start_generation(payload)
+                await self.on_start_episode(payload)
             case 'end_episode':
-                await self.on_end_generation(payload)
+                await self.on_end_episode(payload)
             case 'end_simulation':
                 await self.on_end_simulation()
             case 'is_market_online':
@@ -153,12 +153,12 @@ class Client:
         await self.market.step(message['duration'], sim_params=message)
         self.client.publish('/'.join([self.market.market_id, 'simulation', 'end_round']), '')
 
-    async def on_start_generation(self, message):
+    async def on_start_episode(self, message):
         # message = json.loads(message)
         table_name = str(message) + '_' + self.market.market_id
         await self.market.open_db(table_name)
 
-    async def on_end_generation(self, message):
+    async def on_end_episode(self, message):
         # await self.market.end_sim_generation()
         await self.market.record_transactions(delay=False)
         await self.market.ensure_transactions_complete()

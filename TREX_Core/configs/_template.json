@@ -1,5 +1,5 @@
 {
-  "version": "4.0.0",
+  "version": "5.0.0",
   "study": {
     "name": "sim_name", // the simulation name defines the database name as well as local storage paths.
     "description": "",  // (optional) a description the simulation
@@ -15,7 +15,7 @@
     "start_datetime_sequence": "sequential", // the start times can be sequencial as defined above, or shuffled.
     "timezone": "America/Vancouver",
     "days": 30,
-    "generations": 10,
+    "episodes": 10,
     "profiles_db_location": "", //database string to where the profiles are located, i.e.: 
     //postgresql://pg_un:pg_pw@server_addr/db_name
     "output_db_location": "", //db string to where sim results should be stored, i.e.:
