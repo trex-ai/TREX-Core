@@ -55,7 +55,7 @@ class Controller:
         }
 
         self.__episodes = config['study']['episodes']
-        self.__episode = 0
+        self.__episode = 1
         # self.__episode = self.set_initial_episode()
 
         self.__start_time = config['study']['start_time']
@@ -388,12 +388,13 @@ class Controller:
             # elapsed_steps_gen = self.__current_step +
             elapsed_steps = self.__current_step + (self.__episode - 1) * self.__end_step
             steps_to_go = self.__total_steps - elapsed_steps
+            # print(self.__current_step, elapsed_steps, steps_to_go, self.__total_steps)
             eta_s = steps_to_go * mean(self.__eta_buffer) / report_steps
 
 
             # eta_s = round((self.__end_step - self.__current_step) / report_steps * step_time)
             print(self.__config['market']['id'],
-                  ', episode: ', self.__episode + 1, '/', self.__episodes + 1,
+                  ', episode: ', self.__episode, '/', self.__episodes,
                   ', step: ', self.__current_step, '/', self.__end_step)
                   # ', day', int(self.__current_step / self.__day_steps), '/', int((self.__end_step - 1) / self.__day_steps))
             print('step time:', round(step_time, 1), 's', ', ETA:', str(datetime.timedelta(seconds=eta_s)))

@@ -93,10 +93,12 @@ def get_config(config_name: str, original=False, **kwargs):
 
     # time_step_s = config['study']['time_step_size']
     day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
-    episodes = config['study']['episodes'] - 1
+    episodes = config['study']['episodes']
     episode_steps = int(config['study']['days'] * day_steps) + 1
     total_steps = episodes * episode_steps
     end_time = start_time + episode_steps
+    print(day_steps, episodes, episode_steps, total_steps)
+
 
     config['study'].update(dict(
         start_time=start_time,
