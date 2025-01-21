@@ -104,6 +104,21 @@ async def create_market_table(db_string, table_name=None, engine=None, **kwargs)
     table.create(engine, checkfirst=True)
     return True
 
+async def create_table(db_string, table, engine=None):
+    if not engine:
+        engine = create_engine(db_string)
+    if not database_exists(engine.url):
+        create_db(db_string)
+
+    if sqlalchemy.inspect(engine).has_table(table.name):
+        return
+
+        # must be a pre-defined sqlalchemy Table object
+        # TODO: add type check
+    # table = kwargs['custom_table']
+    table.create(engine, checkfirst=True)
+    return True
+
 async def update_metadata(db_string, generation, update_dict):
     db = databases.Database(db_string)
     await db.connect()

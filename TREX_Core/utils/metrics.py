@@ -60,8 +60,7 @@ class Metrics:
             if 'table' not in self.__db or self.__db['table'] is None:
                 table_name = self.__db.pop('table_name')
                 await db_utils.create_table(db_string=self.__db['path'],
-                                            table_type='custom',
-                                            custom_table=self.__create_metrics_table(table_name))
+                                            table=self.__create_metrics_table(table_name))
                 self.__db['table'] = db_utils.get_table(self.__db['path'], table_name)
 
             if self.__db['table'] is None:

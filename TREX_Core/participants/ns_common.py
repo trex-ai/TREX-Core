@@ -110,7 +110,7 @@ class NSDefault:
             message ([type]): [description]
         """
         if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
-            await asyncio.sleep(np.random.uniform(3, 30))
+            # await asyncio.sleep(np.random.uniform(3, 30))
             await self.participant.trader.metrics.save()
             self.participant.trader.metrics.reset()
 
@@ -132,6 +132,9 @@ class NSDefault:
         """
         # print('end_simulation')
         self.participant.run = False
+        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+            # await asyncio.sleep(np.random.uniform(3, 30))
+            await self.participant.trader.metrics.save()
         await self.participant.kill()
 
     async def on_get_actions_return(self, payload):

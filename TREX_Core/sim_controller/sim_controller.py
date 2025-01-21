@@ -55,7 +55,8 @@ class Controller:
         }
 
         self.__episodes = config['study']['episodes']
-        self.__episode = self.set_initial_episode()
+        self.__episode = 0
+        # self.__episode = self.set_initial_episode()
 
         self.__start_time = config['study']['start_time']
         self.__time = self.__start_time
@@ -464,7 +465,7 @@ class Controller:
             #                                {self.__config['market']['id']: True})
 
             # end simulation if the final generation is done, else reset step and stuff
-            if self.__episode <= self.__episodes:
+            if self.__episode < self.__episodes:
                 print('episode', self.__episode, 'complete')
                 self.__episode += 1
                 self.status['running_episodes'] += 1
@@ -496,10 +497,11 @@ class Controller:
                 #     self.status['market_ready'] = False
                 #     self.status["hyperparameters_loaded"] = False
                 # else:
+                print('episode', self.__episode, 'complete')
                 self.status['sim_ended'] = True
                 # TODO: add function to reset sim for next hyperparameter set
                 # if self.status['sim_ended']:
-                print('end_simulation', self.__episode - 1, self.__episodes)
+                print('end_simulation', self.__episode, self.__episodes)
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',
