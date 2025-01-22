@@ -652,6 +652,9 @@ class Participant:
         self.__timing.clear()
 
     async def kill(self):
+        #TODO: add final actions to do for trader before killing if exists
+        if hasattr(self.trader, 'kill'):
+            await self.trader.kill()
         await asyncio.sleep(5)
         await self.__client.disconnect()
         # print('attempting to end')
