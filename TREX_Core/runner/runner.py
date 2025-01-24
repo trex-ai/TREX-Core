@@ -24,6 +24,8 @@ def get_config(config_name: str, original=False, **kwargs):
     if original:
         return config
 
+    config['study']['checkpoint_save_path'] = os.path.join(root_dir, 'checkpoint')
+
     # credentials_file = 'configs/_credentials.json'
     credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
     credentials = _load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
@@ -38,7 +40,6 @@ def get_config(config_name: str, original=False, **kwargs):
 
     if credentials and ('output_db_location' not in config['study']):
         config['study']['output_db_location'] = credentials['output_db_location']
-
     # engine = create_engine(db_string)
 
     # if resume:
@@ -58,6 +59,10 @@ def get_config(config_name: str, original=False, **kwargs):
     db_string = config['study']['output_db_location'] + '/' + study_name
     if 'output_database' not in config['study'] or not config['study']['output_database']:
         config['study']['output_database'] = db_string
+
+
+
+
     return config
 
 def _load_json_file(file_path):
