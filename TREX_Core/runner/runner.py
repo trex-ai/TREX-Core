@@ -382,8 +382,10 @@ class Runner:
             print(launch_list)
             self.run_subprocess(launch_list[0])
         else:
-            from multiprocessing import Pool
+            from multiprocessing import Pool, cpu_count
             pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
+            pool_size = max(pool_size, cpu_count() - 5)
+            # get the number of cpus available
             pool = Pool(pool_size)
             pool.map(self.run_subprocess, launch_list)
             pool.close()
@@ -401,7 +403,7 @@ class Runner:
         self.__create_sim_db(db_string, self.config_original)
 
         # import multiprocessing
-        from multiprocessing import Pool
+        from multiprocessing import Pool, cpu_count
         # from ray.util.multiprocessing import Pool
 
         # db_purged = False
@@ -421,6 +423,7 @@ class Runner:
         # from pprint import pprint
         # pprint(launch_list)
         pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
+        pool_size = max(pool_size, cpu_count() - 5)
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)
         pool.close()

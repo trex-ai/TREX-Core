@@ -533,8 +533,10 @@ class Market:
                             user_property=('to', self.__participants[bid['participant_id']]['sid']))
         self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message,
                             user_property=('to', self.__participants[ask['participant_id']]['sid']))
+
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+
         self.__status['round_settled'].append(commit_id)
         return quantity, settlement_price_buy, settlement_price_sell
 
@@ -834,13 +836,15 @@ class Market:
         # For extra consumption by buyer greater than settled amount:
         physical_record = settlement.copy()
 
-        # extra purchase by buyer
-        # buyer settled for more than consumed
-        if extra_purchase:
-            print('-extra---------')
-            print(buyer_id, extra_purchase)
-            print(settlement)
-            print(self.__participants[buyer_id]['meter'][time_delivery])
+        # extra purchase by Buyer
+        # Buyer settled for more than consumed
+        ## ToDo: uncomment
+        # if extra_purchase > 1e-10:
+        #     print('-extra---------')
+        #     print(buyer_id, extra_purchase)
+        #     print(settlement)
+        #     print(self.__participants[buyer_id]['meter'][time_delivery])
+        #     print('-------------')
 
         # extra_purchase and deficit_generation SHOULD be mutually exclusive
 
