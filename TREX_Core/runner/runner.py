@@ -334,7 +334,7 @@ class Runner:
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
 
-        exclude = {'version', 'study', 'server', 'participants'}
+        exclude = {'version', 'study', 'server', 'records', 'participants'}
         if isinstance(skip, str):
             skip = (skip,)
         exclude.update(skip)

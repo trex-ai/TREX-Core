@@ -1,6 +1,5 @@
 # from _clients.participants.participants import Residential
 
-from TREX_Core.utils.metrics import Metrics
 import asyncio
 # import serialize
 import TREX_Core.utils as utils
@@ -13,27 +12,7 @@ class Trader:
         # Initialize the agent learning parameters for the agent (your choice)
         self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
         self.ask_price = kwargs['ask_price'] if 'ask_price' in kwargs else None
-
-        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-        if self.track_metrics:
-            self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
-            self.__init_metrics()
-
         self.action_scenario_history = {}
-
-    def __init_metrics(self):
-        import sqlalchemy
-        '''
-        Initializes metrics to record into database
-        '''
-        self.metrics.add('timestamp', sqlalchemy.Integer)
-        self.metrics.add('actions_dict', sqlalchemy.JSON)
-        # self.metrics.add('rewards', sqlalchemy.Float)
-        self.metrics.add('next_settle_load', sqlalchemy.Integer)
-        self.metrics.add('next_settle_generation', sqlalchemy.Integer)
-        if 'storage' in self.__participant:
-            self.metrics.add('storage_soc', sqlalchemy.Float)
-
     # Core Functions, learn and act, called from outside
 
     async def act(self, **kwargs):
@@ -188,14 +167,7 @@ class Trader:
                     }
                 }
 
-        if self.track_metrics:
-            await asyncio.gather(
-                self.metrics.track('timestamp', self.__participant['timing']['current_round'][1]),
-                self.metrics.track('actions_dict', actions),
-                self.metrics.track('next_settle_load', load),
-                self.metrics.track('next_settle_generation', generation))
-            if 'bess' in actions:
-                await self.metrics.track('storage_soc', self.__participant['storage']['info']()['state_of_charge'])
+
         return actions
 
     async def step(self):

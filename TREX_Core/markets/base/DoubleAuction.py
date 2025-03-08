@@ -42,7 +42,8 @@ class Market:
             'round_settle_delivered': dict()
         }
 
-        self.__time_step_s = kwargs['time_step_size'] if 'time_step_size' in kwargs else 60
+        self.__time_step_s = kwargs['time_step_size']
+        # self.__time_step_s = kwargs['time_step_size'] if 'time_step_size' in kwargs else 60
         self.__timing = {
             'mode': 'sim',
             'timezone': kwargs['timezone'],
@@ -972,7 +973,7 @@ class Market:
             raise Exception
         return True
 
-    async def record_transactions(self, buf_len=0, delay=True, check_table_len=False):
+    async def record_transactions(self, buf_len=0, check_table_len=False):
         """This function records the transaction records into the ledger
 
         """
@@ -982,7 +983,7 @@ class Market:
             if table_len < self.transactions_count:
                 return False
 
-        if delay and buf_len:
+        if buf_len:
             delay = buf_len / 100
             ts = datetime.datetime.now().timestamp()
             if ts - self.__transaction_last_record_time < delay:

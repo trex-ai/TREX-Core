@@ -82,7 +82,7 @@ class NSDefault:
 
     async def on_is_participant_joined(self, payload):
         await self.participant.is_participant_joined()
-    async def on_start_episode(self, payload):
+    async def on_start_episode(self, message):
         """Event triggers actions to be taken before the start of a simulation
 
         Args:
@@ -94,32 +94,29 @@ class NSDefault:
             self.participant.storage.reset(soc_pct=0)
         # self.participant.trader.output_path = message['output_path']
 
-        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
-            # print(message)
-            output_db_str = self.participant.output_db_path
-            market_id = self.participant.market_id
-            table_name = f'{payload}_{market_id}_metrics'
-            self.participant.trader.metrics.update_db_info(output_db_str, table_name)
+        if hasattr(self.participant, 'records'):
+            table_name = f'{str(message)}_{self.participant.market_id}'
+            await self.participant.records.open_db(table_name)
 
-    async def on_end_episode(self, payload):
+    async def on_end_episode(self, message):
         # print("eog msg", message)
-        payload = json.loads(payload)
+        message = json.loads(message)
         """Event triggers actions to be taken at the end of a simulation
 
         Args:
             message ([type]): [description]
         """
-        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+        if hasattr(self.participant, 'records'):
             # await asyncio.sleep(np.random.uniform(3, 30))
-            await self.participant.trader.metrics.save()
-            self.participant.trader.metrics.reset()
+            await self.participant.records.save(final=True)
+            # self.participant.records.reset()
 
         # # TODO: save model
         # if hasattr(self.participant.trader, 'save_model'):
         #     await self.participant.trader.save_weights(**message)
 
         if hasattr(self.participant.trader, 'reset'):
-            await self.participant.trader.reset(**payload)
+            await self.participant.trader.reset(**message)
 
         # await self.participant.client.emit(event='participant_ready',
         #                                    data={self.participant.participant_id: True})
@@ -132,9 +129,9 @@ class NSDefault:
         """
         # print('end_simulation')
         self.participant.run = False
-        if hasattr(self.participant.trader, 'metrics') and self.participant.trader.track_metrics:
+        if hasattr(self.participant, 'records'):
             # await asyncio.sleep(np.random.uniform(3, 30))
-            await self.participant.trader.metrics.save()
+            await self.participant.records.save(final=True)
         await self.participant.kill()
 
     async def on_get_actions_return(self, payload):

@@ -7,6 +7,8 @@ import signal
 from collections import deque
 from statistics import mean
 from sqlalchemy_utils import database_exists
+# from TREX_Core
+
 
 # from _clients.sim_controller.training_controller import TrainingController
 # from utils import utils
@@ -98,6 +100,16 @@ class Controller:
             # self.status['policy_sever_online'] = False
             self.status['policy_server_ready'] = False
         # self.training_controller = TrainingController(self.__config, self.status)
+
+        if 'records' in config:
+            from TREX_Core.utils.records import Records
+            self.records = Records(db_string=self.__config['study']['output_database'],
+                                   columns=config['records'])
+
+            # print(vars(self.records))
+            # self.records.create_table()
+        # print(hasattr(self, 'records'), getattr(self, 'records'))
+
 
     async def delay(self, s):
         '''This function delays the sim by s seconds using the client sleep method so as not to interrupt the thread control.
@@ -213,6 +225,7 @@ class Controller:
         # and market is ready
         # reset turn trackers
         # take next step
+        # await self.delay(2)
         self.__reset_turn_trackers()
         self.__time += self.__time_step_s
         await self.step()
@@ -424,6 +437,11 @@ class Controller:
             # if hasattr(self, 'hyperparameters_idx'):
             #     message["market_id"] += "-hps" + str(self.hyperparameters_idx)
             # await self.__client.emit('start_generation', message)
+            # Metrics.create_metrics_table()
+            if hasattr(self, 'records'):
+                table_name = f'{self.__episode}_{self.market_id}'
+                await self.records.create_table(table_name)
+
             self.__client.publish('/'.join([self.market_id, 'simulation', 'start_episode']), self.__episode,
                                   user_property=('to', '^all'))
             self.status['episode_ended'] = False

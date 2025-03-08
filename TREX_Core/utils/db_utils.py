@@ -30,6 +30,9 @@ def get_table(db_string, table_name, engine=None):
     # if not sqlalchemy.inspect(engine).has_table(table_name):
     #     return None
     # print(db_string, table_name)
+    # print(sqlalchemy.inspect(engine).has_table(table_name))
+    if not sqlalchemy.inspect(engine).has_table(table_name):
+        return None
 
     metadata = MetaData()
     table = sqlalchemy.Table(table_name, metadata, autoload_with=engine)

@@ -1,6 +1,6 @@
 import asyncio
 # import tenacity
-from TREX_Core.utils.metrics import Metrics
+# from TREX_Core.utils.records import Metrics
 
 
 class Trader:
@@ -8,24 +8,6 @@ class Trader:
     """
     def __init__(self, **kwargs):
         self.__participant = kwargs['trader_fns']
-        self.track_metrics = kwargs['track_metrics'] if 'track_metrics' in kwargs else False
-
-        if self.track_metrics:
-            self.metrics = Metrics(self.__participant['id'], track=self.track_metrics)
-            self.__init_metrics()
-
-    def __init_metrics(self):
-        import sqlalchemy
-        '''
-        Initializes metrics to record into database
-        '''
-        self.metrics.add('timestamp', sqlalchemy.Integer)
-        self.metrics.add('actions_dict', sqlalchemy.JSON)
-        # self.metrics.add('rewards', sqlalchemy.Float)
-        self.metrics.add('next_settle_load', sqlalchemy.Integer)
-        self.metrics.add('next_settle_generation', sqlalchemy.Integer)
-        if 'storage' in self.__participant:
-            self.metrics.add('storage_soc', sqlalchemy.Float)
 
     async def act(self, **kwargs):
         actions = {}
@@ -57,15 +39,6 @@ class Trader:
             elif residual_gen > 0:
                 effective_charge = min(residual_gen, max_charge)
                 actions['bess'] = {str(next_settle): effective_charge}
-
-        if self.track_metrics:
-            await asyncio.gather(
-                self.metrics.track('timestamp', self.__participant['timing']['current_round'][1]),
-                self.metrics.track('actions_dict', actions),
-                self.metrics.track('next_settle_load', load),
-                self.metrics.track('next_settle_generation', generation))
-            if 'bess' in actions:
-                await self.metrics.track('storage_soc', self.__participant['storage']['info']()['state_of_charge'])
         return actions
 
     async def step(self):

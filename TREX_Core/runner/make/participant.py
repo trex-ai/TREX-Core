@@ -15,6 +15,8 @@ def cli(configs, participant_id):
         return None, None
 
     participant_configs = configs['participants'][participant_id]
+    if 'records' in configs:
+        participant_configs['records'] = configs['records']
 
     if 'type' not in participant_configs:
         return None, None

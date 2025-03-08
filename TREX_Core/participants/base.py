@@ -31,7 +31,7 @@ class Participant:
         self.__profile = {
             'db_path': profile_db_path
         }
-        self.output_db_path = output_db_path
+        self.__output_db_path = output_db_path
         # print(self.output_db_path)
         # Initialize market variables
         self.__ledger = ledger.Ledger(self.participant_id)
@@ -87,6 +87,10 @@ class Participant:
         if synthetic_profile:
             self.__profile_params['synthetic_profile'] = synthetic_profile
 
+        if 'records' in kwargs:
+            from TREX_Core.utils.records import Records
+            self.records = Records(db_string=self.__output_db_path,
+                                   columns=kwargs['records'])
         # print(trader_type, storage_params,  self.__profile_params)
 
         # if 'market_ns' in kwargs:
@@ -395,6 +399,15 @@ class Participant:
         await self.__meter_energy(self.__timing['current_round'])
         # await self.__client.emit('end_turn', namespace='/market')
         # await self.__client.emit('end_turn')
+        if hasattr(self, 'records'):
+            records = dict(
+                time=self.__timing['current_round'][1],
+                participant_id=self.participant_id,
+                meter=self.__meter)
+            if hasattr(self, 'storage'):
+                records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
+                # records['storage'] = self.storage
+            await self.records.track(records)
         self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id,
                               user_property=('to', self.market_sid))
 
@@ -477,7 +490,7 @@ class Participant:
 
         self.__meter = await self.__allocate_energy(time_interval)
         # await self.__client.emit('meter_data', self.__meter)
-        time_interval = self.__meter.pop('time_interval')
+        # time_interval = self.__meter.pop('time_interval')
         message = [self.participant_id, time_interval, self.__meter]
         self.__client.publish('/'.join([self.market_id, 'meter']), message,
                               user_property=('to', self.market_sid),
@@ -497,7 +510,7 @@ class Participant:
 
         self.__timing['last_deliver'] = time_interval
         meter = {
-            'time_interval': time_interval,
+            # 'time_interval': time_interval,
 
             # generation is NET from each source
             # self consumed energy are allocated to consumption
