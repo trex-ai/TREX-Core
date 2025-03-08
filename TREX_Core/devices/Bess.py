@@ -54,6 +54,7 @@ class Storage:
             'power_rating': power,  # reading at the meter in W
             'self_discharge_rate_min': capacity * monthly_sdr / 28 / 24 / 60,
             # fixed quantity in Wh based on full capacity
+            'remaining_energy': 0,  # Wh
             'state_of_charge': 0,  # Wh
         }
 
@@ -69,15 +70,17 @@ class Storage:
             current_energy_activity = self.__schedule[self.timing['current_round']]
         if self.__last_round_processed != self.timing['current_round']:
             # Predict soc at end time step if round has not been processed yet
-            soc_start = self.__info['state_of_charge']
+            soc_start = self.__info['remaining_energy']
             soc_end = max(0, soc_start + current_energy_activity - self.__info['self_discharge_rate_min'])
         else:
             # Once round has been processed, use soc end to calculate soc start
-            soc_end = self.__info['state_of_charge']
+            soc_end = self.__info['remaining_energy']
             soc_start = soc_end - current_energy_activity + self.__info['self_discharge_rate_min']
         if 'internal' in kwargs:
-            return (soc_start, current_energy_activity, soc_end)
-        return (soc_start, current_energy_activity, round(soc_end, 2))
+            self.__info['remaining_energy'] = soc_end
+            self.__info['state_of_charge'] = round(soc_end/self.__info['capacity'], 1)
+            # return (soc_start, current_energy_activity, soc_end)
+        return soc_start, current_energy_activity, round(soc_end, 2)
 
     # Check that time interval is a multiple of time durations
     def __time_interval_is_valid(self, time_interval: tuple):
@@ -113,7 +116,7 @@ class Storage:
                         elapse_intervals.index((time_interval[0], time_interval[0] + round_duration)):]
 
         request_blocks = len(request_intervals)
-        soc_start = self.__info['state_of_charge']
+        soc_start = self.__info['remaining_energy']
         for idx in range(request_blocks):
             elapse_keys = elapse_intervals[:elapse_intervals.index(request_intervals[idx]) + 1]
             elapsed_and_scheduled = {key: self.__schedule[key] for key in elapse_keys if key in self.__schedule}
@@ -179,8 +182,8 @@ class Storage:
 
         if self.__last_round_processed == self.timing['current_round']:
             return False
-        soc_start, energy_activity, soc_end = await self.__status()
-        _, _, self.__info['state_of_charge'] = await self.__status(internal=True)
+        soc_start, energy_activity, soc_end = await self.__status(internal=True)
+        # _, _, self.__info['remaining_energy'] = await self.__status(internal=True)
         self.__schedule.pop(self.timing['last_round'], None)
         self.__last_round_processed = self.timing['current_round']
         self.last_activity = energy_activity
@@ -189,12 +192,15 @@ class Storage:
     async def step(self):
         return await self.__process_schedule()
 
-    def get_info(self):
+    def get_info(self, *args):
+        if args:
+            return {k: self.__info[k] for k in args}
         return self.__info
 
     def reset(self, soc_pct):
-        state_of_charge = int(self.__info['capacity'] * max(0, min(100, soc_pct/100)))
-        self.__info['state_of_charge'] = state_of_charge
+        remaining_energy = int(self.__info['capacity'] * max(0, min(100, soc_pct/100)))
+        self.__info['remaining_energy'] = remaining_energy
+        self.__info['state_of_charge'] = soc_pct
         self.__schedule = {}
         self.__last_round_processed = None
         self.last_activity = 0
