@@ -7,43 +7,43 @@ This document visualizes the complete architecture, dependencies, and interactio
 ```mermaid
 flowchart TB
     %% Main Components
-    Runner[Runner\nOrchestrator] --> SimController[Simulation Controller]
-    Runner --> MarketClient[Market Client]
-    Runner --> ParticipantClients[Participant Clients]
+    Runner["Runner\nOrchestrator"] --> SimController["Simulation Controller"]
+    Runner --> Market["Market Client"]
+    Runner --> Participants["Participant Clients"]
     
     %% Config Dependencies
-    Config[JSON Configs] --> Runner
+    Config["JSON Configs"] --> Runner
     Config --> SimController
-    Config --> MarketClient
-    Config --> ParticipantClients
+    Config --> Market
+    Config --> Participants
     
     %% MQTT Communication Hub
-    MQTT[MQTT Broker] <--> SimController
-    MQTT <--> MarketClient
-    MQTT <--> ParticipantClients
+    MQTT["MQTT Broker"] <--> SimController
+    MQTT <--> Market
+    MQTT <--> Participants
     
     %% Database Connections
     DB[(Database)] --> Runner
     DB <--> SimController
-    DB <--> MarketClient
-    DB <--> ParticipantClients
-    DBUtils[DB Utilities] --> DB
+    DB <--> Market
+    DB <--> Participants
+    DBUtils["DB Utilities"] --> DB
     
     %% Market Components
-    MarketClient --> DoubleAuction[Double Auction\nMarket Mechanism]
-    DoubleAuction --> BidsAsks[Bids and Asks]
-    MarketClient --> Grid[Grid Market]
+    Market --> DoubleAuction["Double Auction\nMarket Mechanism"]
+    DoubleAuction --> BidsAsks["Bids and Asks"]
+    Market --> Grid["Grid Market"]
     
     %% Participant Components
-    ParticipantClients --> TraderAgents[Trader Agents]
-    ParticipantClients --> DeviceModels[Physical Devices]
-    ParticipantClients --> Ledger[Participant Ledger]
-    DeviceModels --> BESS[Battery Storage]
+    Participants --> TraderAgents["Trader Agents"]
+    Participants --> DeviceModels["Physical Devices"]
+    Participants --> Ledger["Participant Ledger"]
+    DeviceModels --> BESS["Battery Storage"]
     
     %% Trader Agent Types
-    TraderAgents --> BasicTrader[Basic Trader]
-    TraderAgents --> BaselineAgent[Baseline Agent]
-    TraderAgents --> BatteryScheduleAgent[Battery Schedule Agent]
+    TraderAgents --> BasicTrader["Basic Trader"]
+    TraderAgents --> BaselineAgent["Baseline Agent"]
+    TraderAgents --> BatteryScheduleAgent["Battery Schedule Agent"]
     
     %% Trading Logic Flow
     TraderAgents --> BidsAsks
@@ -55,7 +55,7 @@ flowchart TB
     classDef comms fill:#beb,stroke:#383,stroke-width:1px
     
     class Runner,SimController core
-    class MarketClient,ParticipantClients,DoubleAuction,TraderAgents,DeviceModels component
+    class Market,Participants,DoubleAuction,TraderAgents,DeviceModels component
     class Config,DB,BidsAsks data
     class MQTT comms
 ```
@@ -65,31 +65,31 @@ flowchart TB
 ```mermaid
 flowchart LR
     %% MQTT Topic Structure
-    MQTT((MQTT\nBroker))
+    MQTT((MQTT Broker))
     
     %% Market Topics
-    MQTT --> MT1[/market_id/]
-    MQTT --> MT2[/market_id/join_market/]
-    MQTT --> MT3[/market_id/bid/]
-    MQTT --> MT4[/market_id/ask/]
-    MQTT --> MT5[/market_id/settlement_delivered/]
-    MQTT --> MT6[/market_id/meter/]
-    MQTT --> MT7[/market_id/{participant_id}/]
+    MQTT --> MT1["/market_id"]
+    MQTT --> MT2["/market_id/join_market"]
+    MQTT --> MT3["/market_id/bid"]
+    MQTT --> MT4["/market_id/ask"]
+    MQTT --> MT5["/market_id/settlement_delivered"]
+    MQTT --> MT6["/market_id/meter"]
+    MQTT --> MT7["/market_id/{participant_id}"]
     
     %% Simulation Controller Topics
-    MQTT --> ST1[/market_id/simulation/participant_joined/]
-    MQTT --> ST2[/market_id/simulation/end_turn/]
-    MQTT --> ST3[/market_id/simulation/end_round/]
-    MQTT --> ST4[/market_id/simulation/participant_ready/]
-    MQTT --> ST5[/market_id/simulation/market_ready/]
-    MQTT --> ST6[/market_id/algorithm/policy_server_ready/]
-    MQTT --> ST7[/market_id/simulation/participant_disconnected/]
-    MQTT --> ST8[/market_id/start_round/]
+    MQTT --> ST1["/market_id/simulation/participant_joined"]
+    MQTT --> ST2["/market_id/simulation/end_turn"]
+    MQTT --> ST3["/market_id/simulation/end_round"]
+    MQTT --> ST4["/market_id/simulation/participant_ready"]
+    MQTT --> ST5["/market_id/simulation/market_ready"]
+    MQTT --> ST6["/market_id/algorithm/policy_sever_ready"]
+    MQTT --> ST7["/market_id/simulation/participant_disconnected"]
+    MQTT --> ST8["/market_id/start_round"]
     
     %% Components
-    Market[Market Client]
-    SimController[Simulation Controller]
-    Participants[Participant Clients]
+    Market["Market Client"]
+    SimController["Simulation Controller"]
+    Participants["Participant Clients"]
     
     %% Market Subscriptions
     MT1 --> Market
@@ -126,26 +126,26 @@ flowchart LR
 ```mermaid
 flowchart TB
     %% Configuration Flow
-    Config[Config Files] --> Runner
-    Runner --> MarketConfig[Market Configuration]
-    Runner --> ParticipantConfig[Participant Configuration]
+    Config["Config Files"] --> Runner
+    Runner --> MarketConfig["Market Configuration"]
+    Runner --> ParticipantConfig["Participant Configuration"]
     
     %% Market Data Flow
-    MarketConfig --> Market[Market]
-    Market --> BidAskProcessing[Bid/Ask Processing]
-    BidAskProcessing --> MarketClearing[Market Clearing]
-    MarketClearing --> SettlementProcessing[Settlement Processing]
+    MarketConfig --> Market["Market Client"]
+    Market --> BidAskProcessing["Bid/Ask Processing"]
+    BidAskProcessing --> MarketClearing["Market Clearing"]
+    MarketClearing --> SettlementProcessing["Settlement Processing"]
     
     %% Participant Data Flow
-    ParticipantConfig --> Participant[Participant]
+    ParticipantConfig --> Participant["Participant"]
     ProfileDB[(Profile Database)] --> Participant
-    Participant --> LoadGenData[Load/Generation Data]
-    LoadGenData --> TraderAgent[Trader Agent]
+    Participant --> LoadGenData["Load/Generation Data"]
+    LoadGenData --> TraderAgent["Trader Agent"]
     TraderAgent --> BidAskProcessing
     
     %% Device Control Flow
-    TraderAgent --> DeviceControl[Device Control]
-    DeviceControl --> BESS[Battery Storage]
+    TraderAgent --> DeviceControl["Device Control"]
+    DeviceControl --> BESS["Battery Storage"]
     BESS --> SettlementProcessing
     
     %% Results Flow
@@ -169,10 +169,10 @@ flowchart TB
 sequenceDiagram
     participant Runner
     participant SimController as Simulation Controller
-    participant Market
+    participant Market as Market Client
     participant Participant1 as Participant 1
     participant ParticipantN as Participant N
-    participant MQTT
+    participant MQTT as MQTT Broker
     participant DB as Database
     
     Runner->>SimController: Initialize
@@ -311,26 +311,26 @@ classDiagram
 ```mermaid
 flowchart TB
     %% Market Process
-    MarketOpen[Market Open] --> BidsAsks[Collect Bids & Asks]
-    BidsAsks --> MarketClose[Market Close]
-    MarketClose --> SourceClassify[Classify Energy Sources]
-    SourceClassify --> SortBids[Sort Bids by Price]
-    SortBids --> SortAsks[Sort Asks by Price]
-    SortAsks --> MatchOrders[Match Orders]
-    MatchOrders --> DeterminePrice[Determine Settlement Price]
-    DeterminePrice --> NotifyParticipants[Notify Participants]
-    NotifyParticipants --> RecordSettlements[Record Settlements]
-    RecordSettlements --> NextRound[Prepare for Next Round]
+    MarketOpen["Market Open"] --> BidsAsks["Collect Bids & Asks"]
+    BidsAsks --> MarketClose["Market Close"]
+    MarketClose --> SourceClassify["Classify Energy Sources"]
+    SourceClassify --> SortBids["Sort Bids by Price"]
+    SortBids --> SortAsks["Sort Asks by Price"]
+    SortAsks --> MatchOrders["Match Orders"]
+    MatchOrders --> DeterminePrice["Determine Settlement Price"]
+    DeterminePrice --> NotifyParticipants["Notify Participants"]
+    NotifyParticipants --> RecordSettlements["Record Settlements"]
+    RecordSettlements --> NextRound["Prepare for Next Round"]
     
     %% Subprocesses
-    MatchOrders --> BidExceedsAsk{Bid Price ≥ Ask Price?}
-    BidExceedsAsk -->|Yes| QuantityMatch[Match Quantities]
-    BidExceedsAsk -->|No| NoMatch[No Match Possible]
+    MatchOrders --> BidExceedsAsk{"Bid Price ≥ Ask Price?"}
+    BidExceedsAsk -->|Yes| QuantityMatch["Match Quantities"]
+    BidExceedsAsk -->|No| NoMatch["No Match Possible"]
     
-    DeterminePrice --> PriceRule{Price Rule}
-    PriceRule -->|Midpoint| MidpointPrice[Average of Bid & Ask]
-    PriceRule -->|Discriminatory| DiscriminatoryPrice[Bid & Ask Original Prices]
-    PriceRule -->|Uniform| UniformPrice[Market Clearing Price]
+    DeterminePrice --> PriceRule{"Price Rule"}
+    PriceRule -->|Midpoint| MidpointPrice["Average of Bid & Ask"]
+    PriceRule -->|Discriminatory| DiscriminatoryPrice["Bid & Ask Original Prices"]
+    PriceRule -->|Uniform| UniformPrice["Market Clearing Price"]
     
     %% Style
     classDef process fill:#bbf,stroke:#33f,stroke-width:1px
@@ -348,9 +348,9 @@ flowchart TB
 sequenceDiagram
     participant Runner
     participant SimController as Simulation Controller
-    participant Market
+    participant Market as Market Client
     participant Participant as Participants
-    participant MQTT
+    participant MQTT as MQTT Broker
     
     Note over Runner,MQTT: 1. Simulation Initialization
     Runner->>SimController: Start simulation
@@ -403,8 +403,8 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    TREX[TREX-Core System] <--> CityLearn[CityLearn\nvia configs]
-    TREX <--> PolicyServers[Policy Servers\nvia MQTT]
+    TREX["TREX-Core System"] <--> CityLearn["CityLearn\nvia configs"]
+    TREX <--> PolicyServers["Policy Servers\nvia MQTT"]
     TREX <--> ExternalDB[(External Databases\nvia db_utils)]
     
     %% Style
