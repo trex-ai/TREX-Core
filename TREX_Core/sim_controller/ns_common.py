@@ -28,7 +28,7 @@ class NSDefault():
                 await self.on_market_ready(payload)
             case 'participant_disconnected':
                 await self.on_participant_disconnected(payload)
-            case 'policy_sever_ready':
+            case 'policy_server_ready':
                 await self.on_policy_server_ready(payload)
             case 'sim_controller_status':
                 await self.on_sim_controller_status()
