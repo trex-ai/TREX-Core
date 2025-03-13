@@ -403,7 +403,8 @@ class Participant:
             records = dict(
                 time=self.__timing['current_round'][1],
                 participant_id=self.participant_id,
-                meter=self.__meter)
+                meter=self.__meter,
+                next_actions=next_actions)
             if hasattr(self, 'storage'):
                 records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
                 # records['storage'] = self.storage
