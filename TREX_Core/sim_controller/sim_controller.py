@@ -426,7 +426,7 @@ class Controller:
 
         # Beginning new episode
         if self.__current_step == 0:
-            print('STARTING SIMULATION')
+            print(f'STARTING SIMULATION EPISODE {self.__episode}')
             # message = {
             #     'generation': self.__generation
             #     # 'db_string': self.__config['study']['output_database'],
