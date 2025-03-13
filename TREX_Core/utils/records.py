@@ -14,23 +14,25 @@ class Records:
             'path': db_string
         }
         # self.__columns = columns
-        self.__record_names = columns
-        self.__columns = [Column(record,
-                          getattr(sqlalchemy, columns[record]['type']),
-                          primary_key=columns[record]['primary'] if 'primary' in columns[record] else False)
-                          for record in columns]
+        self.__columns = columns
+
         # pprint(self.__columns)
 
         self.__records = list()
         self.__last_record_time = 0
         self.__transactions_count = 0
+        self.__meta = MetaData()
 
     async def create_table(self, table_name):
         table_name += '_records'
+        columns = [Column(record,
+                          getattr(sqlalchemy, self.__columns[record]['type']),
+                          primary_key=self.__columns[record]['primary'] if 'primary' in self.__columns[record] else False)
+                   for record in self.__columns]
         table = sqlalchemy.Table(
-            table_name,
-            MetaData(),
-            *self.__columns
+            str(table_name),
+            self.__meta,
+            *columns
         )
         return await db_utils.create_table(self.__db['path'], table)
         # return table
@@ -49,7 +51,7 @@ class Records:
     async def track(self, records):
         # if not self.__track:
         #     return
-        filtered_records = {key: records[key] for key in self.__record_names.keys() if key in records}
+        filtered_records = {key: records[key] for key in self.__columns.keys() if key in records}
         self.__records.append(filtered_records)
 
     # def update_db_info(self, db_string, table_name):
