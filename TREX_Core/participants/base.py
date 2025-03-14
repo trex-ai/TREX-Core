@@ -404,6 +404,7 @@ class Participant:
                 time=self.__timing['current_round'][1],
                 participant_id=self.participant_id,
                 meter=self.__meter,
+                next_observations=await self.make_observations_for_records(self.__timing['next_settle']),
                 next_actions=next_actions)
             if hasattr(self, 'storage'):
                 records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
@@ -412,6 +413,21 @@ class Participant:
         self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id,
                               user_property=('to', self.market_sid))
 
+    async def make_observations_for_records(self, time_interval):
+        generation, consumption = await self.__read_profile(time_interval)
+        net_load = consumption - generation
+        obs_dict = {
+            'time': str(time_interval),
+            'generation': generation,
+            'consumption': consumption,
+            'net_load': net_load,
+        }
+        if hasattr(self, 'storage'):
+            storage_schedule = await self.storage.check_schedule(time_interval)
+            obs_dict.update(storage_schedule[time_interval])
+
+        # print(obs_dict)
+        return obs_dict
 
     async def __read_profile(self, time_interval):
         """Fetches energy profile for one timestamp from database
