@@ -35,6 +35,10 @@ class Controller:
         self.__client = sio_client
         self.__config = config
 
+        # Add monitor control event
+        self.__monitor_running = asyncio.Event()
+        self.__monitor_running.set()  # Start in running state
+
         self.__learning_agents = [participant for participant in self.__config['participants'] if
                                  'learning' in self.__config['participants'][participant]['trader'] and
                                  self.__config['participants'][participant]['trader']['learning']]
@@ -269,17 +273,26 @@ class Controller:
             self.status['participants_online'] = True
 
     async def monitor(self):
+        first_cycle = True
         while True:
-            await self.delay(self.status['monitor_timeout'])
-            # pprint(self.status)
-
+            # Check if monitor is paused - wait until resumed if so
+            if not self.__monitor_running.is_set():
+                # True pause: wait until the event is set again
+                # This consumes no CPU while waiting
+                print("Monitor paused - waiting for resume signal")
+                await self.__monitor_running.wait()
+                print("Monitor resumed")
+            
+            # Skip delay on first cycle
+            if not first_cycle:
+                # Normal monitor delay when running
+                await self.delay(self.status['monitor_timeout'])
+            else:
+                first_cycle = False
+            
             if not self.status['registered_on_server']:
                 continue
 
-            #TODO: maybe disable this at some point and just use mqtt to query status at any time
-            # if not self.status['episode_ended'] and self.status['last_step_clock'] and time.time() - self.status['last_step_clock'] > 300:
-            #     self.status['last_step_clock'] = time.time()
-            #     pprint(self.status)
 
             #TODO: One of the most likely scensarios for sim to get stuck is that a participant
             # disconnects before an action is taken for some reason, so that the turn tracker cannot advance
@@ -364,9 +377,11 @@ class Controller:
                 continue
 
             self.status['sim_started'] = True
-            self.status['monitor_timeout'] = 5
+            # self.status['monitor_timeout'] = 5
 
+            await self.pause_monitor()
             await self.__advance_turn()
+
             # await self.step()
 
     # async def __load_weights(self, db, generation, market_id, participant_id):
@@ -505,6 +520,7 @@ class Controller:
             # if self.__episode <= self.__episodes:
                 self.__client.publish('/'.join([self.market_id, 'simulation', 'end_episode']), message,
                                       user_property=('to', '^all'))
+                await self.resume_monitor()
             else:
                 # self.__generation > self.__generations:
                 # if 'hyperparameters' in self.__config['training'] and len(self.__config['training']['hyperparameters']):
@@ -528,3 +544,15 @@ class Controller:
                 await self.delay(1)
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)
+
+    async def pause_monitor(self):
+        """Pause the monitor loop without cancelling the task"""
+        if self.__monitor_running.is_set():
+            print("Pausing monitor - simulation active")
+            self.__monitor_running.clear()
+        
+    async def resume_monitor(self):
+        """Resume the monitor loop"""
+        if not self.__monitor_running.is_set():
+            print("Resuming monitor - simulation paused/between episodes")
+            self.__monitor_running.set()
