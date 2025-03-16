@@ -979,15 +979,10 @@ class Market:
             raise Exception
         return True
 
-    async def record_transactions(self, buf_len=0, check_table_len=False):
+    async def record_transactions(self, buf_len=0):
         """This function records the transaction records into the ledger
 
         """
-
-        if check_table_len:
-            table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-            if table_len < self.transactions_count:
-                return False
 
         if buf_len:
             delay = buf_len / 100
@@ -999,11 +994,13 @@ class Market:
         if transactions_len < buf_len:
             return False
 
-        transactions = self.__transactions[:transactions_len]
-        await asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table'], existing_connection=self.__db.get('connection')))
+        # Swap the entire list instead of slicing
+        transactions_to_write = self.__transactions
+        self.__transactions = []  # Create a fresh list for new transactions
+        
+        await asyncio.create_task(db_utils.dump_data(transactions_to_write, self.__db['path'], self.__db['table'], existing_connection=self.__db.get('connection')))
 
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
-        del self.__transactions[:transactions_len]
         self.transactions_count += transactions_len
         return True
 
