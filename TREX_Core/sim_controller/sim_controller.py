@@ -312,12 +312,12 @@ class Controller:
 
             if not self.status['market_online']:
                 # await self.__client.emit('is_market_online')
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_market_online']), '')
+                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '')
                 continue
 
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_participant_joined']), '',
+                self.__client.publish(f'{self.market_id}/simulation/is_participant_joined', '',
                                       user_property=('to', '^all'))
                 continue
 
@@ -325,7 +325,7 @@ class Controller:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'is_policy_server_online']), '')
+                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '')
                 continue
 
             # await self.update_sim_paths()
@@ -457,7 +457,7 @@ class Controller:
                 table_name = f'{self.__episode}_{self.market_id}'
                 await self.records.create_table(table_name)
 
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_episode']), self.__episode,
+            self.__client.publish(f'{self.market_id}/simulation/start_episode', self.__episode,
                                   user_property=('to', '^all'))
             self.status['episode_ended'] = False
 
@@ -474,7 +474,7 @@ class Controller:
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
             # print(self.__current_step, self.__end_step)
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'start_round']), message,
+            self.__client.publish(f'{self.market_id}/simulation/start_round', message,
                                   user_property=('to', '^all'))
         # end of episode
         elif self.__current_step == self.__end_step + 1:
@@ -518,7 +518,7 @@ class Controller:
             # await self.__client.emit('end_generation', message)
             # await self.delay(20)
             # if self.__episode <= self.__episodes:
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_episode']), message,
+                self.__client.publish(f'{self.market_id}/simulation/end_episode', message,
                                       user_property=('to', '^all'))
                 await self.resume_monitor()
             else:
@@ -539,7 +539,7 @@ class Controller:
                 print('end_simulation', self.__episode, self.__episodes)
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
-                self.__client.publish('/'.join([self.market_id, 'simulation', 'end_simulation']), '',
+                self.__client.publish(f'{self.market_id}/simulation/end_simulation', '',
                                       user_property=('to', '^all'))
                 await self.delay(1)
                 await self.__client.disconnect()
