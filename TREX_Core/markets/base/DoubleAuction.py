@@ -12,6 +12,7 @@ from operator import itemgetter
 
 from TREX_Core.markets.Grid import Market as Grid
 from TREX_Core.utils import db_utils, source_classifier
+import databases
 
 
 class Market:
@@ -116,6 +117,11 @@ class Market:
             db_string=db_string,
             table_name=table_name)
         self.__db['table'] = db_utils.get_table(db_string, table_name)
+        
+        # Initialize the database connection for reuse
+        if 'connection' not in self.__db or self.__db['connection'] is None:
+            self.__db['connection'] = databases.Database(db_string)
+            await self.__db['connection'].connect()
 
     # async def register(self):
     #     """Function that attempts to register Market client with socket.io server in the market namespace
@@ -994,7 +1000,7 @@ class Market:
             return False
 
         transactions = self.__transactions[:transactions_len]
-        await asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
+        await asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table'], existing_connection=self.__db.get('connection')))
 
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
         del self.__transactions[:transactions_len]
@@ -1101,3 +1107,10 @@ class Market:
         self.__settled.clear()
         for participant in self.__participants:
             self.__participants[participant]['meter'].clear()
+
+    async def close_connection(self):
+        """Close the database connection when done"""
+        if self.__db.get('connection'):
+            await self.__db['connection'].disconnect()
+            self.__db['connection'] = None
+            

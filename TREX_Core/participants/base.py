@@ -11,6 +11,8 @@ from TREX_Core.participants import ledger
 from TREX_Core.utils import db_utils, utils
 from cuid2 import Cuid
 
+from async_lru import alru_cache
+
 
 class Participant:
     """
@@ -429,6 +431,8 @@ class Participant:
         # print(obs_dict)
         return obs_dict
 
+
+    @alru_cache
     async def __read_profile(self, time_interval):
         """Fetches energy profile for one timestamp from database
 
@@ -442,12 +446,13 @@ class Participant:
         table = self.__profile['db_table']
         # query = table.select().where(table.c.tstamp == time_interval[1])
         query = table.select().where(table.c.time == time_interval[1])
-        async with db.transaction():
-            row = await db.fetch_one(query)
+        # Direct fetch without transaction
+        row = await db.fetch_one(query)
         return utils.process_profile(row=row,
                                      gen_scale=self.__profile_params['generation_scale'],
                                      load_scale=self.__profile_params['load_scale'])
 
+    @alru_cache
     async def __read_sensors(self, time_interval):
         """Fetches energy profile for one timestamp from database
 
@@ -461,8 +466,8 @@ class Participant:
         table = self.__profile['db_table']
         # query = table.select().where(table.c.tstamp == time_interval[1])
         query = table.select().where(table.c.time == time_interval[1])
-        async with db.transaction():
-            row = await db.fetch_one(query)
+        # Direct fetch without transaction
+        row = await db.fetch_one(query)
         return utils.process_profile(row=row,
                                      gen_scale=self.__profile_params['generation_scale'],
                                      load_scale=self.__profile_params['load_scale'])
@@ -686,6 +691,13 @@ class Participant:
         if hasattr(self.trader, 'kill'):
             await self.trader.kill()
         await asyncio.sleep(5)
+        # Close the database connection if records exist
+        if hasattr(self, 'records'):
+            await self.records.close_connection()
+        # Close the profile database connection
+        if self.__profile.get('db'):
+            await self.__profile['db'].disconnect()
+
         await self.__client.disconnect()
         # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)

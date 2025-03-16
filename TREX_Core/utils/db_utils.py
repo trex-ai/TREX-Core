@@ -13,15 +13,34 @@ def create_db(db_string, engine=None):
         create_database(engine.url)
     return database_exists(engine.url)
 
-async def dump_data(data, db_string, table):
-    # db = databases.Database(db_string)
-    # await db.connect()
-    # query = table.insert()
-    async with databases.Database(db_string) as db:
-        async with db.transaction():
-            query = table.insert()
-            await db.execute_many(query, data)
-    # await db.disconnect()
+async def dump_data(data, db_string, table, existing_connection=None):
+    """Insert multiple records into a database table efficiently.
+    
+    Args:
+        data: List of records to insert
+        db_string: Database connection string
+        table: SQLAlchemy Table object
+        existing_connection: Optional existing database connection to reuse
+    """
+    if not data:
+        return  # Short-circuit for empty data
+        
+    # Use existing connection if provided, otherwise create a new one
+    if existing_connection:
+        db = existing_connection
+        close_after = False
+    else:
+        # Create a new connection
+        async with databases.Database(db_string) as db:
+            async with db.transaction():
+                query = table.insert()
+                await db.execute_many(query, data)
+            return
+            
+    # Only execute this if using an existing connection
+    async with db.transaction():
+        query = table.insert()
+        await db.execute_many(query, data)
 
 def get_table(db_string, table_name, engine=None):
     if not engine:
@@ -42,9 +61,9 @@ def get_table_len(db_string, table, engine=None):
     if not engine:
         engine = create_engine(db_string)
     Session = sessionmaker(bind=engine)
-    session = Session()
-    rows = session.query(table).count()
-    return rows
+    with Session() as session:
+        rows = session.query(table).count()
+        return rows
     # return engine.scalar(table.count())
 
 def drop_table(db_string, table_name, engine=None):

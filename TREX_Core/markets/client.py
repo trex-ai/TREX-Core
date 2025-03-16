@@ -171,6 +171,8 @@ class Client:
         # await self.market.end_sim_generation()
         await self.market.record_transactions()
         await self.market.ensure_transactions_complete()
+        # Close the database connection after transactions are complete but before disconnecting
+        await self.market.close_connection()
         await asyncio.sleep(5)
         await self.client.disconnect()
         # print('attempting to end')

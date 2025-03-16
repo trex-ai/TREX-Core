@@ -11,7 +11,9 @@ from pprint import pprint
 class Records:
     def __init__(self, db_string, columns):
         self.__db = {
-            'path': db_string
+            'path': db_string,
+            'sa_engine': sqlalchemy.create_engine(db_string),
+            'connection': None  # Added to store a reusable database connection
         }
         # self.__columns = columns
         self.__columns = columns
@@ -42,6 +44,10 @@ class Records:
             db_string = self.__db['path']
         table_name += '_records'
         self.__db['table'] = db_utils.get_table(db_string, table_name)
+        # Initialize the database connection
+        if not self.__db.get('connection'):
+            self.__db['connection'] = databases.Database(db_string)
+            await self.__db['connection'].connect()
 
     # def add(self, record: str, column_type):
     #     if record not in self.__columns:
@@ -87,9 +93,9 @@ class Records:
 
         records = self.__records[:records_len]
         if not final:
-            await asyncio.create_task(db_utils.dump_data(records, self.__db['path'], self.__db['table']))
+            await asyncio.create_task(db_utils.dump_data(records, self.__db['path'], self.__db['table'], existing_connection=self.__db.get('connection')))
         else:
-            await db_utils.dump_data(records, self.__db['path'], self.__db['table'])
+            await db_utils.dump_data(records, self.__db['path'], self.__db['table'], existing_connection=self.__db.get('connection'))
         self.__last_record_time = datetime.datetime.now().timestamp()
         del self.__records[:records_len]
         # self.transactions_count += transactions_len
@@ -151,3 +157,10 @@ class Records:
     #     async with self.__db['db'].transaction():
     #         row = await self.__db['db'].fetch_one(query)
     #     return row['actions_dict']
+
+    # Add method to properly close the connection when done
+    async def close_connection(self):
+        """Close the database connection when done"""
+        if self.__db.get('connection'):
+            await self.__db['connection'].disconnect()
+            self.__db['connection'] = None
