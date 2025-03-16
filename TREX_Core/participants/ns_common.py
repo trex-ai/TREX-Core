@@ -108,7 +108,7 @@ class NSDefault:
         """
         if hasattr(self.participant, 'records'):
             # await asyncio.sleep(np.random.uniform(3, 30))
-            await self.participant.records.save(final=True)
+            await self.participant.records.ensure_records_complete()
             # self.participant.records.reset()
 
         # # TODO: save model
@@ -131,7 +131,7 @@ class NSDefault:
         self.participant.run = False
         if hasattr(self.participant, 'records'):
             # await asyncio.sleep(np.random.uniform(3, 30))
-            await self.participant.records.save(final=True)
+            await self.participant.records.close_connection()
         await self.participant.kill()
 
     async def on_get_actions_return(self, payload):

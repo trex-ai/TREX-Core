@@ -412,6 +412,7 @@ class Participant:
                 records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
                 # records['storage'] = self.storage
             await self.records.track(records)
+            await self.records.save(1000)
         self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id,
                               user_property=('to', self.market_sid))
 
