@@ -279,9 +279,9 @@ class Controller:
             if not self.__monitor_running.is_set():
                 # True pause: wait until the event is set again
                 # This consumes no CPU while waiting
-                print("Monitor paused - waiting for resume signal")
+                # print("Monitor paused - waiting for resume signal")
                 await self.__monitor_running.wait()
-                print("Monitor resumed")
+                # print("Monitor resumed")
             
             # Skip delay on first cycle
             if not first_cycle:
@@ -463,7 +463,7 @@ class Controller:
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time(self.__end_step)
+            await self.__print_step_time(self.__end_step/10)
             self.__current_step += 1
 
             message = {
@@ -548,11 +548,11 @@ class Controller:
     async def pause_monitor(self):
         """Pause the monitor loop without cancelling the task"""
         if self.__monitor_running.is_set():
-            print("Pausing monitor - simulation active")
+            # print("Pausing monitor - simulation active")
             self.__monitor_running.clear()
         
     async def resume_monitor(self):
         """Resume the monitor loop"""
         if not self.__monitor_running.is_set():
-            print("Resuming monitor - simulation paused/between episodes")
+            # print("Resuming monitor - simulation paused/between episodes")
             self.__monitor_running.set()
