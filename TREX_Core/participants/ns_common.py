@@ -38,6 +38,8 @@ class NSDefault:
                 await self.on_end_simulation()
             case 'get_actions_return':
                 await self.on_get_actions_return(payload)
+            case 'get_metadata_return':
+                await self.on_get_metadata_return(payload)
 
     async def on_connect(self):
         # print('connected')
@@ -138,3 +140,8 @@ class NSDefault:
         payload = json.loads(payload)
         # print(message)
         await self.participant.trader.get_actions_return(payload)
+
+    async def on_get_metadata_return(self, payload):
+        payload = json.loads(payload)
+        # print(message)
+        await self.participant.trader.get_metadata_return(payload)
