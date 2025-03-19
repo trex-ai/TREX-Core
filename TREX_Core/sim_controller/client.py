@@ -61,16 +61,7 @@ class Client:
         # await self.msg_queue.put(message)
         await self.ns.process_message(message)
         return 0
-
-    # @tenacity.retry(wait=tenacity.wait_fixed(1) + tenacity.wait_random(0, 2))
-    # async def start_client(self):
-    #     await self.sio_client.connect(self.server_address)
-    #     await self.sio_client.wait()
-    #
-    # async def keep_alive(self):
-    #     while True:
-    #         await self.sio_client.sleep(10)
-    #         await self.sio_client.emit("ping")
+    # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect
         client.on_disconnect = self.on_disconnect
@@ -78,9 +69,10 @@ class Client:
         client.on_message = self.on_message
 
         # client.set_auth_credentials(token, None)
+        # print(self.server_address)
         await client.connect(self.server_address, keepalive=60)
+        
         await STOP.wait()
-
 
     async def run(self):
         """Function to start the client and other background tasks

@@ -160,18 +160,21 @@ class Client:
 
     async def on_end_episode(self, message):
         # await self.market.end_sim_generation()
-        await self.market.record_transactions()
+        # No need to call record_transactions here since ensure_transactions_complete already does it
         await self.market.ensure_transactions_complete()
         # if not last_generation:
         await self.market.reset_market()
         self.client.publish('/'.join([self.market.market_id, 'simulation', 'market_ready']), '')
 
     async def on_end_simulation(self):
+        # print('end simulation')
         self.market.run = False
         # await self.market.end_sim_generation()
-        await self.market.record_transactions()
+        # No need to call record_transactions here since ensure_transactions_complete already does it
         await self.market.ensure_transactions_complete()
-        await asyncio.sleep(5)
+        # Close the database connection after transactions are complete but before disconnecting
+        await self.market.close_connection()
+        # No need for sleep - all database tasks are confirmed complete
         await self.client.disconnect()
         # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)

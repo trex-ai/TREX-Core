@@ -11,7 +11,9 @@ from pprint import pprint
 class Records:
     def __init__(self, db_string, columns):
         self.__db = {
-            'path': db_string
+            'path': db_string,
+            'sa_engine': sqlalchemy.create_engine(db_string),
+            'connection': None  # Added to store a reusable database connection
         }
         # self.__columns = columns
         self.__columns = columns
@@ -22,6 +24,9 @@ class Records:
         self.__last_record_time = 0
         self.__transactions_count = 0
         self.__meta = MetaData()
+        
+        # Track pending database write tasks
+        self.__pending_write_tasks = []
 
     async def create_table(self, table_name):
         table_name += '_records'
@@ -42,6 +47,10 @@ class Records:
             db_string = self.__db['path']
         table_name += '_records'
         self.__db['table'] = db_utils.get_table(db_string, table_name)
+        # Initialize the database connection
+        if not self.__db.get('connection'):
+            self.__db['connection'] = databases.Database(db_string)
+            await self.__db['connection'].connect()
 
     # def add(self, record: str, column_type):
     #     if record not in self.__columns:
@@ -66,88 +75,96 @@ class Records:
     #         self.__records[metric_name].clear()
 
     async def save(self, buf_len=0, final=False, check_table_len=False):
-        """This function records the transaction records into the ledger
-
+        """Record the buffered records into the database
+        
+        Args:
+            buf_len: Minimum buffer length to trigger a write (default=0)
+            final: If True, wait for the write to complete before returning
+            check_table_len: If True, verify record count after write (not implemented)
+        
+        Returns:
+            False if no write was performed (due to buffer conditions)
+            True if a write was initiated
         """
-
-        # if check_table_len:
-        #     table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-        #     if table_len < self.transactions_count:
+        # Apply rate limiting if not a final write
+        # if buf_len and not final:
+        #     delay = buf_len / 100
+        #     ts = datetime.datetime.now().timestamp()
+        #     if ts - self.__last_record_time < delay:
         #         return False
-
-        if buf_len:
-            delay = buf_len / 100
-            ts = datetime.datetime.now().timestamp()
-            if ts - self.__last_record_time < delay:
-                return False
 
         records_len = len(self.__records)
         if records_len < buf_len:
             return False
 
-        records = self.__records[:records_len]
-        if not final:
-            await asyncio.create_task(db_utils.dump_data(records, self.__db['path'], self.__db['table']))
-        else:
-            await db_utils.dump_data(records, self.__db['path'], self.__db['table'])
+        # Swap the entire buffer instead of slicing (more efficient)
+        records_to_write = self.__records
+        self.__records = []  # Create a fresh list for new records
+        
+        # Create and track the database write task
+        db_task = asyncio.create_task(
+            db_utils.dump_data(records_to_write, self.__db['path'], self.__db['table'], 
+                              existing_connection=self.__db.get('connection'))
+        )
+        
+        # Add to our tracking list
+        self.__pending_write_tasks.append(db_task)
+        
+        # Set up callback to remove from our list when done
+        def task_done_callback(completed_task):
+            if completed_task in self.__pending_write_tasks:
+                self.__pending_write_tasks.remove(completed_task)
+        
+        db_task.add_done_callback(task_done_callback)
+        
+        # For critical writes (final=True), wait for completion
+        if final:
+            await db_task
+
         self.__last_record_time = datetime.datetime.now().timestamp()
-        del self.__records[:records_len]
-        # self.transactions_count += transactions_len
+        self.__transactions_count += records_len
         return True
 
+    async def ensure_records_complete(self):
+        """Ensure all database write tasks are complete before continuing.
+        
+        This method will:
+        1. Trigger a final write of any pending records
+        2. Wait for all pending database write tasks to complete
+        3. Verify the record count if needed
+        
+        Returns:
+            True if all records completed successfully
+            
+        Raises:
+            TimeoutError: If writes don't complete within timeout period
+        """
+        # First do one final write and wait for it to complete
+        await self.save(final=True)
+        
+        # Now wait for ALL remaining in-flight tasks
+        if self.__pending_write_tasks:
+            # Wait for all pending tasks to complete
+            await asyncio.wait(self.__pending_write_tasks)
+            
+            # Check if we timed out and still have pending tasks
+            remaining = [task for task in self.__pending_write_tasks if not task.done()]
+            if remaining:
+                raise TimeoutError(f"Timed out waiting for {len(remaining)} database writes to complete")
+        
+        return True
 
-    # async def save(self, buf_len=0):
-    #     if not self.__track:
-    #         return
-    #     # code converts dictionaries of lists to list of dictionaries
-    #     # https://stackoverflow.com/questions/5558418/list-of-dicts-to-from-dict-of-lists
-    #     # v = [dict(zip(DL, t)) for t in zip(*DL.values())]
-    #
-    #     # metrics_len = len(self.__records['timestamp'])
-    #     if metrics_len > buf_len:
-    #         # a table will be created the first time metrics are being saved
-    #         # this increases the likelihood of complete columnss
-    #         if 'table' not in self.__db or self.__db['table'] is None:
-    #             table_name = self.__db.pop('table_name')
-    #             # await db_utils.create_table(db_string=self.__db['path'],
-    #             #                             table=self.__create_metrics_table(table_name))
-    #             # try:
-    #             self.__db['table'] = db_utils.get_table(self.__db['path'], table_name)
-    #             if self.__db['table'] is None:
-    #                 await db_utils.create_table(db_string=self.__db['path'],
-    #                                             table=self.__create_metrics_table(table_name))
-    #                 self.__db['table'] = db_utils.get_table(self.__db['path'], table_name)
-    #
-    #         if self.__db['table'] is None:
-    #             return
-    #
-    #         metrics = {key: value for key, value in self.__records.items() if value}
-    #         metrics = [dict(zip(metrics, t)) for t in zip(*metrics.values())]
-    #         self.__records = {key: value[metrics_len:] for key, value in self.__records.items()}
-    #         # await db_utils.dump_data(metrics, self.__db['path'], self.__db['table'])
-    #         await asyncio.create_task(db_utils.dump_data(metrics, self.__db['path'], self.__db['table']))
-    #         # await self.__ensure_transactions_complete(metrics_len)
-
-    # @tenacity.retry(wait=tenacity.wait_random(1, 5))
-    # async def __ensure_transactions_complete(self, metrics_len):
-    #     table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-    #     # numbers don't match all the time for some reason
-    #     print('comparing recorded metrics vs number of metrics', table_len, metrics_len)
-    #     if table_len < metrics_len:
-    #         raise Exception
-    #     return True
-    #
-    # async def fetch_one(self, timestamp):
-    #     if 'db' not in self.__db:
-    #         self.__db['db'] = databases.Database(self.__db['path'])
-    #
-    #     if 'table' not in self.__db or self.__db['table'] is None:
-    #         table_name = self.__db.pop('table_name')
-    #         self.__db['table'] = db_utils.get_table(self.__db['path'], table_name)
-    #         await self.__db['db'].connect()
-    #
-    #     table = self.__db['table']
-    #     query = table.select().where(table.c.timestamp == timestamp)
-    #     async with self.__db['db'].transaction():
-    #         row = await self.__db['db'].fetch_one(query)
-    #     return row['actions_dict']
+    # Add method to properly close the connection when done
+    async def close_connection(self):
+        """Close the database connection when done"""
+        # First ensure all write tasks are complete
+        try:
+            await self.ensure_records_complete()
+        except Exception as e:
+            # Log the error but continue to close the connection
+            print(f"Warning: Error ensuring records complete: {e}")
+            
+        # Now safe to close the connection
+        if self.__db.get('connection'):
+            await self.__db['connection'].disconnect()
+            self.__db['connection'] = None

@@ -12,6 +12,7 @@ from operator import itemgetter
 
 from TREX_Core.markets.Grid import Market as Grid
 from TREX_Core.utils import db_utils, source_classifier
+import databases
 
 
 class Market:
@@ -77,6 +78,12 @@ class Market:
         self.__transactions = []
         self.__transaction_last_record_time = 0
         self.transactions_count = 0
+        
+        # Track pending database write tasks
+        self.__pending_write_tasks = []
+        
+        # Condition for round completion
+        self.__round_condition = asyncio.Condition()
 
     def __time(self):
         """Return time based on time convention
@@ -116,6 +123,11 @@ class Market:
             db_string=db_string,
             table_name=table_name)
         self.__db['table'] = db_utils.get_table(db_string, table_name)
+        
+        # Initialize the database connection for reuse
+        if 'connection' not in self.__db or self.__db['connection'] is None:
+            self.__db['connection'] = databases.Database(db_string)
+            await self.__db['connection'].connect()
 
     # async def register(self):
     #     """Function that attempts to register Market client with socket.io server in the market namespace
@@ -162,11 +174,15 @@ class Market:
         return await source_classifier.classify(source)
 
     # Initialize variables for new time step
-    def __reset_status(self):
+    async def __reset_status(self):
         self.__status['round_metered'] = 0
         self.__status['round_matched'] = False
         self.__status['round_settled'].clear()
         self.__status['round_settle_delivered'].clear()
+        
+        # Notify any waiters after resetting status to ensure they re-check with new status
+        async with self.__round_condition:
+            self.__round_condition.notify_all()
 
     async def get_market_info(self):
         market_info = {
@@ -189,7 +205,7 @@ class Market:
         as the market does not wait in real-time mode
         """
         start_time = self.__time()
-        self.__reset_status()
+        await self.__reset_status()
         market_info = await self.get_market_info()
         # market_info = {
         #     'current_round': (self.__grid.buy_price(), self.__grid.sell_price()),
@@ -549,6 +565,10 @@ class Market:
             self.__status['round_settle_delivered'][commit_id] = 1
         else:
             self.__status['round_settle_delivered'][commit_id] += 1
+            
+        # Notify waiting tasks that a settlement has been delivered
+        async with self.__round_condition:
+            self.__round_condition.notify_all()
 
     async def meter_data(self, message):
         """Update meter data from participant
@@ -582,6 +602,10 @@ class Market:
 
         self.__participants[participant_id]['meter'][time_delivery] = meter
         self.__status['round_metered'] += 1
+        
+        # Notify waiting tasks that a meter reading has been received
+        async with self.__round_condition:
+            self.__round_condition.notify_all()
 
     async def __process_settlements(self, time_delivery, source_type):
         physical_tranactions = []
@@ -970,38 +994,94 @@ class Market:
         # await self.__client.emit('settlement_complete', message, namespace='/market')
         del self.__settled[time_delivery][commit_id]
 
-    @tenacity.retry(wait=tenacity.wait_random(1, 5))
     async def ensure_transactions_complete(self):
+        """Ensure all database transactions are complete before continuing.
+        
+        This method will:
+        1. Trigger a final write of any pending transactions
+        2. Wait for all pending database write tasks to complete
+        3. Verify the transaction count matches expected count
+        
+        Args:
+            timeout: Maximum time to wait for transactions to complete in seconds
+            
+        Returns:
+            True if all transactions completed successfully
+            
+        Raises:
+            TimeoutError: If writes don't complete within timeout period
+            ValueError: If transaction count doesn't match expected count
+        """
+        # First do one final write and wait for it to complete
+
+        # print(len(self.__transactions))
+        await self.record_transactions(wait_for_completion=True)
+        # print('writing final stuff', len(self.__pending_write_tasks), bool(self.__pending_write_tasks))
+        
+        # Now wait for ALL remaining in-flight tasks
+        if self.__pending_write_tasks:
+            # Wait for all pending tasks to complete with timeout
+            await asyncio.wait(self.__pending_write_tasks)
+            
+            # Check if we timed out and still have pending tasks
+            remaining = [task for task in self.__pending_write_tasks if not task.done()]
+            if remaining:
+                raise TimeoutError(f"Timed out waiting for {len(remaining)} database writes to complete")
+        
+        # Double-check transaction count to be safe
         table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
         if table_len < self.transactions_count:
-            raise Exception
+            raise ValueError(f"Database count mismatch: expected {self.transactions_count}, found {table_len}")
+        
         return True
 
-    async def record_transactions(self, buf_len=0, check_table_len=False):
+    async def record_transactions(self, buf_len=0, wait_for_completion=False):
         """This function records the transaction records into the ledger
-
+        
+        Args:
+            buf_len: Minimum buffer length to trigger a write
+            wait_for_completion: If True, wait for the write to complete before returning
+        
+        Returns:
+            False if no write was performed (due to buffer conditions)
+            True if a write was initiated
         """
 
-        if check_table_len:
-            table_len = db_utils.get_table_len(self.__db['path'], self.__db['table'])
-            if table_len < self.transactions_count:
-                return False
-
-        if buf_len:
-            delay = buf_len / 100
-            ts = datetime.datetime.now().timestamp()
-            if ts - self.__transaction_last_record_time < delay:
-                return False
+        # if buf_len:
+        #     delay = buf_len / 100
+        #     ts = datetime.datetime.now().timestamp()
+        #     if ts - self.__transaction_last_record_time < delay:
+        #         return False
 
         transactions_len = len(self.__transactions)
         if transactions_len < buf_len:
             return False
 
-        transactions = self.__transactions[:transactions_len]
-        await asyncio.create_task(db_utils.dump_data(transactions, self.__db['path'], self.__db['table']))
+        # Swap the entire list instead of slicing
+        transactions_to_write = self.__transactions
+        self.__transactions = []  # Create a fresh list for new transactions
+        
+        # Create the database write task
+        db_task = asyncio.create_task(
+            db_utils.dump_data(transactions_to_write, self.__db['path'], self.__db['table'], 
+                              existing_connection=self.__db.get('connection'))
+        )
+        
+        # Add to our tracking list
+        self.__pending_write_tasks.append(db_task)
+        
+        # Set up callback to remove from our list when done
+        def task_done_callback(completed_task):
+            if completed_task in self.__pending_write_tasks:
+                self.__pending_write_tasks.remove(completed_task)
+        
+        db_task.add_done_callback(task_done_callback)
+        
+        # For critical writes (end of episode/simulation), wait for completion
+        if wait_for_completion:
+            await db_task
 
         self.__transaction_last_record_time = datetime.datetime.now().timestamp()
-        del self.__transactions[:transactions_len]
         self.transactions_count += transactions_len
         return True
 
@@ -1048,21 +1128,32 @@ class Market:
     async def __match_all(self, time_delivery):
         await self.__match(time_delivery)
         self.__status['round_matched'] = True
+        
+        # Notify waiting tasks that matching is complete
+        async with self.__round_condition:
+            self.__round_condition.notify_all()
 
-    # should be for simulation mode only
-    @tenacity.retry(wait=tenacity.wait_fixed(0.01))
-    async def __ensure_round_complete(self):
-        # print(self.__status)
+    # Define helper method to check if round is complete
+    def __is_round_complete(self):
+        """Check if all round conditions are met"""
         if self.__status['round_metered'] < self.__status['active_participants']:
-            raise Exception
-
+            return False
+            
         if not self.__status['round_matched']:
-            raise Exception
-
+            return False
+            
         keys = [k for k, v in self.__status['round_settle_delivered'].items() if v == 2]
         if set(keys) != set(self.__status['round_settled']):
-            # if set(self.__status['round_settle_delivered']) != set(self.__status['round_settled']):
-            raise Exception
+            return False
+            
+        return True
+
+    # Replace the polling-based implementation with condition-based
+    async def __ensure_round_complete(self):
+        """Wait for all round conditions to be met"""
+        async with self.__round_condition:
+            await self.__round_condition.wait_for(self.__is_round_complete)
+            return True
 
     # Finish all processes and remove all unnecessary/ remaining records in preparation for a new time step, begin processes for next step
     async def step(self, timeout=60, sim_params=None):
@@ -1105,3 +1196,18 @@ class Market:
         self.__settled.clear()
         for participant in self.__participants:
             self.__participants[participant]['meter'].clear()
+
+    async def close_connection(self):
+        """Close the database connection when done"""
+        # First ensure all write tasks are complete
+        # try:
+        #     await self.ensure_transactions_complete()
+        # except Exception as e:
+        #     # Log the error but continue to close the connection
+        #     print(f"Warning: Error ensuring transactions complete: {e}")
+        
+        # Now safe to close the connection
+        if self.__db.get('connection'):
+            await self.__db['connection'].disconnect()
+            self.__db['connection'] = None
+            

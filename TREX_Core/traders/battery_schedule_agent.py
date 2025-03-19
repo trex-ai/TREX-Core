@@ -1,6 +1,7 @@
-import tenacity
-from _agent._utils.metrics import Metrics
-from _utils import utils
+# import tenacity
+# from _agent._utils.metrics import Metrics
+# from _utils import utils
+import TREX_Core.utils as utils
 
 class Trader:
     """The baseline trader that emulates behaviour under net-metering/net-billing with a focus on self-sufficiency
