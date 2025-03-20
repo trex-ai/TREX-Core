@@ -410,6 +410,8 @@ class Participant:
                 next_actions=next_actions)
             if hasattr(self, 'storage'):
                 records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
+            if hasattr(self.trader, 'metadata'):
+                records['world_model_prediction'] = self.trader.metadata
                 # records['storage'] = self.storage
             await self.records.track(records)
             await self.records.save(1000)
