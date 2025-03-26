@@ -241,8 +241,10 @@ class Participant:
         }
         # print('bidding', self.trader.is_learner, self.__timing, bid_entry)
         # await self.__client.emit('bid', bid_entry)
-        self.__client.publish('/'.join([self.market_id, 'bid']), bid_entry,
-                              user_property=('to', self.market_sid))
+        self.__client.publish(f'{self.market_id}/bid',
+                              bid_entry,
+                              user_property=('to', self.market_sid),
+                              qos=2)
 
     # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -278,8 +280,10 @@ class Participant:
             'quantity': kwargs['quantity'],
             'time_delivery': time_delivery
         }
-        self.__client.publish('/'.join([self.market_id, 'ask']), ask_entry,
-                              user_property=('to', self.market_sid))
+        self.__client.publish(f'{self.market_id}/ask',
+                              ask_entry,
+                              user_property=('to', self.market_sid),
+                              qos=2)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -291,9 +295,10 @@ class Participant:
         # print(message)
         commit_id = await self.__ledger.settle_success(message)
         # if commit_id == message['commit_id']:
-        self.__client.publish('/'.join([self.market_id, 'settlement_delivered']),
+        self.__client.publish(f'{self.market_id}/settlement_delivered',
                               {self.participant_id: commit_id},
-                              user_property=('to', self.market_sid))
+                              user_property=('to', self.market_sid),
+                              qos=2)
         # return message['commit_id']
 
     async def __update_time(self, message):
@@ -410,13 +415,13 @@ class Participant:
                 next_actions=next_actions)
             if hasattr(self, 'storage'):
                 records.update(self.storage.get_info('remaining_energy', 'state_of_charge'))
-            if hasattr(self.trader, 'metadata'):
-                records['world_model_prediction'] = self.trader.metadata
                 # records['storage'] = self.storage
             await self.records.track(records)
             await self.records.save(1000)
-        self.__client.publish('/'.join([self.market_id, 'simulation', 'end_turn']), self.participant_id,
-                              user_property=('to', self.market_sid))
+        self.__client.publish(f'{self.market_id}/simulation/end_turn',
+                              self.participant_id,
+                              user_property=('to', self.market_sid),
+                              qos=2)
 
     async def make_observations_for_records(self, time_interval):
         generation, consumption = await self.__read_profile(time_interval)
@@ -517,9 +522,11 @@ class Participant:
         # await self.__client.emit('meter_data', self.__meter)
         # time_interval = self.__meter.pop('time_interval')
         message = [self.participant_id, time_interval, self.__meter]
-        self.__client.publish('/'.join([self.market_id, 'meter']), message,
+        self.__client.publish(f'{self.market_id}/meter',
+                              message,
                               user_property=('to', self.market_sid),
-                              topic_alias=5)
+                              topic_alias=5,
+                              qos=2)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -708,5 +715,7 @@ class Participant:
 
     async def is_participant_joined(self):
         if self.market_connected:
-            self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_joined']), self.participant_id,
-                                  user_property=('to', self.market_sid))
+            self.__client.publish(f'{self.market_id}/simulation/participant_joined',
+                                  self.participant_id,
+                                  user_property=('to', self.market_sid),
+                                  qos=2)

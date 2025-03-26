@@ -63,20 +63,21 @@ that is crucial for reinforcement learning applications. The algorithm carefully
 market efficiency, fairness, and computational complexity.
 """
 
+
 class Market(BaseMarket):
     """MicroTE4 is a futures trading based market design for transactive energy as part of TREX
-    
+
     This implementation extends the standard double auction with deterministic pro-rata matching
     for price-level ties, which is critical for reinforcement learning applications.
-    
+
     The market mechanism works like standard futures contracts, where delivery time interval
     is submitted along with the bid or ask. Bids and asks are organized by source type and
     time slot.
-    
+
     When multiple bids or asks exist at the same price level, quantities are allocated
     proportionally based on order size. This ensures fair treatment of all orders
     and deterministic behavior for identical inputs.
-    
+
     Bids/asks can be accepted for any time slot starting from one step into the future to infinity.
     The minimum close slot is determined by 'close_steps', where a close_steps of 2 is 1 step into the future.
     The minimum close time slot is the last delivery slot that will accept bids/asks.
@@ -88,117 +89,117 @@ class Market(BaseMarket):
     @override
     async def __match(self, time_delivery):
         """Pro-rata matching algorithm with deterministic allocation for ties.
-        
+
         This algorithm maintains the core behavior of matching highest bids with lowest asks,
         but adds special handling for ties at the same price level. When multiple bids or asks
         exist at the same price, quantities are allocated proportionally based on order size.
-        
+
         Parameters
         ----------
         time_delivery : tuple
-            Tuple containing the start and end timestamps in UNIX timestamp format 
+            Tuple containing the start and end timestamps in UNIX timestamp format
             indicating the interval for energy to be delivered.
         """
         if time_delivery not in self._Market__open:
             return
-        
+
         if {'ask', 'bid'} > self._Market__open[time_delivery].keys():
             return
-        
+
         # Group bids and asks by price
         bids = sorted([bid.copy() for bid in self._Market__open[time_delivery]['bid'] if bid['quantity'] > 0],
                       key=itemgetter('price'), reverse=True)
         asks = sorted([ask.copy() for ask in self._Market__open[time_delivery]['ask'] if ask['quantity'] > 0],
                       key=itemgetter('price'), reverse=False)
-        
+
         if not bids or not asks:
             return
-        
+
         # Group bids and asks by price level to detect ties
         bid_price_groups = {}
         for bid in bids:
             if bid['price'] not in bid_price_groups:
                 bid_price_groups[bid['price']] = []
             bid_price_groups[bid['price']].append(bid)
-            
+
         ask_price_groups = {}
         for ask in asks:
             if ask['price'] not in ask_price_groups:
                 ask_price_groups[ask['price']] = []
             ask_price_groups[ask['price']].append(ask)
-        
+
         # Map from working copies back to original objects for settlement
-        bid_map = {b['id']: next(original for original in self._Market__open[time_delivery]['bid'] 
-                                 if original['id'] == b['id']) 
-                  for b in bids}
-        ask_map = {a['id']: next(original for original in self._Market__open[time_delivery]['ask'] 
-                                 if original['id'] == a['id']) 
-                  for a in asks}
-        
+        bid_map = {b['id']: next(original for original in self._Market__open[time_delivery]['bid']
+                                 if original['id'] == b['id'])
+                   for b in bids}
+        ask_map = {a['id']: next(original for original in self._Market__open[time_delivery]['ask']
+                                 if original['id'] == a['id'])
+                   for a in asks}
+
         # Process each bid price group in descending order
         for bid_price in sorted(bid_price_groups.keys(), reverse=True):
             bids_at_price = bid_price_groups[bid_price]
-            
+
             # Process each ask price group in ascending order
             for ask_price in sorted(ask_price_groups.keys()):
                 # Early termination - if ask price exceeds bid price, no more matches possible
                 if ask_price > bid_price:
                     break
-                    
+
                 asks_at_price = ask_price_groups[ask_price]
-                
+
                 # Check for ties - if no ties, use standard matching
                 if len(bids_at_price) == 1 and len(asks_at_price) == 1:
                     bid = bids_at_price[0]
                     ask = asks_at_price[0]
-                    
+
                     # Skip self-trades
                     if bid['participant_id'] == ask['participant_id'] or bid['quantity'] <= 0 or ask['quantity'] <= 0:
                         continue
-                        
+
                     original_bid = bid_map[bid['id']]
                     original_ask = ask_map[ask['id']]
-                    
+
                     # Calculate quantity from original objects
                     quantity = min(original_bid['quantity'], original_ask['quantity'])
-                    
+
                     if quantity > 0:
                         # Use the standard settle method
                         await self.settle(original_bid, original_ask, time_delivery)
-                        
+
                         # Update working copies
                         bid['quantity'] = original_bid['quantity']
                         ask['quantity'] = original_ask['quantity']
                 else:
                     # We have ties, use pro-rata matching
                     await self.__match_pro_rata(bids_at_price, asks_at_price, bid_map, ask_map, time_delivery)
-                    
+
                     # Update working copies after pro-rata matching
                     for bid in bids_at_price:
                         original_bid = bid_map[bid['id']]
                         bid['quantity'] = original_bid['quantity']
-                    
+
                     for ask in asks_at_price:
                         original_ask = ask_map[ask['id']]
                         ask['quantity'] = original_ask['quantity']
-                
+
                 # Remove orders with zero quantity
                 bid_price_groups[bid_price] = [b for b in bids_at_price if b['quantity'] > 0]
                 bids_at_price = bid_price_groups[bid_price]
-                
+
                 ask_price_groups[ask_price] = [a for a in asks_at_price if a['quantity'] > 0]
                 asks_at_price = ask_price_groups[ask_price]
-                
+
                 # If all bids at this price are fulfilled, move to next price
                 if not bids_at_price:
                     break
-    
+
     async def __match_pro_rata(self, bids_at_price, asks_at_price, bid_map, ask_map, time_delivery):
         """Match orders with pro-rata allocation for ties.
-        
+
         This method handles the case where multiple bids and/or asks exist at the same price level.
         Quantities are allocated proportionally based on order size, ensuring deterministic behavior.
-        
+
         Parameters
         ----------
         bids_at_price : list
@@ -219,37 +220,37 @@ class Market(BaseMarket):
                 original_bid = bid_map[bid['id']]
                 if original_bid['quantity'] > 0:
                     valid_bids.append(bid)
-        
+
         valid_asks = []
         for ask in asks_at_price:
             if ask['quantity'] > 0:
                 original_ask = ask_map[ask['id']]
                 if original_ask['quantity'] > 0:
                     valid_asks.append(ask)
-        
+
         if not valid_bids or not valid_asks:
             return
-            
+
         # Calculate total quantities
         total_bid_qty = sum(bid_map[bid['id']]['quantity'] for bid in valid_bids)
         total_ask_qty = sum(ask_map[ask['id']]['quantity'] for ask in valid_asks)
         match_qty = min(total_bid_qty, total_ask_qty)
-        
+
         if match_qty <= 0:
             return
-            
+
         # Calculate proportional allocations for bids
         bid_allocations = {}
         for bid in valid_bids:
             original_bid = bid_map[bid['id']]
             bid_qty = original_bid['quantity']
-            
+
             # Calculate raw pro-rata allocation
             raw_allocation = match_qty * (bid_qty / total_bid_qty)
-            
+
             # Initial allocation rounded to nearest integer
             allocation = round(raw_allocation)
-            
+
             # Store data for allocation adjustments
             bid_allocations[bid['id']] = {
                 'bid': bid,
@@ -259,19 +260,19 @@ class Market(BaseMarket):
                 'allocation': allocation,
                 'frac_part': abs(raw_allocation - allocation)
             }
-        
+
         # Calculate proportional allocations for asks
         ask_allocations = {}
         for ask in valid_asks:
             original_ask = ask_map[ask['id']]
             ask_qty = original_ask['quantity']
-            
+
             # Calculate raw pro-rata allocation
             raw_allocation = match_qty * (ask_qty / total_ask_qty)
-            
+
             # Initial allocation rounded to nearest integer
             allocation = round(raw_allocation)
-            
+
             # Store data for allocation adjustments
             ask_allocations[ask['id']] = {
                 'ask': ask,
@@ -281,7 +282,7 @@ class Market(BaseMarket):
                 'allocation': allocation,
                 'frac_part': abs(raw_allocation - allocation)
             }
-        
+
         # Fix quantity conservation for bids
         bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
         if bid_total != match_qty:
@@ -291,10 +292,10 @@ class Market(BaseMarket):
                 x['raw_allocation'],  # Then by raw allocation
                 x['quantity']  # Then by original quantity
             ))
-            
+
             adjustment = -1 if bid_total > match_qty else 1
             sorted_bids[0]['allocation'] += adjustment
-        
+
         # Fix quantity conservation for asks
         ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
         if ask_total != match_qty:
@@ -303,19 +304,19 @@ class Market(BaseMarket):
                 x['raw_allocation'],
                 x['quantity']
             ))
-            
+
             adjustment = -1 if ask_total > match_qty else 1
             sorted_asks[0]['allocation'] += adjustment
-        
+
         # Handle minimum allocations
         # First see how many units we could allocate after standard rounding
         bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
         remaining_bid_qty = match_qty - bid_total
-        
+
         # Find bids with positive raw allocation but zero rounded allocation
-        zero_allocated_bids = [b for b in bid_allocations.values() 
-                              if b['raw_allocation'] > 0 and b['allocation'] == 0]
-        
+        zero_allocated_bids = [b for b in bid_allocations.values()
+                               if b['raw_allocation'] > 0 and b['allocation'] == 0]
+
         # Sort by raw allocation (highest first) and allocate minimum of 1 where possible
         if remaining_bid_qty > 0 and zero_allocated_bids:
             zero_allocated_bids.sort(key=lambda x: x['raw_allocation'], reverse=True)
@@ -325,14 +326,14 @@ class Market(BaseMarket):
                     remaining_bid_qty -= 1
                 else:
                     break
-        
+
         # Do the same for asks
         ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
         remaining_ask_qty = match_qty - ask_total
-        
-        zero_allocated_asks = [a for a in ask_allocations.values() 
-                              if a['raw_allocation'] > 0 and a['allocation'] == 0]
-        
+
+        zero_allocated_asks = [a for a in ask_allocations.values()
+                               if a['raw_allocation'] > 0 and a['allocation'] == 0]
+
         if remaining_ask_qty > 0 and zero_allocated_asks:
             zero_allocated_asks.sort(key=lambda x: x['raw_allocation'], reverse=True)
             for ask_data in zero_allocated_asks:
@@ -341,14 +342,14 @@ class Market(BaseMarket):
                     remaining_ask_qty -= 1
                 else:
                     break
-        
+
         # Final check for quantity conservation after minimum allocations
         bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
         if bid_total > match_qty:
             # If minimums caused excess, reduce from largest allocations
             sorted_bids = sorted(bid_allocations.values(), key=lambda x: (-x['allocation'], -x['raw_allocation']))
             excess = bid_total - match_qty
-            
+
             for bid_data in sorted_bids:
                 reduction = min(excess, bid_data['allocation'] - 1) if bid_data['allocation'] > 1 else 0
                 if reduction > 0:
@@ -356,12 +357,12 @@ class Market(BaseMarket):
                     excess -= reduction
                     if excess == 0:
                         break
-        
+
         ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
         if ask_total > match_qty:
             sorted_asks = sorted(ask_allocations.values(), key=lambda x: (-x['allocation'], -x['raw_allocation']))
             excess = ask_total - match_qty
-            
+
             for ask_data in sorted_asks:
                 reduction = min(excess, ask_data['allocation'] - 1) if ask_data['allocation'] > 1 else 0
                 if reduction > 0:
@@ -369,38 +370,38 @@ class Market(BaseMarket):
                     excess -= reduction
                     if excess == 0:
                         break
-        
+
         # Create settlements based on allocations
         # For each bid-ask pair that doesn't involve self-trading
         for bid_id, bid_data in bid_allocations.items():
             if bid_data['allocation'] <= 0:
                 continue
-                
+
             original_bid = bid_data['original']
             bid_allocation = bid_data['allocation']
-            
+
             for ask_id, ask_data in ask_allocations.items():
                 if ask_data['allocation'] <= 0:
                     continue
-                    
+
                 # Skip self-trading
                 if bid_data['bid']['participant_id'] == ask_data['ask']['participant_id']:
                     continue
-                    
+
                 original_ask = ask_data['original']
                 ask_allocation = ask_data['allocation']
-                
+
                 # Calculate pair quantity
                 pair_qty = min(bid_allocation, ask_allocation)
-                
+
                 if pair_qty > 0:
                     # Create settlement with explicit quantity
                     await self.settle(original_bid, original_ask, time_delivery, pair_qty)
-                    
+
                     # Update remaining allocations
                     bid_allocation -= pair_qty
                     ask_data['allocation'] -= pair_qty
-                    
+
                     if bid_allocation <= 0:
                         break
 
@@ -443,7 +444,7 @@ class Market(BaseMarket):
 
         # Use specified quantity if provided, otherwise calculate as min
         quantity = quantity_to_settle if quantity_to_settle is not None else min(bid['quantity'], ask['quantity'])
-        
+
         # only proceed to settle if settlement quantity is positive
         if quantity <= 0:
             return
@@ -499,10 +500,10 @@ class Market(BaseMarket):
             quantity,
             time_delivery
         ]
-        self.__client.publish('/'.join([self.market_id, bid['participant_id'], 'settled']), buyer_message,
-                            user_property=('to', self.__participants[bid['participant_id']]['sid']))
-        self.__client.publish('/'.join([self.market_id, ask['participant_id'], 'settled']), seller_message,
-                            user_property=('to', self.__participants[ask['participant_id']]['sid']))
+        self.__client.publish(f'{self.market_id}/{bid['participant_id']}/settled', buyer_message,
+                              user_property=('to', self.__participants[bid['participant_id']]['sid']), qos=2)
+        self.__client.publish(f'{self.market_id}/{ask['participant_id']}/settled', seller_message,
+                              user_property=('to', self.__participants[ask['participant_id']]['sid']), qos=2)
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)

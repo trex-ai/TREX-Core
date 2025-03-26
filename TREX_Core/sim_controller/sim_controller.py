@@ -457,8 +457,10 @@ class Controller:
                 table_name = f'{self.__episode}_{self.market_id}'
                 await self.records.create_table(table_name)
 
-            self.__client.publish(f'{self.market_id}/simulation/start_episode', self.__episode,
-                                  user_property=('to', '^all'))
+            self.__client.publish(f'{self.market_id}/simulation/start_episode',
+                                  self.__episode,
+                                  user_property=('to', '^all'),
+                                  qos=2)
             self.status['episode_ended'] = False
 
         # Beginning new time step
@@ -474,8 +476,10 @@ class Controller:
             # print("start simulation round")
             # await self.__client.emit('start_round_simulation', message)
             # print(self.__current_step, self.__end_step)
-            self.__client.publish(f'{self.market_id}/simulation/start_round', message,
-                                  user_property=('to', '^all'))
+            self.__client.publish(f'{self.market_id}/simulation/start_round',
+                                  message,
+                                  user_property=('to', '^all'),
+                                  qos=2)
         # end of episode
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -518,8 +522,10 @@ class Controller:
             # await self.__client.emit('end_generation', message)
             # await self.delay(20)
             # if self.__episode <= self.__episodes:
-                self.__client.publish(f'{self.market_id}/simulation/end_episode', message,
-                                      user_property=('to', '^all'))
+                self.__client.publish(f'{self.market_id}/simulation/end_episode',
+                                      message,
+                                      user_property=('to', '^all'),
+                                      qos=2)
                 await self.resume_monitor()
             else:
                 # self.__generation > self.__generations:
@@ -539,8 +545,9 @@ class Controller:
                 print('end_simulation', self.__episode, self.__episodes)
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
-                self.__client.publish(f'{self.market_id}/simulation/end_simulation', '',
-                                      user_property=('to', '^all'))
+                self.__client.publish(f'{self.market_id}/simulation/end_simulation', self.market_id,
+                                      user_property=('to', '^all'),
+                                      qos=2)
                 await self.delay(1)
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)

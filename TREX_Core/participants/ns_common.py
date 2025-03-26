@@ -3,6 +3,7 @@ import json
 import asyncio
 import numpy as np
 
+
 class NSDefault:
     def __init__(self, participant):
         # super().__init__(namespace='')
@@ -84,13 +85,14 @@ class NSDefault:
 
     async def on_is_participant_joined(self, payload):
         await self.participant.is_participant_joined()
+
     async def on_start_episode(self, message):
         """Event triggers actions to be taken before the start of a simulation
 
         Args:
             message ([type]): [description]
         """
-        
+
         self.participant.reset()
         if hasattr(self.participant, 'storage'):
             self.participant.storage.reset(soc_pct=0)
