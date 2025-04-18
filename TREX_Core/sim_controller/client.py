@@ -1,13 +1,10 @@
 import asyncio
-# from asyncio import Queue
 import os
 import json
+from pprint import pprint
 
 from gmqtt import Client as MQTTClient
-from TREX_Core.sim_controller.ns_common import NSDefault
 from TREX_Core.sim_controller.sim_controller import Controller
-# from utils import jkson
-# from _clients.sim_controller.sim_controller import NSMarket, NSSimulation
 from cuid2 import Cuid as cuid
 
 if os.name == 'posix':
@@ -20,18 +17,28 @@ class Client:
     # Initialize client data for sim controller
     def __init__(self, server_address, config):
         self.server_address = server_address
-        self.sio_client = MQTTClient(cuid(length=10).generate())
+        self.client = MQTTClient(cuid(length=10).generate())
 
         # Set client to controller class
-        self.controller = Controller(self.sio_client, config)
+        self.controller = Controller(self.client, config)
         self.msg_queue = asyncio.Queue()
-        self.ns = NSDefault(self.controller)
+
+        self.dispatch = {
+            'market_online': self.on_market_online,
+            'participant_joined': self.on_participant_joined,
+            'end_turn': self.on_end_turn,
+            'end_round': self.on_end_round,
+            'participant_ready': self.on_participant_ready,
+            'market_ready': self.on_market_ready,
+            'participant_disconnected': self.on_participant_disconnected,
+            'policy_server_ready': self.on_policy_server_ready,
+            'sim_controller_status': self.on_sim_controller_status,
+        }
 
     def on_connect(self, client, flags, rc, properties):
         market_id = self.controller.market_id
         print('Connected sim_controller', market_id)
-        loop = asyncio.get_running_loop()
-        loop.create_task(self.ns.on_connect())
+        asyncio.create_task(self.on_connect_task())
 
         # client.subscribe("/".join([market_id]), qos=0)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
@@ -44,12 +51,12 @@ class Client:
         client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=0)
         client.subscribe(f'debug/sim_controller_status', qos=0)
 
+    async def on_connect_task(self):
+        await self.controller.register()
+
     def on_disconnect(self, client, packet, exc=None):
         # self.ns.on_disconnect()
         print('sim controller disconnected')
-
-    # def on_subscribe(self, client, mid, qos, properties):
-    #     print('SUBSCRIBED')
 
     async def on_message(self, client, topic, payload, qos, properties):
         # print('controller RECV MSG:', topic, payload.decode(), properties)
@@ -66,11 +73,61 @@ class Client:
         while True:
             message = await self.msg_queue.get()
             try:
-                await self.ns.process_message(message)
+                await self.process_message(message)
             except Exception as e:
                 logging.error(f"Error processing message: {e}", exc_info=True)
             finally:
                 self.msg_queue.task_done()
+
+    async def process_message(self, message):
+        for segment in message['topic'].split('/'):
+            handler = self.dispatch.get(segment)
+            if handler:
+                await handler(message)
+                break
+        else:
+            print("unrecognised topic:", message['topic'])
+
+    async def on_participant_joined(self, message):
+        participant_id = message['payload']
+        await self.controller.participant_online(participant_id, True)
+
+    async def on_participant_disconnected(self, message):
+        print(message['payload'], 'PARTICIPANT LOST')
+        participant_id = message['payload']
+        await self.controller.participant_online(participant_id, False)
+
+    async def on_participant_ready(self, message):
+        payload = json.loads(message['payload'])
+        for participant_id in payload:
+            await self.controller.participant_status(participant_id, 'ready', payload[participant_id])
+
+    async def on_participant_weights_loaded(self, message):
+        payload = message['payload']
+        for participant_id in payload:
+            await self.controller.participant_status(participant_id, 'weights_loaded', payload[participant_id])
+
+    # send by individual participants
+    async def on_end_turn(self, message):
+        await self.controller.update_turn_status(message['payload'])
+
+    # sent by the market
+    async def on_end_round(self, message):
+        await self.controller.market_turn_end()
+        await self.controller.update_turn_status(message['payload'])
+
+    async def on_market_online(self, message):
+        self.controller.status['market_online'] = True
+
+    async def on_market_ready(self, message):
+        self.controller.status['market_ready'] = True
+
+    async def on_policy_server_ready(self, message):
+        self.controller.status['policy_server_ready'] = True
+        await self.controller.update_turn_status(message['payload'])
+
+    async def on_sim_controller_status(self, message):
+        pprint(self.controller.status)
     # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect
@@ -101,7 +158,7 @@ class Client:
         # await asyncio.gather(*tasks)
 
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(self.run_client(self.sio_client))
+            tg.create_task(self.run_client(self.client))
             tg.create_task(self.controller.monitor())
             tg.create_task(self.message_processor())
     # except SystemExit:
@@ -114,7 +171,6 @@ if __name__ == '__main__':
     # sys.exit(__main())
     import socket
     import argparse
-    import json
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')

@@ -1,10 +1,8 @@
 import asyncio
-# from asyncio import Queue
 import os
 import json
 import gmqtt
 from gmqtt import Client as MQTTClient
-from TREX_Core.participants.ns_common import NSDefault
 
 from cuid2 import Cuid as cuid
 

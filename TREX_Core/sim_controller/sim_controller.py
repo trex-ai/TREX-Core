@@ -31,8 +31,8 @@ class Controller:
     The sim controller has special permission to see when participants join the market
     '''
     # Intialize client related data
-    def __init__(self, sio_client, config, **kwargs):
-        self.__client = sio_client
+    def __init__(self, client, config, **kwargs):
+        self.__client = client
         self.__config = config
 
         # Add monitor control event
