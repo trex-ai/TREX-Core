@@ -42,14 +42,14 @@ class Client:
 
         # client.subscribe("/".join([market_id]), qos=0)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe(f'{market_id}/simulation/market_online', qos=0)
-        client.subscribe(f'{market_id}/simulation/participant_joined', qos=0)
-        client.subscribe(f'{market_id}/simulation/end_turn', qos=0)
-        client.subscribe(f'{market_id}/simulation/end_round', qos=0)
-        client.subscribe(f'{market_id}/simulation/participant_ready', qos=0)
-        client.subscribe(f'{market_id}/simulation/market_ready', qos=0)
-        client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=0)
-        client.subscribe(f'debug/sim_controller_status', qos=0)
+        client.subscribe(f'{market_id}/simulation/market_online', qos=2)
+        client.subscribe(f'{market_id}/simulation/participant_joined', qos=2)
+        client.subscribe(f'{market_id}/simulation/end_turn', qos=2)
+        client.subscribe(f'{market_id}/simulation/end_round', qos=2)
+        client.subscribe(f'{market_id}/simulation/participant_ready', qos=2)
+        client.subscribe(f'{market_id}/simulation/market_ready', qos=2)
+        client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=2)
+        client.subscribe(f'debug/sim_controller_status', qos=2)
 
     async def on_connect_task(self):
         await self.controller.register()

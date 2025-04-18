@@ -54,20 +54,22 @@ class Client:
     def on_connect(self, client, flags, rc, properties):
         market_id = self.market.market_id
         print('Connected market', market_id)
-        client.subscribe(f'{market_id}', qos=0)
-        # client.subscribe("/".join([market_id, '+']), qos=0)
-        client.subscribe(f'{market_id}/{market_id}', qos=0)
-        client.subscribe(f'{market_id}/join_market/+', qos=0)
-        client.subscribe(f'{market_id}/bid', qos=0)
-        client.subscribe(f'{market_id}/ask', qos=0)
-        client.subscribe(f'{market_id}/settlement_delivered', qos=0)
-        client.subscribe(f'{market_id}/meter', qos=0)
-        # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe(f'{market_id}/simulation/start_round', qos=0)
-        client.subscribe(f'{market_id}/simulation/start_episode', qos=0)
-        client.subscribe(f'{market_id}/simulation/end_episode', qos=0)
-        client.subscribe(f'{market_id}/simulation/end_simulation', qos=0)
-        client.subscribe(f'{market_id}/simulation/is_market_online', qos=0)
+        client.subscribe(f'{market_id}', qos=2)
+        # client.subscribe(f'{market_id}/+', qos=2)
+        client.subscribe(f'{market_id}/join_market/+', qos=2)
+        # client.subscribe(f'{market_id}/simulation/+', qos=2)
+
+        client.subscribe(f'{market_id}/{market_id}', qos=2)
+        client.subscribe(f'{market_id}/bid', qos=2)
+        client.subscribe(f'{market_id}/ask', qos=2)
+        client.subscribe(f'{market_id}/settlement_delivered', qos=2)
+        client.subscribe(f'{market_id}/meter', qos=2)
+
+        client.subscribe(f'{market_id}/simulation/start_round', qos=2)
+        client.subscribe(f'{market_id}/simulation/start_episode', qos=2)
+        client.subscribe(f'{market_id}/simulation/end_episode', qos=2)
+        client.subscribe(f'{market_id}/simulation/end_simulation', qos=2)
+        client.subscribe(f'{market_id}/simulation/is_market_online', qos=2)
 
     def on_disconnect(self, client, packet, exc=None):
         # self.market.server_online = False

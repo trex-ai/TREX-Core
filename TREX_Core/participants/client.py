@@ -61,22 +61,22 @@ class Client:
 
         # asyncio.run(keep_alive())
         print('Connected participant', market_id, participant_id)
-        client.subscribe(f'{market_id}', qos=0)
+        client.subscribe(f'{market_id}', qos=2)
         client.subscribe(f'{market_id}/start_round', qos=2)
-        client.subscribe(f'{market_id}/{participant_id}', qos=0)
-        client.subscribe(f'{market_id}/{participant_id}/market_info', qos=0)
+        client.subscribe(f'{market_id}/{participant_id}', qos=2)
+        client.subscribe(f'{market_id}/{participant_id}/market_info', qos=2)
         client.subscribe(f'{market_id}/{participant_id}/ask_ack', qos=2)
         client.subscribe(f'{market_id}/{participant_id}/bid_ack', qos=2)
         client.subscribe(f'{market_id}/{participant_id}/settled', qos=2)
         client.subscribe(f'{market_id}/{participant_id}/extra_transaction', qos=2)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
         client.subscribe(f'{market_id}/simulation/start_episode', qos=2)
-        client.subscribe(f'{market_id}/simulation/is_participant_joined', qos=0)
+        client.subscribe(f'{market_id}/simulation/is_participant_joined', qos=2)
         client.subscribe(f'{market_id}/simulation/end_episode', qos=2)
         client.subscribe(f'{market_id}/simulation/end_simulation', qos=2)
 
-        client.subscribe(f'{market_id}/algorithm/{participant_id}/get_actions_return', qos=0)
-        client.subscribe(f'{market_id}/algorithm/{participant_id}/get_metadata_return', qos=0)
+        client.subscribe(f'{market_id}/algorithm/{participant_id}/get_actions_return', qos=2)
+        client.subscribe(f'{market_id}/algorithm/{participant_id}/get_metadata_return', qos=2)
         # await keep_alive()
 
     async def on_connect_task(self):
