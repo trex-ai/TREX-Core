@@ -123,7 +123,7 @@ class Market:
             db_string=db_string,
             table_name=table_name)
         self.__db['table'] = db_utils.get_table(db_string, table_name)
-
+        
         # Initialize the database connection for reuse
         if 'connection' not in self.__db or self.__db['connection'] is None:
             self.__db['connection'] = databases.Database(db_string)
@@ -861,18 +861,18 @@ class Market:
         seller_id = self.__settled[time_delivery][commit_id]['seller_id']
         buyer_id = self.__settled[time_delivery][commit_id]['buyer_id']
         energy_source = self.__settled[time_delivery][commit_id]['source']
-        physical_qty = 0
+        # physical_qty = 0
         settlement = self.__settled[time_delivery][commit_id]['record']
         # For extra consumption by buyer greater than settled amount:
         physical_record = settlement.copy()
 
         # extra purchase by buyer
         # buyer settled for more than consumed
-        if extra_purchase:
-            print('-extra---------')
-            print(buyer_id, extra_purchase)
-            print(settlement)
-            print(self.__participants[buyer_id]['meter'][time_delivery])
+        # if extra_purchase:
+        #     print('-extra---------')
+        #     print(buyer_id, extra_purchase)
+        #     print(settlement)
+        #     print(self.__participants[buyer_id]['meter'][time_delivery])
 
         # extra_purchase and deficit_generation SHOULD be mutually exclusive
 

@@ -44,15 +44,15 @@ class Client:
         # client.subscribe("/".join([market_id, '+']), qos=0)
         client.subscribe("/".join([market_id, market_id]), qos=0)
         client.subscribe("/".join([market_id, 'join_market']), qos=0)
-        client.subscribe("/".join([market_id, 'bid']), qos=2)
-        client.subscribe("/".join([market_id, 'ask']), qos=2)
-        client.subscribe("/".join([market_id, 'settlement_delivered']), qos=2)
-        client.subscribe("/".join([market_id, 'meter']), qos=2)
+        client.subscribe("/".join([market_id, 'bid']), qos=0)
+        client.subscribe("/".join([market_id, 'ask']), qos=0)
+        client.subscribe("/".join([market_id, 'settlement_delivered']), qos=0)
+        client.subscribe("/".join([market_id, 'meter']), qos=0)
 
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=2)
-        client.subscribe("/".join([market_id, 'simulation', 'start_episode']), qos=2)
-        client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=2)
+        client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'start_episode']), qos=0)
+        client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'is_market_online']), qos=0)
 
@@ -111,7 +111,7 @@ class Client:
             entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
             self.client.publish(f'{self.market.market_id}/{participant_id}/bid_ack', entry_id,
                                 user_property=('to', participant_sid),
-                                qos=2)
+                                qos=0)
         except TypeError:
             return
 
@@ -121,7 +121,7 @@ class Client:
             entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
             self.client.publish(f'{self.market.market_id}/{participant_id}/ask_ack', entry_id,
                                 user_property=('to', participant_sid),
-                                qos=2)
+                                qos=0)
         except TypeError:
             return
 
@@ -145,16 +145,16 @@ class Client:
                              'sid': market_sid,
                              'timezone': timezone, },
                             user_property=('to', client_data['sid']),
-                            qos=2)
+                            qos=0)
 
     async def on_is_market_online(self):
-        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=2)
+        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=0)
         # await self.market.market_is_online()
 
     async def on_start_round(self, message):
         message = json.loads(message)
         await self.market.step(message['duration'], sim_params=message)
-        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=2)
+        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=0)
 
     async def on_start_episode(self, message):
         # message = json.loads(message)
@@ -167,7 +167,7 @@ class Client:
         await self.market.ensure_transactions_complete()
         # if not last_generation:
         await self.market.reset_market()
-        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=2)
+        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=0)
 
     async def on_end_simulation(self):
         # print('end simulation')
