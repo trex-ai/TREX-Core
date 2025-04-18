@@ -36,6 +36,7 @@ class Market:
         # Initialize timing intervals and definitions
         self.__status = {
             'active_participants': 0,
+            'round_active': False,
             'round_metered': 0,
             'round_matched': False,
             'round_settled': [],
@@ -73,6 +74,7 @@ class Market:
 
         self.__grid = Grid(**kwargs['grid_params'])
 
+        self._write_state_lock = asyncio.Lock()
         self.__open = {}
         self.__settled = {}
         self.__transactions = []
@@ -123,7 +125,7 @@ class Market:
             db_string=db_string,
             table_name=table_name)
         self.__db['table'] = db_utils.get_table(db_string, table_name)
-        
+
         # Initialize the database connection for reuse
         if 'connection' not in self.__db or self.__db['connection'] is None:
             self.__db['connection'] = databases.Database(db_string)
@@ -175,10 +177,12 @@ class Market:
 
     # Initialize variables for new time step
     async def __reset_status(self):
-        self.__status['round_metered'] = 0
-        self.__status['round_matched'] = False
-        self.__status['round_settled'].clear()
-        self.__status['round_settle_delivered'].clear()
+        async with self._write_state_lock:
+            self.__status['round_active'] = False
+            self.__status['round_metered'] = 0
+            self.__status['round_matched'] = False
+            self.__status['round_settled'].clear()
+            self.__status['round_settle_delivered'].clear()
 
         # Notify any waiters after resetting status to ensure they re-check with new status
         async with self.__round_condition:
@@ -293,17 +297,18 @@ class Market:
 
         # create a new time slot container if the time slot doesn't exist
         time_delivery = tuple(message[4])
-        if time_delivery not in self.__open:
-            self.__open[time_delivery] = {
-                'bid': []
-            }
+        async with self._write_state_lock:
+            if time_delivery not in self.__open:
+                self.__open[time_delivery] = {
+                    'bid': []
+                }
 
-        # if the time slot exists but no entry exist, create the entry container
-        if 'bid' not in self.__open[time_delivery]:
-            self.__open[time_delivery]['bid'] = []
+            # if the time slot exists but no entry exist, create the entry container
+            if 'bid' not in self.__open[time_delivery]:
+                self.__open[time_delivery]['bid'] = []
 
-        # add open entry
-        self.__open[time_delivery]['bid'].append(entry)
+            # add open entry
+            self.__open[time_delivery]['bid'].append(entry)
         return entry_id, participant_id, self.__participants[participant_id]['sid']
 
     async def submit_ask(self, message: dict):
@@ -396,17 +401,18 @@ class Market:
 
         # create a new time slot container if the time slot doesn't exist
         time_delivery = tuple(message[4])
-        if time_delivery not in self.__open:
-            self.__open[time_delivery] = {
-                'ask': []
-            }
+        async with self._write_state_lock:
+            if time_delivery not in self.__open:
+                self.__open[time_delivery] = {
+                    'ask': []
+                }
 
-        # if the time slot exists but no entry exist, create the entry container
-        if 'ask' not in self.__open[time_delivery]:
-            self.__open[time_delivery]['ask'] = []
+            # if the time slot exists but no entry exist, create the entry container
+            if 'ask' not in self.__open[time_delivery]:
+                self.__open[time_delivery]['ask'] = []
 
-        # add open entry
-        self.__open[time_delivery]['ask'].append(entry)
+            # add open entry
+            self.__open[time_delivery]['ask'].append(entry)
         # print(entry_id, participant_id, self.__participants[participant_id]['sid'])
         return entry_id, participant_id, self.__participants[participant_id]['sid']
 
@@ -556,9 +562,10 @@ class Market:
                               seller_message,
                               user_property=('to', self.__participants[ask['participant_id']]['sid']),
                               qos=0)
-        bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-        ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-        self.__status['round_settled'].append(commit_id)
+        async with self._write_state_lock:
+            bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+            ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
+            self.__status['round_settled'].append(commit_id)
         return quantity, settlement_price_buy, settlement_price_sell
 
     # after settlement confirmation, update bid and ask quantities
@@ -604,10 +611,14 @@ class Market:
         time_delivery = tuple(message[1])
         meter = message[2]
 
-        self.__participants[participant_id]['meter'][time_delivery] = meter
-        self.__status['round_metered'] += 1
+        async with self._write_state_lock:
+            self.__participants[participant_id]['meter'][time_delivery] = meter
+            self.__status['round_metered'] += 1
 
         # Notify waiting tasks that a meter reading has been received
+
+        # print(self.__status['round_metered'], self.__status['active_participants'])
+
         async with self.__round_condition:
             self.__round_condition.notify_all()
 
@@ -1168,12 +1179,9 @@ class Market:
         await self.__start_round(duration=timeout)
         await self.__match_all(self.__timing['last_settle'])
         await self.__ensure_round_complete()
-        # print(self.__status)
-        # print('round complete?')
         await self.__process_energy_exchange(self.__timing['current_round'])
         await self.__clean_market(self.__timing['last_round'])
         # await self.__client.emit('end_round', data='')
-
         # self.__client.publish('/'.join([self.market_id, 'simulation', 'end_round']), '')
 
     # async def loop(self):

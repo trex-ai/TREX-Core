@@ -24,7 +24,7 @@ class Client:
 
         # Set client to controller class
         self.controller = Controller(self.sio_client, config)
-        # self.msg_queue = Queue()
+        self.msg_queue = asyncio.Queue()
         self.ns = NSDefault(self.controller)
 
     def on_connect(self, client, flags, rc, properties):
@@ -35,14 +35,14 @@ class Client:
 
         # client.subscribe("/".join([market_id]), qos=0)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'market_online']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'participant_joined']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_turn']), qos=2)
-        client.subscribe("/".join([market_id, 'simulation', 'end_round']), qos=2)
-        client.subscribe("/".join([market_id, 'simulation', 'participant_ready']), qos=2)
-        client.subscribe("/".join([market_id, 'simulation', 'market_ready']), qos=2)
-        client.subscribe("/".join([market_id, 'algorithm', 'policy_server_ready']), qos=2)
-        client.subscribe("/".join(['debug', 'sim_controller_status']), qos=0)
+        client.subscribe(f'{market_id}/simulation/market_online', qos=0)
+        client.subscribe(f'{market_id}/simulation/participant_joined', qos=0)
+        client.subscribe(f'{market_id}/simulation/end_turn', qos=0)
+        client.subscribe(f'{market_id}/simulation/end_round', qos=0)
+        client.subscribe(f'{market_id}/simulation/participant_ready', qos=0)
+        client.subscribe(f'{market_id}/simulation/market_ready', qos=0)
+        client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=0)
+        client.subscribe(f'debug/sim_controller_status', qos=0)
 
     def on_disconnect(self, client, packet, exc=None):
         # self.ns.on_disconnect()
@@ -58,9 +58,19 @@ class Client:
             'payload': payload.decode(),
             'properties': properties
         }
-        # await self.msg_queue.put(message)
-        await self.ns.process_message(message)
-        return 0
+        await self.msg_queue.put(message)
+        # await self.ns.process_message(message)
+        # return 0
+
+    async def message_processor(self):
+        while True:
+            message = await self.msg_queue.get()
+            try:
+                await self.ns.process_message(message)
+            except Exception as e:
+                logging.error(f"Error processing message: {e}", exc_info=True)
+            finally:
+                self.msg_queue.task_done()
     # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect
@@ -93,6 +103,7 @@ class Client:
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self.run_client(self.sio_client))
             tg.create_task(self.controller.monitor())
+            tg.create_task(self.message_processor())
     # except SystemExit:
     #     for t in tasks:
     #         t.cancel()

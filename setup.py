@@ -4,22 +4,20 @@ from setuptools import setup, find_packages
 setup(
     name='TREX_Core',
     version='5.0.0',
-    install_requires=[  "asyncpg",
-                        "commentjson",
-                        # "asyncpg", #Removed duplicate
-                        "cuid2",
-                        "databases",
-                        "databases[postgresql]",
-                        "gmqtt",
-                        "packaging",
-                        "psycopg[binary]",
-                        "python-dateutil",
-                        "pytz",
-                        "python-rapidjson",
-                        "sqlalchemy",
-                        "sqlalchemy-utils",
-                        "tenacity",
-                        "websockets"
-              ],
+    install_requires=["asyncpg",
+                      "commentjson",
+                      "cuid2",
+                      "databases",
+                      "databases[postgresql]",
+                      "gmqtt",
+                      "packaging",
+                      "psycopg[binary]",
+                      "python-dateutil",
+                      "pytz",
+                      "python-rapidjson",
+                      "sqlalchemy",
+                      "sqlalchemy-utils",
+                      "websockets"
+                      ],
     packages=find_packages()
 )

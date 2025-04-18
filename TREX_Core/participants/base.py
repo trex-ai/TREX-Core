@@ -18,7 +18,8 @@ class Participant:
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
+
+    def __init__(self, client, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -26,9 +27,8 @@ class Participant:
         self.market_connected = False
         self.participant_id = str(participant_id)
         self.sid = kwargs.get('sid', market_id)
-        self.__client = sio_client
-        self.client = sio_client
-
+        self.__client = client
+        self.client = client
 
         self.__profile = {
             'db_path': profile_db_path
@@ -97,7 +97,7 @@ class Participant:
 
         # if 'market_ns' in kwargs:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
-            # self.__client.register_namespace(NSMarket(self))
+        # self.__client.register_namespace(NSMarket(self))
 
     # async def delay(self, s):
     #     await self.__client.sleep(s)
@@ -117,7 +117,7 @@ class Participant:
         """
         self.__profile['db_path'] = db_path
         self.__profile['db'] = databases.Database(db_path)
-        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
+        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params \
             else self.participant_id
         self.__profile['name'] = profile_name
         self.__profile['db_table'] = db_utils.get_table(db_path, profile_name)
@@ -140,7 +140,7 @@ class Participant:
         await self.open_db(self.__profile['db_path'])
         # await self.get_profile_stats(self.__profile['db_path'])
 
-    @tenacity.retry(wait=tenacity.wait_fixed(3))
+    # @tenacity.retry(wait=tenacity.wait_fixed(3))
     async def join_market(self):
         """Emits event to join a Market
         """
@@ -154,12 +154,14 @@ class Participant:
             'market_id': self.market_id
         }
         # await self.__client.emit('join_market', client_data, callback=self.register_success)
-        self.__client.publish('/'.join([self.market_id, 'join_market']), client_data,
+        self.__client.publish(f'{self.market_id}/join_market/{self.participant_id}',
+                              client_data,
+                              retain=True,
                               user_property=('to', '^all'))
         # print('joining market')
         # await asyncio.sleep(2)
-        if not self.market_connected:
-            raise tenacity.TryAgain
+        # if not self.market_connected:
+        #     raise tenacity.TryAgain
 
     # Continuously attempt to join server
     # async def register_success(self, success):
@@ -373,7 +375,6 @@ class Participant:
         #     'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
         # }
 
-
     async def start_round(self, message):
 
         """Sequence of actions during each round
@@ -438,7 +439,6 @@ class Participant:
 
         # print(obs_dict)
         return obs_dict
-
 
     @alru_cache
     async def __read_profile(self, time_interval):
@@ -696,7 +696,7 @@ class Participant:
         self.__timing.clear()
 
     async def kill(self):
-        #TODO: add final actions to do for trader before killing if exists
+        # TODO: add final actions to do for trader before killing if exists
         if hasattr(self.trader, 'kill'):
             await self.trader.kill()
         await asyncio.sleep(5)
