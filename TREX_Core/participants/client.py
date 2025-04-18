@@ -115,7 +115,7 @@ class Client:
 
     # print(msg_queue)
     async def process_message(self, message):
-        for segment in message['topic'].split('/'):
+        for segment in reversed(message['topic'].split('/')):
             handler = self.dispatch.get(segment)
             if handler:
                 await handler(message)
