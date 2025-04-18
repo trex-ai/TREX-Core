@@ -35,7 +35,7 @@ class Client:
                                        # storage_params=storage_params,
                                        **kwargs)
 
-        # self.msg_queue = Queue()
+        self.msg_queue = asyncio.Queue()
         self.ns = NSDefault(participant=self.participant)
 
     def on_connect(self, client, flags, rc, properties):
@@ -59,8 +59,8 @@ class Client:
         client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=0)
         client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
 
-        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_actions_return']), qos=2)
-        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_metadata_return']), qos=2)
+        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_actions_return']), qos=0)
+        client.subscribe("/".join([market_id, 'algorithm', participant_id, 'get_metadata_return']), qos=0)
         # await keep_alive()
 
     # self.__client.publish('/'.join([self.market_id, 'simulation', 'participant_disconnected']), self.participant_id,
@@ -79,9 +79,20 @@ class Client:
             'payload': payload.decode(),
             'properties': properties
         }
-        # await self.msg_queue.put(message)
-        await self.ns.process_message(message)
-        return 0
+        await self.msg_queue.put(message)
+        # await self.ns.process_message(message)
+        # return 0
+
+    async def message_processor(self):
+        while True:
+            message = await self.msg_queue.get()
+            try:
+                await self.ns.process_message(message)
+            except Exception as e:
+                logging.error(f"Error processing message: {e}", exc_info=True)
+            finally:
+                self.msg_queue.task_done()
+
     # print(msg_queue)
     async def run_client(self, client):
         client.on_connect = self.on_connect
@@ -108,6 +119,7 @@ class Client:
         # for python 3.11+
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self.run_client(self.sio_client))
+            tg.create_task(self.message_processor())
 
     # def ask_exit(*args):
     #     STOP.set()

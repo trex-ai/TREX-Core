@@ -84,6 +84,7 @@ class NSDefault:
 
     async def on_is_participant_joined(self, payload):
         await self.participant.is_participant_joined()
+
     async def on_start_episode(self, message):
         """Event triggers actions to be taken before the start of a simulation
 
