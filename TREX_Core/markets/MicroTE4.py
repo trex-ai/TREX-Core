@@ -501,9 +501,9 @@ class Market(BaseMarket):
             time_delivery
         ]
         self.__client.publish(f'{self.market_id}/{bid['participant_id']}/settled', buyer_message,
-                              user_property=('to', self.__participants[bid['participant_id']]['sid']), qos=0)
+                              user_property=('to', self.__participants[bid['participant_id']]['sid']), qos=2)
         self.__client.publish(f'{self.market_id}/{ask['participant_id']}/settled', seller_message,
-                              user_property=('to', self.__participants[ask['participant_id']]['sid']), qos=0)
+                              user_property=('to', self.__participants[ask['participant_id']]['sid']), qos=2)
         bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
         self.__status['round_settled'].append(commit_id)

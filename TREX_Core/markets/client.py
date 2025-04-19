@@ -117,7 +117,7 @@ class Client:
             entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
             self.client.publish(f'{self.market.market_id}/{participant_id}/bid_ack', entry_id,
                                 user_property=('to', participant_sid),
-                                qos=0)
+                                qos=2)
         except TypeError:
             return
 
@@ -127,7 +127,7 @@ class Client:
             entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
             self.client.publish(f'{self.market.market_id}/{participant_id}/ask_ack', entry_id,
                                 user_property=('to', participant_sid),
-                                qos=0)
+                                qos=2)
         except TypeError:
             return
 
@@ -153,10 +153,10 @@ class Client:
                                  'sid': market_sid,
                                  'timezone': timezone, },
                                 user_property=('to', client_data['sid']),
-                                qos=0)
+                                qos=2)
 
     async def on_is_market_online(self, message):
-        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=0)
+        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=2)
         # await self.market.market_is_online()
 
     async def on_start_round(self, message):
@@ -167,7 +167,7 @@ class Client:
         # self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=0)
 
     def on_round_done(self, task):
-        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=0)
+        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=2)
 
     async def on_start_episode(self, message):
         # message = json.loads(message)
@@ -180,7 +180,7 @@ class Client:
         await self.market.ensure_transactions_complete()
         # if not last_generation:
         await self.market.reset_market()
-        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=0)
+        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=2)
 
     async def on_end_simulation(self, message):
         # print('end simulation')
