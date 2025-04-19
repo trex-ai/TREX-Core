@@ -1,54 +1,18 @@
-"""
-trex_core.mqtt.base
-===================
-
-ONE PLACE for all the gmqtt boilerplate every TREX client repeats.
-
-What the backbone gives you
----------------------------
-    • self.client          → gmqtt.Client (already created)
-    • self.msg_queue       → asyncio.Queue for raw MQTT messages
-    • run()                → connects, spawns N workers, then
-                             waits forever
-
-What you *must* provide in each subclass
-----------------------------------------
-    • self.SUBS            list[(topic, qos)]
-                            – the topics you want auto‑subscribed
-    • self.dispatch        dict[str, async handler(message_dict)]
-                            – exactly the table you already use
-    • the usual callbacks  on_connect, on_disconnect, on_message,
-                           message_processor, process_message, etc.
-
-Optional hook
--------------
-    extra_tasks() → list[coro]
-        Return any background coroutines you want the run‑loop
-        to schedule (e.g. Sim‑Controller’s monitor()).
-
-Nothing else in your existing files needs to change.
-"""
-
 import asyncio
 from typing import List, Tuple, Dict, Callable, Coroutine, Any
-from cuid2 import Cuid as cuid
+from cuid2 import Cuid
 from gmqtt import Client as MQTTClient
 from abc import ABC, abstractmethod
 
-STOP = asyncio.Event()           # reused by all TREX scripts
+# STOP = asyncio.Event()           # reused by all TREX scripts
 
 
 class BaseMQTTClient(ABC):
-    """
-    Minimal, explicit, no‑magic backbone.
-    """
-
-    # subclass sets these two *in __init__* once it knows market_id, etc.
     SUBS: List[Tuple[str, int]] = []
     dispatch: Dict[str, Callable[[dict], Coroutine[Any, Any, None]]] = {}
 
     def __init__(self, server_address: str, *, consumers: int = 4):
-        self.cuid = cuid(length=10).generate()
+        self.cuid = Cuid(length=10).generate()
         self.server_address = server_address
         self.consumers = consumers
         self.client = MQTTClient(self.cuid)
@@ -56,7 +20,6 @@ class BaseMQTTClient(ABC):
 
     @abstractmethod
     def on_connect(self, client, flags, rc, properties):
-        """Subclass must implement."""
         raise NotImplementedError
 
     @abstractmethod
@@ -71,7 +34,7 @@ class BaseMQTTClient(ABC):
         for topic, qos in self.SUBS:
             client.subscribe(topic, qos=qos)
 
-    async def extra_tasks(self) -> List[Coroutine]:
+    async def background_tasks(self) -> List[Coroutine]:
         """
         Subclass can override to return extra background coroutines
         that run alongside the MQTT loop (e.g. controller.monitor()).
@@ -92,7 +55,7 @@ class BaseMQTTClient(ABC):
     async def _dispatch(self, message: dict) -> None:
         for segment in reversed(message["topic"].split("/")):
             handler = self.dispatch.get(segment)
-            if handler:                         # first match wins
+            if handler:
                 await handler(message)
                 return
         print("unrecognised topic:", message["topic"])
@@ -112,11 +75,11 @@ class BaseMQTTClient(ABC):
         """
         Uses the subclass's *own* on_connect/on_disconnect implementations.
         """
-        self.client.on_connect    = self.on_connect
+        self.client.on_connect = self.on_connect
         self.client.on_disconnect = self.on_disconnect
-        self.client.on_message    = self._enqueue
+        self.client.on_message = self._enqueue
         await self.client.connect(self.server_address, keepalive=60)
-        await STOP.wait()                       # run until someone sets STOP
+        # await STOP.wait()
 
     # ------------------------------------------------------------------ #
     # Public: start everything
@@ -132,5 +95,5 @@ class BaseMQTTClient(ABC):
             for _ in range(self.consumers):     # message queue workers
                 tg.create_task(self._message_processor())
 
-            for coro in await self.extra_tasks():
+            for coro in await self.background_tasks():
                 tg.create_task(coro)

@@ -1,28 +1,28 @@
 import asyncio
-import os
 import json
 from pprint import pprint
-
-from gmqtt import Client as MQTTClient
+from TREX_Core.mqtt.base import BaseMQTTClient
 from TREX_Core.sim_controller.sim_controller import Controller
-from cuid2 import Cuid as cuid
 
-if os.name == 'posix':
-    import uvloop
-    uvloop.install()
 
-STOP = asyncio.Event()
-
-class Client:
+class Client(BaseMQTTClient):
     # Initialize client data for sim controller
     def __init__(self, server_address, config):
-        self.server_address = server_address
-        self.client = MQTTClient(cuid(length=10).generate())
-
+        super().__init__(server_address, consumers=4)
         # Set client to controller class
         self.controller = Controller(self.client, config)
-        self.msg_queue = asyncio.Queue()
-        # self._write_state_lock = asyncio.Lock()
+
+        market_id = self.controller.market_id
+        self.SUBS = [
+            (f'{market_id}/simulation/market_online', 2),
+            (f'{market_id}/simulation/participant_joined', 2),
+            (f'{market_id}/simulation/end_turn', 2),
+            (f'{market_id}/simulation/end_round', 2),
+            (f'{market_id}/simulation/participant_ready', 2),
+            (f'{market_id}/simulation/market_ready', 2),
+            (f'{market_id}/algorithm/policy_server_ready', 2),
+            ('debug/sim_controller_status', 2),
+        ]
 
         self.dispatch = {
             'market_online': self.on_market_online,
@@ -37,20 +37,20 @@ class Client:
         }
 
     def on_connect(self, client, flags, rc, properties):
-        market_id = self.controller.market_id
-        print('Connected sim_controller', market_id)
+        self.subscribe_common(client)
         asyncio.create_task(self.on_connect_task())
+        print('Connected sim_controller', self.controller.market_id)
 
         # client.subscribe("/".join([market_id]), qos=0)
         # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe(f'{market_id}/simulation/market_online', qos=2)
-        client.subscribe(f'{market_id}/simulation/participant_joined', qos=2)
-        client.subscribe(f'{market_id}/simulation/end_turn', qos=2)
-        client.subscribe(f'{market_id}/simulation/end_round', qos=2)
-        client.subscribe(f'{market_id}/simulation/participant_ready', qos=2)
-        client.subscribe(f'{market_id}/simulation/market_ready', qos=2)
-        client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=2)
-        client.subscribe(f'debug/sim_controller_status', qos=2)
+        # client.subscribe(f'{market_id}/simulation/market_online', qos=2)
+        # client.subscribe(f'{market_id}/simulation/participant_joined', qos=2)
+        # client.subscribe(f'{market_id}/simulation/end_turn', qos=2)
+        # client.subscribe(f'{market_id}/simulation/end_round', qos=2)
+        # client.subscribe(f'{market_id}/simulation/participant_ready', qos=2)
+        # client.subscribe(f'{market_id}/simulation/market_ready', qos=2)
+        # client.subscribe(f'{market_id}/algorithm/policy_server_ready', qos=2)
+        # client.subscribe(f'debug/sim_controller_status', qos=2)
 
     async def on_connect_task(self):
         await self.controller.register()
@@ -58,36 +58,6 @@ class Client:
     def on_disconnect(self, client, packet, exc=None):
         # self.ns.on_disconnect()
         print('sim controller disconnected')
-
-    async def on_message(self, client, topic, payload, qos, properties):
-        # print('controller RECV MSG:', topic, payload.decode(), properties)
-        message = {
-            'topic': topic,
-            'payload': payload.decode(),
-            'properties': properties
-        }
-        await self.msg_queue.put(message)
-        # await self.ns.process_message(message)
-        # return 0
-
-    async def message_processor(self):
-        while True:
-            message = await self.msg_queue.get()
-            try:
-                await self.process_message(message)
-            except Exception as e:
-                logging.error(f"Error processing message: {e}", exc_info=True)
-            finally:
-                self.msg_queue.task_done()
-
-    async def process_message(self, message):
-        for segment in reversed(message['topic'].split('/')):
-            handler = self.dispatch.get(segment)
-            if handler:
-                await handler(message)
-                break
-        else:
-            print("unrecognised topic:", message['topic'])
 
     async def on_participant_joined(self, message):
         participant_id = message['payload']
@@ -135,45 +105,13 @@ class Client:
     async def on_sim_controller_status(self, message):
         pprint(self.controller.status)
     # print(msg_queue)
-    async def run_client(self, client):
-        client.on_connect = self.on_connect
-        client.on_disconnect = self.on_disconnect
-        # client.on_subscribe = self.on_subscribe
-        client.on_message = self.on_message
 
-        # client.set_auth_credentials(token, None)
-        # print(self.server_address)
-        await client.connect(self.server_address, keepalive=60)
-        
-        await STOP.wait()
+    async def background_tasks(self):
+        return [self.controller.monitor()]
 
     async def run(self):
-        """Function to start the client and other background tasks
+        await super().run()
 
-        Raises:
-            SystemExit: [description]
-        """
-        # tasks = [
-        #     # asyncio.create_task(keep_alive()),
-        #     # asyncio.create_task(self.ns.listen(self.msg_queue)),
-        #     asyncio.create_task(self.run_client(self.sio_client)),
-        #     asyncio.create_task(self.controller.monitor())
-        # ]
-        #
-        # # try:
-        # await asyncio.gather(*tasks)
-
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(self.run_client(self.client))
-            tg.create_task(self.controller.monitor())
-            # tg.create_task(self.message_processor())
-            for _ in range(4):
-                tg.create_task(self.message_processor())
-
-    # except SystemExit:
-    #     for t in tasks:
-    #         t.cancel()
-    #     raise SystemExit
 
 if __name__ == '__main__':
     # import sys
