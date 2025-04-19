@@ -313,12 +313,13 @@ class Controller:
 
             if not self.status['market_online']:
                 # await self.__client.emit('is_market_online')
-                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '')
+                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '', qos=2)
                 continue
 
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
                 self.__client.publish(f'{self.market_id}/simulation/is_participant_joined', '',
+                                      qos=2,
                                       user_property=('to', '^all'))
                 continue
 
@@ -326,7 +327,7 @@ class Controller:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
-                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '')
+                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '', qos=2)
                 continue
 
             # await self.update_sim_paths()

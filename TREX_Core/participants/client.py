@@ -198,6 +198,7 @@ class Client:
         #                                    data={self.participant.participant_id: True})
         self.participant.client.publish(f'{self.participant.market_id}/simulation/participant_ready',
                                         {self.participant.participant_id: True},
+                                        qos=2,
                                         user_property=('to', self.participant.market_sid))
 
     async def on_end_simulation(self, message):
@@ -208,6 +209,7 @@ class Client:
         self.client.publish(f'{self.participant.market_id}/join_market/{self.participant.participant_id}',
                             '',
                             retain=True,
+                            qos=2,
                             user_property=('to', '^all'))
         if hasattr(self.participant, 'records'):
             # await asyncio.sleep(np.random.uniform(3, 30))

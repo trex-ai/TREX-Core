@@ -12,7 +12,28 @@ from TREX_Core.utils import db_utils, utils
 from cuid2 import Cuid
 
 from async_lru import alru_cache
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional
+from gmqtt import Client as MQTTClient
 
+@dataclass(frozen=True)
+class StorageContext:
+    get_info:        Callable
+    check_schedule:  Callable
+
+@dataclass(frozen=True)
+class TraderContext:
+    client:            MQTTClient
+    participant_id:    str
+    market_id:         str
+    timing:            Dict
+    ledger:            ledger.Ledger
+    extra_tx:          Dict
+    market_info:       Dict
+    read_profile:      Callable
+    get_profile_stats: Callable
+    meter:             Dict
+    storage:           Optional[StorageContext] = None
 
 class Participant:
     """
@@ -28,8 +49,6 @@ class Participant:
         self.participant_id = str(participant_id)
         self.sid = kwargs.get('sid', market_id)
         self.__client = client
-        self.client = client
-
         self.__profile = {
             'db_path': profile_db_path
         }
@@ -44,20 +63,20 @@ class Participant:
 
         # Initialize trader variables and functions
         trader_params = kwargs.get('trader')
-        trader_fns = {
-            'client': self.__client,
-            'id': self.participant_id,
-            'market_id': self.market_id,
-            'timing': self.__timing,
-            'ledger': self.__ledger,
-            'extra_transactions': self.__extra_transactions,
-            'market_info': self.__market_info,
-            'read_profile': self.__read_profile,
-            'get_profile_stats': self.__get_profile_stats,
-            'meter': self.__meter
-        }
-
+        # trader_fns = {
+        #     'client': self.__client,
+        #     'id': self.participant_id,
+        #     'market_id': self.market_id,
+        #     'timing': self.__timing,
+        #     'ledger': self.__ledger,
+        #     'extra_transactions': self.__extra_transactions,
+        #     'market_info': self.__market_info,
+        #     'read_profile': self.__read_profile,
+        #     'get_profile_stats': self.__get_profile_stats,
+        #     'meter': self.__meter
+        # }
         storage_params = kwargs.get('storage')
+        storage_ctx = None
         if storage_params is not None:
             storage_type = storage_params.pop('type', None)
             # self.storage_fns = {
@@ -66,12 +85,29 @@ class Participant:
             # }
             self.storage = importlib.import_module('TREX_Core.devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
-            trader_fns['storage'] = {
-                'info': self.storage.get_info,
-                'check_schedule': self.storage.check_schedule
-                # 'schedule_energy': self.storage.schedule_energy
-            }
+            # trader_fns['storage'] = {
+            #     'info': self.storage.get_info,
+            #     'check_schedule': self.storage.check_schedule
+            #     # 'schedule_energy': self.storage.schedule_energy
+            # }
+            storage_ctx = StorageContext(
+                get_info=self.storage.get_info,
+                check_schedule=self.storage.check_schedule
+            )
 
+        ctx = TraderContext(
+            client=self.__client,
+            participant_id=self.participant_id,
+            market_id=self.market_id,
+            timing=self.__timing,
+            ledger=self.__ledger,
+            extra_tx=self.__extra_transactions,
+            market_info=self.__market_info,
+            read_profile=self.__read_profile,
+            get_profile_stats=self.__get_profile_stats,
+            meter=self.__meter,
+            storage=storage_ctx
+        )
         trader_type = trader_params.pop('type', None)
         # if trader_type == 'remote_agent':
         #     trader_fns['emit'] = self.__client.emit
@@ -79,7 +115,7 @@ class Participant:
             Trader = importlib.import_module('traders.' + trader_type).Trader
         except ImportError:
             Trader = importlib.import_module('TREX_Core.traders.' + trader_type).Trader
-        self.trader = Trader(trader_fns=trader_fns, **trader_params)
+        self.trader = Trader(context=ctx, **trader_params)
 
         self.__profile_params = {
             'generation_scale': kwargs.get('generation', {}).get('scale', 1),
@@ -157,6 +193,7 @@ class Participant:
         self.__client.publish(f'{self.market_id}/join_market/{self.participant_id}',
                               client_data,
                               retain=True,
+                              qos=2,
                               user_property=('to', '^all'))
         # print('joining market')
         # await asyncio.sleep(2)
@@ -718,3 +755,7 @@ class Participant:
                                   self.participant_id,
                                   user_property=('to', self.market_sid),
                                   qos=2)
+
+    @property
+    def client(self):
+        return self.__client

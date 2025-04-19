@@ -7,7 +7,7 @@ import TREX_Core.utils as utils
 class Trader:
     def __init__(self, **kwargs):
         # Some util stuffies
-        self.__participant = kwargs['trader_fns']
+        self.__participant = kwargs['context']
 
         # Initialize the agent learning parameters for the agent (your choice)
         self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
@@ -17,26 +17,25 @@ class Trader:
 
     async def act(self, **kwargs):
         actions = {}
-        last_settle = self.__participant['timing']['last_settle']
-        next_settle = self.__participant['timing']['next_settle']
-        timezone = self.__participant['timing']['timezone']
+        last_settle = self.__participant.timing['last_settle']
+        next_settle = self.__participant.timing['next_settle']
+        timezone = self.__participant.timing['timezone']
         next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
         charge_hours_allowed = (8, 9, 10, 11, 12, 13, 14, 15, 16)
 
-        generation, load = await self.__participant['read_profile'](next_settle)
+        generation, load = await self.__participant.read_profile(next_settle)
         residual_load = load - generation
         residual_gen = -residual_load
 
         if 'storage' in self.__participant:
-            storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
+            storage_schedule = await self.__participant.storage['check_schedule'](next_settle)
             max_charge = storage_schedule[next_settle]['energy_potential'][1]
             max_discharge = storage_schedule[next_settle]['energy_potential'][0]
 
             # adjust battery actions from last settle
 
             if last_settle in self.action_scenario_history:
-                # print(self.__participant['id'], self.action_scenario_history)
-                last_settle_info = await self.__participant['ledger'].get_settled_info(last_settle)
+                last_settle_info = await self.__participant.ledger.get_settled_info(last_settle)
                 # s1: charge settled max(0, bids - residual load)
                 # s2: discharge residual load + settled asks
                 # s3: change settled bids + residual gen
@@ -71,7 +70,7 @@ class Trader:
                         str(last_settle): -min(abs(ls_max_discharge), max(0, ls_asks - ls_residual_gen))
                     }
                 # clean up history buffer
-                stale_round = self.__participant['timing']['stale_round']
+                stale_round = self.__participant.timing['stale_round']
                 self.action_scenario_history.pop(stale_round, None)
 
 

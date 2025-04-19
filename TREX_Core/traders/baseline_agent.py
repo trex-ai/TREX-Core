@@ -7,7 +7,7 @@ class Trader:
     """The baseline trader that emulates behaviour under net-metering/net-billing with a focus on self-sufficiency
     """
     def __init__(self, **kwargs):
-        self.__participant = kwargs['trader_fns']
+        self.__participant = kwargs['context']
 
     async def act(self, **kwargs):
         actions = {}
@@ -17,16 +17,16 @@ class Trader:
         # if 'storage' not in self.__participant:
         #     return actions
 
-        next_settle = self.__participant['timing']['next_settle']
+        next_settle = self.__participant.timing['next_settle']
 
         # amount of energy that the agent has to play with.
-        generation, load = await self.__participant['read_profile'](next_settle)
+        generation, load = await self.__participant.read_profile(next_settle)
         residual_load = load - generation
         residual_gen = -residual_load
-        if 'storage' in self.__participant:
+        if self.__participant.storage is not None:
             # if battery exists, then
             # get the battery information:
-            storage_schedule = await self.__participant['storage']['check_schedule'](next_settle)
+            storage_schedule = await self.__participant.storage.check_schedule(next_settle)
             max_charge = storage_schedule[next_settle]['energy_potential'][1]
             max_discharge = storage_schedule[next_settle]['energy_potential'][0]
 
