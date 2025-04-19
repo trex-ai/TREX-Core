@@ -22,6 +22,7 @@ class Client:
         # Set client to controller class
         self.controller = Controller(self.client, config)
         self.msg_queue = asyncio.Queue()
+        # self._write_state_lock = asyncio.Lock()
 
         self.dispatch = {
             'market_online': self.on_market_online,
@@ -90,15 +91,18 @@ class Client:
 
     async def on_participant_joined(self, message):
         participant_id = message['payload']
+        # async with self._write_state_lock:
         await self.controller.participant_online(participant_id, True)
 
     async def on_participant_disconnected(self, message):
         print(message['payload'], 'PARTICIPANT LOST')
         participant_id = message['payload']
+        # async with self._write_state_lock:
         await self.controller.participant_online(participant_id, False)
 
     async def on_participant_ready(self, message):
         payload = json.loads(message['payload'])
+        print(payload)
         for participant_id in payload:
             await self.controller.participant_status(participant_id, 'ready', payload[participant_id])
 
@@ -109,12 +113,14 @@ class Client:
 
     # send by individual participants
     async def on_end_turn(self, message):
-        await self.controller.update_turn_status(message['payload'])
+        # async with self._write_state_lock:
+        task = asyncio.create_task(self.controller.update_turn_status(message['payload']))
 
     # sent by the market
     async def on_end_round(self, message):
         await self.controller.market_turn_end()
-        await self.controller.update_turn_status(message['payload'])
+        # async with self._write_state_lock:
+        task = asyncio.create_task(self.controller.update_turn_status(message['payload']))
 
     async def on_market_online(self, message):
         self.controller.status['market_online'] = True
@@ -160,7 +166,10 @@ class Client:
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self.run_client(self.client))
             tg.create_task(self.controller.monitor())
-            tg.create_task(self.message_processor())
+            # tg.create_task(self.message_processor())
+            for _ in range(4):
+                tg.create_task(self.message_processor())
+
     # except SystemExit:
     #     for t in tasks:
     #         t.cancel()

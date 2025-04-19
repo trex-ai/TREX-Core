@@ -215,7 +215,9 @@ class Client:
         # for python 3.11+
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self.run_client(self.client))
-            tg.create_task(self.message_processor())
+            for _ in range(4):
+                tg.create_task(self.message_processor())  # N consumers
+            # tg.create_task(self.message_processor())
 
 
 if __name__ == '__main__':
