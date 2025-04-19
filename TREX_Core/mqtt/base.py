@@ -48,9 +48,10 @@ class BaseMQTTClient(ABC):
     dispatch: Dict[str, Callable[[dict], Coroutine[Any, Any, None]]] = {}
 
     def __init__(self, server_address: str, *, consumers: int = 4):
+        self.cuid = cuid(length=10).generate()
         self.server_address = server_address
         self.consumers = consumers
-        self.client = MQTTClient(cuid(length=10).generate())
+        self.client = MQTTClient(self.cuid)
         self.msg_queue: asyncio.Queue = asyncio.Queue()
 
     @abstractmethod
