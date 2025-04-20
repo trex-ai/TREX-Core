@@ -11,9 +11,10 @@ class BaseMQTTClient(ABC):
     SUBS: List[Tuple[str, int]] = []
     dispatch: Dict[str, Callable[[dict], Coroutine[Any, Any, None]]] = {}
 
-    def __init__(self, server_address: str, *, consumers: int = 4):
+    def __init__(self, server_address: str, port: int = 1883, consumers: int = 1):
         self.cuid = Cuid(length=10).generate()
         self.server_address = server_address
+        self.port = port
         self.consumers = consumers
         self.client = MQTTClient(self.cuid)
         self.msg_queue: asyncio.Queue = asyncio.Queue()
@@ -78,7 +79,7 @@ class BaseMQTTClient(ABC):
         self.client.on_connect = self.on_connect
         self.client.on_disconnect = self.on_disconnect
         self.client.on_message = self._enqueue
-        await self.client.connect(self.server_address, keepalive=60)
+        await self.client.connect(self.server_address, self.port, keepalive=60)
         # await STOP.wait()
 
     # ------------------------------------------------------------------ #

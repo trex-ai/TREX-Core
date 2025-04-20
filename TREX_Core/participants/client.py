@@ -2,14 +2,14 @@ import asyncio
 import json
 from gmqtt import Client as MQTTClient
 from gmqtt import Message
-from TREX_Core.mqtt.base import BaseMQTTClient
+from TREX_Core.mqtt.base_gmqtt import BaseMQTTClient
 
 
 class Client(BaseMQTTClient):
     """A socket.io client wrapper for participants
     """
-    def __init__(self, server_address, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
-        super().__init__(server_address, consumers=1)
+    def __init__(self, server_address, port, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
+        super().__init__(server_address, port, consumers=1)
         will_message = Message(f'{market_id}/join_market/{participant_id}',
                                '',
                                retain=True,
@@ -187,9 +187,8 @@ if __name__ == '__main__':
     parser.add_argument('--configs')
     args = parser.parse_args()
 
-    # server_address = ''.join(['http://', args.host, ':', str(args.port)])
-    server_address = args.host
-    client = Client(server_address=server_address,
+    client = Client(server_address=args.host,
+                    port=args.port,
                     # participant_type=args.type,
                     participant_id=args.id,
                     market_id=args.market_id,

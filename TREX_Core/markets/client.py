@@ -2,12 +2,12 @@ import asyncio
 import json
 import os
 import signal
-from TREX_Core.mqtt.base import BaseMQTTClient
+from TREX_Core.mqtt.base_gmqtt import BaseMQTTClient
 
 
 class Client(BaseMQTTClient):
-    def __init__(self, server_address, market_configs):
-        super().__init__(server_address, consumers=4)
+    def __init__(self, server_address, port, market_configs):
+        super().__init__(server_address, port, consumers=4)
         market_configs = market_configs
         market_configs['market_id'] = market_configs.pop('id', '')
         grid_params = market_configs.pop('grid', {})
@@ -145,8 +145,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=1883, help='')
     parser.add_argument('--configs')
     args = parser.parse_args()
-    # server_address = ''.join(['http://', args.host, ':', str(args.port)])
-    server_address = args.host
-    client = Client(server_address=server_address,
+
+    client = Client(server_address=args.host,
+                    port=args.port,
                     market_configs=json.loads(args.configs))
     asyncio.run(client.run())
