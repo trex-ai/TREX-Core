@@ -67,7 +67,7 @@ class Client(BaseMQTTClient):
         try:
             entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
             self.client.publish(f'{self.market.market_id}/{participant_id}/bid_ack', entry_id,
-                                user_property=('to', participant_sid),
+                                user_property=[('to', participant_sid)],
                                 qos=2)
         except TypeError:
             return
@@ -77,7 +77,7 @@ class Client(BaseMQTTClient):
         try:
             entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
             self.client.publish(f'{self.market.market_id}/{participant_id}/ask_ack', entry_id,
-                                user_property=('to', participant_sid),
+                                user_property=[('to', participant_sid)],
                                 qos=2)
         except TypeError:
             return
@@ -101,7 +101,7 @@ class Client(BaseMQTTClient):
                                 {'id': market_id,
                                  'sid': market_sid,
                                  'timezone': timezone, },
-                                user_property=('to', client_data['sid']),
+                                user_property=[('to', client_data['sid'])],
                                 qos=2)
 
     async def on_is_market_online(self, message):

@@ -320,7 +320,7 @@ class Controller:
                 # await self.__client.emit('re_register_participant')
                 self.__client.publish(f'{self.market_id}/simulation/is_participant_joined', '',
                                       qos=2,
-                                      user_property=('to', '^all'))
+                                      user_property=[('to', '^all')])
                 continue
 
             if not self.status['market_ready']:
@@ -461,7 +461,7 @@ class Controller:
 
             self.__client.publish(f'{self.market_id}/simulation/start_episode',
                                   self.__episode,
-                                  user_property=('to', '^all'),
+                                  user_property=[('to', '^all')],
                                   qos=2)
             self.status['episode_ended'] = False
 
@@ -480,7 +480,7 @@ class Controller:
             # print(self.__current_step, self.__end_step)
             self.__client.publish(f'{self.market_id}/simulation/start_round',
                                   message,
-                                  user_property=('to', '^all'),
+                                  user_property=[('to', '^all')],
                                   qos=2)
         # end of episode
         elif self.__current_step == self.__end_step + 1:
@@ -526,7 +526,7 @@ class Controller:
             # if self.__episode <= self.__episodes:
                 self.__client.publish(f'{self.market_id}/simulation/end_episode',
                                       message,
-                                      user_property=('to', '^all'),
+                                      user_property=[('to', '^all')],
                                       qos=2)
                 await self.resume_monitor()
             else:
@@ -548,7 +548,7 @@ class Controller:
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
                 self.__client.publish(f'{self.market_id}/simulation/end_simulation', self.market_id,
-                                      user_property=('to', '^all'),
+                                      user_property=[('to', '^all')],
                                       qos=2)
                 await self.delay(1)
                 await self.__client.disconnect()

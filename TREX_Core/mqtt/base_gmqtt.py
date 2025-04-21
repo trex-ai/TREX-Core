@@ -1,5 +1,6 @@
 import asyncio
 from typing import List, Tuple, Dict, Callable, Coroutine, Any
+
 from cuid2 import Cuid
 from gmqtt import Client as MQTTClient
 from abc import ABC, abstractmethod
@@ -17,7 +18,28 @@ class BaseMQTTClient(ABC):
         self.port = port
         self.consumers = consumers
         self.client = MQTTClient(self.cuid)
+
+        # orig_publish = self.client.publish
+        #
+        # def publish_with_msg_id(message_or_topic, payload=None, qos=1, retain=False, **kwargs):
+        #     user_property = kwargs.get('user_property')
+        #     if user_property is None:
+        #         user_property = kwargs['user_property'] = []
+        #     user_property.append(
+        #         ('msg_id', Cuid(length=10).generate())
+        #     )
+        #     return orig_publish(
+        #         message_or_topic,
+        #         payload,
+        #         qos,
+        #         retain,
+        #         **kwargs,
+        #     )
+        # self.client.publish = publish_with_msg_id
+
         self.msg_queue: asyncio.Queue = asyncio.Queue()
+        # self._seen_extra_pids: dict[int, float] = {}  # keep 2 min worth
+        # self._pid_cache_seconds = 120
 
     @abstractmethod
     def on_connect(self, client, flags, rc, properties):
@@ -42,10 +64,31 @@ class BaseMQTTClient(ABC):
         """
         return []
 
+    async def _dedup_msg(self, topic, payload, qos, properties):
+        # {'user_property': [('to', '^all')], 'dup': 0, 'retain': 0}
+        # this following code doesn't work
+        msg_id = properties['user_property'][-1][-1]
+        now = asyncio.get_running_loop().time()
+        # purge stale ids
+        for old_pid in list(self._seen_extra_pids):
+            if now - self._seen_extra_pids[old_pid] > self._pid_cache_seconds:
+                del self._seen_extra_pids[old_pid]
+        if msg_id in self._seen_extra_pids:
+            return None
+        self._seen_extra_pids[msg_id] = now
+        return {"topic": topic, "payload": payload.decode(), "properties": properties}
+
     # ------------------------------------------------------------------ #
     # Internal: queue raw messages
     # ------------------------------------------------------------------ #
     async def _enqueue(self, client, topic, payload, qos, properties):
+        # print('queueing', topic)
+        # if qos == 1:
+        #     message = await self._dedup_msg(topic, payload, properties)
+        #     # print(message)
+        #     if message is not None:
+        #         await self.msg_queue.put(message)
+        # else:
         await self.msg_queue.put(
             {"topic": topic, "payload": payload.decode(), "properties": properties}
         )
@@ -63,9 +106,10 @@ class BaseMQTTClient(ABC):
 
     async def _message_processor(self) -> None:
         while True:
-            msg = await self.msg_queue.get()
+            message = await self.msg_queue.get()
+            # print('processing', message['topic'])
             try:
-                await self._dispatch(msg)
+                await self._dispatch(message)
             finally:
                 self.msg_queue.task_done()
 

@@ -192,7 +192,7 @@ class Participant:
                               client_data,
                               retain=True,
                               qos=2,
-                              user_property=('to', '^all'))
+                              user_property=[('to', '^all')])
         # print('joining market')
         # await asyncio.sleep(2)
         # if not self.market_connected:
@@ -280,7 +280,7 @@ class Participant:
         # await self.__client.emit('bid', bid_entry)
         self.__client.publish(f'{self.market_id}/bid',
                               bid_entry,
-                              user_property=('to', self.market_sid),
+                              user_property=[('to', self.market_sid)],
                               qos=2)
 
     # @tenacity.retry(wait=tenacity.wait_random(0, 3))
@@ -319,7 +319,7 @@ class Participant:
         }
         self.__client.publish(f'{self.market_id}/ask',
                               ask_entry,
-                              user_property=('to', self.market_sid),
+                              user_property=[('to', self.market_sid)],
                               qos=2)
 
     async def ask_success(self, message):
@@ -334,7 +334,7 @@ class Participant:
         # if commit_id == message['commit_id']:
         self.__client.publish(f'{self.market_id}/settlement_delivered',
                               {self.participant_id: commit_id},
-                              user_property=('to', self.market_sid),
+                              user_property=[('to', self.market_sid)],
                               qos=2)
         # return message['commit_id']
 
@@ -456,7 +456,7 @@ class Participant:
             await self.records.save(1000)
         self.__client.publish(f'{self.market_id}/simulation/end_turn',
                               self.participant_id,
-                              user_property=('to', self.market_sid),
+                              user_property=[('to', self.market_sid)],
                               qos=2)
 
     async def make_observations_for_records(self, time_interval):
@@ -559,7 +559,7 @@ class Participant:
         message = [self.participant_id, time_interval, self.__meter]
         self.__client.publish(f'{self.market_id}/meter',
                               message,
-                              user_property=('to', self.market_sid),
+                              user_property=[('to', self.market_sid)],
                               qos=2)
         return True
 
@@ -751,7 +751,7 @@ class Participant:
         if self.market_connected:
             self.__client.publish(f'{self.market_id}/simulation/participant_joined',
                                   self.participant_id,
-                                  user_property=('to', self.market_sid),
+                                  user_property=[('to', self.market_sid)],
                                   qos=2)
 
     @property

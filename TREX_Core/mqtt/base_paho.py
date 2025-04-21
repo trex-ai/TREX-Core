@@ -28,7 +28,7 @@ class BaseMQTTClient(ABC):
     dispatch: Dict[str, Callable[[Dict[str, Any]], None]] = {}
 
     # ---------- ctor ----------
-    def __init__(self, host: str, *, port: int = 1883, consumers: int = 1):
+    def __init__(self, host: str, port: int = 1883, consumers: int = 1):
         self.host, self.port = host, port
         self.consumers = consumers
         self.client = mqtt.Client(

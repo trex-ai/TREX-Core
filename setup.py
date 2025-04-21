@@ -17,7 +17,8 @@ setup(
                       "python-rapidjson",
                       "sqlalchemy",
                       "sqlalchemy-utils",
-                      "websockets"
+                      "websockets",
+                      "numpy"
                       ],
     packages=find_packages()
 )

@@ -3,9 +3,6 @@ import asyncio
 import calendar
 import datetime
 import itertools
-import os
-import signal
-import tenacity
 import time
 from cuid2 import Cuid
 from operator import itemgetter
@@ -223,7 +220,7 @@ class Market:
         ]
         self.__client.publish(f'{self.market_id}/start_round',
                               start_msg,
-                              user_property=('to', '^all'),
+                              user_property=[('to', '^all')],
                               qos=2)
 
     async def submit_bid(self, message: dict):
@@ -556,11 +553,11 @@ class Market:
         ]
         self.__client.publish(f'{self.market_id}/{bid['participant_id']}/settled',
                               buyer_message,
-                              user_property=('to', self.__participants[bid['participant_id']]['sid']),
+                              user_property=[('to', self.__participants[bid['participant_id']]['sid'])],
                               qos=2)
         self.__client.publish(f'{self.market_id}/{ask['participant_id']}/settled',
                               seller_message,
-                              user_property=('to', self.__participants[ask['participant_id']]['sid']),
+                              user_property=[('to', self.__participants[ask['participant_id']]['sid'])],
                               qos=2)
         async with self._write_state_lock:
             bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
@@ -854,8 +851,8 @@ class Market:
                     or 'financial' in extra_transactions):
                 self.__client.publish(f'{self.market_id}/{participant_id}/extra_transaction',
                                       extra_transactions,
-                                      user_property=('to', self.__participants[participant_id]['sid']),
-                                      qos=2)
+                                      user_property=[('to', self.__participants[participant_id]['sid'])],
+                                      qos=1)
 
         if self.save_transactions:
             self.__transactions.extend(transactions)

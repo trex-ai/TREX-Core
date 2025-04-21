@@ -87,7 +87,8 @@ class Client(BaseMQTTClient):
 
     async def on_start_round(self, message):
         payload = json.loads(message['payload'])
-        await self.participant.start_round(payload)
+        t = asyncio.create_task(self.participant.start_round(payload))
+        t.add_done_callback(lambda fut: fut.exception())
 
     async def on_ask_success(self, message):
         await self.participant.ask_success(message['payload'])
@@ -100,8 +101,20 @@ class Client(BaseMQTTClient):
         await self.participant.settle_success(payload)
 
     async def on_return_extra_transactions(self, message):
+        packet_id = getattr(message["properties"], "packet_id", None)
+        # === de‑dup ===
+        if packet_id is not None:
+            now = asyncio.get_running_loop().time()
+            # purge stale ids
+            for old_pid in list(self._seen_extra_pids):
+                if now - self._seen_extra_pids[old_pid] > self._pid_cache_seconds:
+                    del self._seen_extra_pids[old_pid]
+            if packet_id in self._seen_extra_pids:
+                return  # duplicate → ignore
+            self._seen_extra_pids[packet_id] = now
+
         payload = json.loads(message['payload'])
-        await self.participant.update_extra_transactions(payload)
+        t = asyncio.create_task(self.participant.update_extra_transactions(payload))
 
     async def on_is_participant_joined(self, message):
         await self.participant.is_participant_joined()
@@ -142,7 +155,7 @@ class Client(BaseMQTTClient):
         self.participant.client.publish(f'{self.participant.market_id}/simulation/participant_ready',
                                         {self.participant.participant_id: True},
                                         qos=2,
-                                        user_property=('to', self.participant.market_sid))
+                                        user_property=[('to', self.participant.market_sid)])
 
     async def on_end_simulation(self, message):
         """Event tells the participant that it can terminate itself when ready.
@@ -152,12 +165,13 @@ class Client(BaseMQTTClient):
                             '',
                             retain=True,
                             qos=2,
-                            user_property=('to', '^all'))
+                            user_property=[('to', '^all')])
         if hasattr(self.participant, 'records'):
             await self.participant.records.close_connection()
         await self.participant.kill()
 
     async def on_get_actions_return(self, message):
+        # print(message['topic'])
         payload = json.loads(message['payload'])
         await self.participant.trader.get_actions_return(payload)
 
