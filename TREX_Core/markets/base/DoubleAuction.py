@@ -11,8 +11,10 @@ from TREX_Core.markets.Grid import Market as Grid
 from TREX_Core.utils import db_utils, source_classifier
 import databases
 
+from abc import ABC, abstractmethod
 
-class Market:
+
+class Market(ABC):
     """MicroTE is a futures trading based market design for transactive energy as part of TREX
 
     The market mechanism here works more like standard futures contracts,

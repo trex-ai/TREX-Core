@@ -13,6 +13,7 @@ from async_lru import alru_cache
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 from gmqtt import Client as MQTTClient
+from abc import ABC, abstractmethod
 
 @dataclass(frozen=True)
 class StorageContext:
@@ -33,7 +34,8 @@ class TraderContext:
     meter:             Dict
     storage:           Optional[StorageContext] = None
 
-class Participant:
+
+class Participant(ABC):
     """
     Participant is the interface layer between local resources and the Market
     """

@@ -32,14 +32,12 @@ class BaseMQTTClient(ABC):
         #         message_or_topic,
         #         payload,
         #         qos,
-        #         retain,
+        #         retain
         #         **kwargs,
         #     )
         # self.client.publish = publish_with_msg_id
 
         self.msg_queue: asyncio.Queue = asyncio.Queue()
-        # self._seen_extra_pids: dict[int, float] = {}  # keep 2 min worth
-        # self._pid_cache_seconds = 120
 
     @abstractmethod
     def on_connect(self, client, flags, rc, properties):
@@ -63,20 +61,6 @@ class BaseMQTTClient(ABC):
         that run alongside the MQTT loop (e.g. controller.monitor()).
         """
         return []
-
-    async def _dedup_msg(self, topic, payload, qos, properties):
-        # {'user_property': [('to', '^all')], 'dup': 0, 'retain': 0}
-        # this following code doesn't work
-        msg_id = properties['user_property'][-1][-1]
-        now = asyncio.get_running_loop().time()
-        # purge stale ids
-        for old_pid in list(self._seen_extra_pids):
-            if now - self._seen_extra_pids[old_pid] > self._pid_cache_seconds:
-                del self._seen_extra_pids[old_pid]
-        if msg_id in self._seen_extra_pids:
-            return None
-        self._seen_extra_pids[msg_id] = now
-        return {"topic": topic, "payload": payload.decode(), "properties": properties}
 
     # ------------------------------------------------------------------ #
     # Internal: queue raw messages
