@@ -8,8 +8,8 @@ from TREX_Core.mqtt.base_gmqtt import BaseMQTTClient
 class Client(BaseMQTTClient):
     """A socket.io client wrapper for participants
     """
-    def __init__(self, server_address, port, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
-        super().__init__(server_address, port, consumers=1)
+    def __init__(self, host, port, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
+        super().__init__(host, port, consumers=1)
         will_message = Message(f'{market_id}/join_market/{participant_id}',
                                '',
                                retain=True,
@@ -17,8 +17,8 @@ class Client(BaseMQTTClient):
         # replace the placeholder client with one that has the will
         self.client = MQTTClient(self.cuid, will_message=will_message)
 
-        Participant = importlib.import_module('TREX_Core.participants.' + kwargs.get('type')).Participant
-        self.participant = Participant(client=self.client,
+        participant = importlib.import_module('TREX_Core.participants.' + kwargs.get('type')).Participant
+        self.participant = participant(client=self.client,
                                        participant_id=participant_id,
                                        market_id=market_id,
                                        profile_db_path=profile_db_path,
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('--configs')
     args = parser.parse_args()
 
-    client = Client(server_address=args.host,
+    client = Client(host=args.host,
                     port=args.port,
                     # participant_type=args.type,
                     participant_id=args.id,

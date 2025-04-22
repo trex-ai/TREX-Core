@@ -7,8 +7,8 @@ from TREX_Core.sim_controller.sim_controller import Controller
 
 class Client(BaseMQTTClient):
     # Initialize client data for sim controller
-    def __init__(self, server_address, port, config):
-        super().__init__(server_address, port, consumers=4)
+    def __init__(self, host, port, config):
+        super().__init__(host, port, consumers=4)
         # Set client to controller class
         self.controller = Controller(self.client, config)
 
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', default='', help='')
     args = parser.parse_args()
 
-    client = Client(server_address=args.host,
+    client = Client(host=args.host,
                     port=args.port,
                     config=json.loads(args.config))
 

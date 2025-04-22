@@ -6,18 +6,18 @@ from TREX_Core.mqtt.base_gmqtt import BaseMQTTClient
 
 
 class Client(BaseMQTTClient):
-    def __init__(self, server_address, port, market_configs):
-        super().__init__(server_address, port, consumers=4)
+    def __init__(self, host, port, market_configs):
+        super().__init__(host, port, consumers=4)
         market_configs = market_configs
         market_configs['market_id'] = market_configs.pop('id', '')
         grid_params = market_configs.pop('grid', {})
 
         try:
-            Market = importlib.import_module('markets.' + market_configs['type']).Market
+            market = importlib.import_module('markets.' + market_configs['type']).Market
         except ImportError:
-            Market = importlib.import_module('TREX_Core.markets.' + market_configs['type']).Market
+            market = importlib.import_module('TREX_Core.markets.' + market_configs['type']).Market
 
-        self.market = Market(client=self.client,
+        self.market = market(client=self.client,
                              **market_configs,
                              grid_params=grid_params)
 
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     parser.add_argument('--configs')
     args = parser.parse_args()
 
-    client = Client(server_address=args.host,
+    client = Client(host=args.host,
                     port=args.port,
                     market_configs=json.loads(args.configs))
     asyncio.run(client.run())
