@@ -221,7 +221,7 @@ class Market:
         self.__client.publish(f'{self.market_id}/start_round',
                               start_msg,
                               user_property=[('to', '^all')],
-                              qos=2)
+                              qos=1)
 
     async def submit_bid(self, message: dict):
         """Processes bids sent from the participants
@@ -554,11 +554,11 @@ class Market:
         self.__client.publish(f'{self.market_id}/{bid['participant_id']}/settled',
                               buyer_message,
                               user_property=[('to', self.__participants[bid['participant_id']]['sid'])],
-                              qos=2)
+                              qos=1)
         self.__client.publish(f'{self.market_id}/{ask['participant_id']}/settled',
                               seller_message,
                               user_property=[('to', self.__participants[ask['participant_id']]['sid'])],
-                              qos=2)
+                              qos=1)
         async with self._write_state_lock:
             bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
             ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
@@ -856,7 +856,7 @@ class Market:
 
         if self.save_transactions:
             self.__transactions.extend(transactions)
-            await self.record_transactions(10000)
+            _ = asyncio.create_task(self.record_transactions(10000))
 
     async def __transfer_energy(self, time_delivery, commit_id, extra_purchase=0, deficit_generation=0):
         # pt, ft = await self.__transfer_energy(time_delivery, commit_id, extra_purchase, deficit_generation)

@@ -610,6 +610,8 @@ class Participant:
                     settled_solar += ask['quantity']
                 if ask['source'] == 'bess':
                     settled_bess += ask['quantity']
+                await asyncio.sleep(0)
+
 
         # step 2. get battery activity
         bess_charge = 0
