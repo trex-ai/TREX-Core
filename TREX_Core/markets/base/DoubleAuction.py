@@ -583,8 +583,8 @@ class Market:
     async def settlement_delivered(self, message):
         # self.__status['round_settle_delivered'].append(commit_id)
         commit_id = message.pop(next(iter(message)))
-        if commit_id in self.__status['round_settle_delivered']:
-            return
+        # if commit_id in self.__status['round_settle_delivered']:
+        #     return
 
         if commit_id not in self.__status['round_settle_delivered']:
             self.__status['round_settle_delivered'][commit_id] = 1
