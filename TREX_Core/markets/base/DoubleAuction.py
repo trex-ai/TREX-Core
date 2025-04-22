@@ -282,30 +282,34 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
-        entry = {
-            'id': entry_id,
-            'participant_id': participant_id,
-            'quantity': quantity,
-            'price': price,
-            'time_submission': self.__time(),
 
-            # 'lock': False
-        }
 
         # create a new time slot container if the time slot doesn't exist
         time_delivery = tuple(message[4])
         async with self._write_state_lock:
-            if time_delivery not in self.__open:
-                self.__open[time_delivery] = {
-                    'bid': []
-                }
+            # if time_delivery not in self.__open:
+            #     self.__open[time_delivery] = {
+            #         'bid': dict()
+            #     }
+            #
+            # # if the time slot exists but no entry exist, create the entry container
+            # if 'bid' not in self.__open[time_delivery]:
+            #     self.__open[time_delivery]['bid'] = dict()
 
-            # if the time slot exists but no entry exist, create the entry container
-            if 'bid' not in self.__open[time_delivery]:
-                self.__open[time_delivery]['bid'] = []
+            bucket = self.__open.setdefault(time_delivery, {})
+            bids = bucket.setdefault("bid", {})
+            if entry_id in bids:
+                return
 
-            # add open entry
-            self.__open[time_delivery]['bid'].append(entry)
+                # add open entry
+            entry = {
+                'id': entry_id,
+                'participant_id': participant_id,
+                'quantity': quantity,
+                'price': price,
+                'time_submission': self.__time(),
+            }
+            bids[entry_id] = entry
         return entry_id, participant_id, self.__participants[participant_id]['sid']
 
     async def submit_ask(self, message: dict):
@@ -385,31 +389,37 @@ class Market:
         # if entry is valid, then update entry with market specific info
         # convert kwh price to token price
 
-        entry = {
-            'id': entry_id,
-            'participant_id': participant_id,
-            'quantity': quantity,
-            'price': price,
-            'source': source,
-            'time_submission': self.__time(),
-
-            # 'lock': False
-        }
-
         # create a new time slot container if the time slot doesn't exist
         time_delivery = tuple(message[4])
         async with self._write_state_lock:
-            if time_delivery not in self.__open:
-                self.__open[time_delivery] = {
-                    'ask': []
-                }
+            # if time_delivery not in self.__open:
+            #     self.__open[time_delivery] = {
+            #         'ask': dict()
+            #     }
+            #
+            # # if the time slot exists but no entry exist, create the entry container
+            # if 'ask' not in self.__open[time_delivery]:
+            #     self.__open[time_delivery]['ask'] = dict()
+            #
+            # # add open entry
+            # self.__open[time_delivery]['ask'][entry_id] = entry
 
-            # if the time slot exists but no entry exist, create the entry container
-            if 'ask' not in self.__open[time_delivery]:
-                self.__open[time_delivery]['ask'] = []
+            bucket = self.__open.setdefault(time_delivery, {})
+            asks = bucket.setdefault('ask', {})
+            if entry_id in asks:
+                return
+                # add open entry
 
-            # add open entry
-            self.__open[time_delivery]['ask'].append(entry)
+            entry = {
+                'id': entry_id,
+                'participant_id': participant_id,
+                'quantity': quantity,
+                'price': price,
+                'source': source,
+                'time_submission': self.__time(),
+            }
+            asks[entry_id] = entry
+
         # print(entry_id, participant_id, self.__participants[participant_id]['sid'])
         return entry_id, participant_id, self.__participants[participant_id]['sid']
 
@@ -441,10 +451,10 @@ class Market:
         # sort bids by decreasing price and asks by increasing price
         # def filter_bids_asks():
         self.__open[time_delivery]['ask'][:] = \
-            sorted([ask for ask in self.__open[time_delivery]['ask'] if ask['quantity'] > 0],
+            sorted([ask for ask in self.__open[time_delivery]['ask'].values() if ask['quantity'] > 0],
                    key=itemgetter('price'), reverse=False)
         self.__open[time_delivery]['bid'][:] = \
-            sorted([bid for bid in self.__open[time_delivery]['bid'] if bid['quantity'] > 0],
+            sorted([bid for bid in self.__open[time_delivery]['bid'].values() if bid['quantity'] > 0],
                    key=itemgetter('price'), reverse=True)
 
         # await asyncio.get_event_loop().run_in_executor(filter_bids_asks)
@@ -461,7 +471,11 @@ class Market:
 
             if bid['quantity'] <= 0 or ask['quantity'] <= 0:
                 continue
+
             await self.settle(bid, ask, time_delivery)
+
+            if i & 1000:
+                await asyncio.sleep(0)
 
     async def settle(self, bid: dict, ask: dict, time_delivery: tuple):
         """Performs settlement for bid/ask pairs found during the matching process.
