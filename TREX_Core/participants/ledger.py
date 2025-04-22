@@ -1,3 +1,6 @@
+import asyncio
+
+
 class Ledger:
     """Ledger helps participants keep track of accepted bids/asks, and successsful settlements.
 
@@ -159,6 +162,7 @@ class Ledger:
                     # note how action is converted from plural to singular (asks -> ask, bids -> bid).
                     # This only works because bid/ask have the same character length
                     transactions.append((action[:3], quantity, price, source))
+            await asyncio.sleep(0)
         return transactions
     
     async def clear_history(self, time_interval):
