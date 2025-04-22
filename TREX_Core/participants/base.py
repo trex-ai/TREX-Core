@@ -332,10 +332,11 @@ class Participant:
         # print(message)
         commit_id = await self.__ledger.settle_success(message)
         # if commit_id == message['commit_id']:
-        self.__client.publish(f'{self.market_id}/settlement_delivered',
-                              {self.participant_id: commit_id},
-                              user_property=[('to', self.market_sid)],
-                              qos=2)
+        if commit_id:
+            self.__client.publish(f'{self.market_id}/settlement_delivered',
+                                  {self.participant_id: commit_id},
+                                  user_property=[('to', self.market_sid)],
+                                  qos=1)
         # return message['commit_id']
 
     async def __update_time(self, message):
