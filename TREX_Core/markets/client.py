@@ -108,11 +108,15 @@ class Client(BaseMQTTClient):
         self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=1)
 
     async def on_start_round(self, message):
+        if self.market.round_in_progress:
+            return
+        self.market.round_in_progress = True
         payload = json.loads(message['payload'])
         step_task = asyncio.create_task(self.market.step(payload['duration'], sim_params=payload))
         step_task.add_done_callback(self.on_round_done)
 
     def on_round_done(self, task):
+        self.market.round_in_progress = False
         self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=1)
 
     async def on_start_episode(self, message):

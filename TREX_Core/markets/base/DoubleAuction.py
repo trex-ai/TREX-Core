@@ -84,6 +84,7 @@ class Market(ABC):
         self.__pending_write_tasks = []
 
         # Condition for round completion
+        self.round_in_progress = False
         self.__round_condition = asyncio.Condition()
 
     def __time(self):
