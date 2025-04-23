@@ -154,7 +154,7 @@ class Client(BaseMQTTClient):
 
         self.participant.client.publish(f'{self.participant.market_id}/simulation/participant_ready',
                                         {self.participant.participant_id: True},
-                                        qos=2,
+                                        qos=1,
                                         user_property=[('to', self.participant.market_sid)])
 
     async def on_end_simulation(self, message):
@@ -164,7 +164,7 @@ class Client(BaseMQTTClient):
         self.client.publish(f'{self.participant.market_id}/join_market/{self.participant.participant_id}',
                             '',
                             retain=True,
-                            qos=2,
+                            qos=1,
                             user_property=[('to', '^all')])
         if hasattr(self.participant, 'records'):
             await self.participant.records.close_connection()

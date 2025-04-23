@@ -105,7 +105,7 @@ class Client(BaseMQTTClient):
                                 qos=2)
 
     async def on_is_market_online(self, message):
-        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=2)
+        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=1)
 
     async def on_start_round(self, message):
         payload = json.loads(message['payload'])

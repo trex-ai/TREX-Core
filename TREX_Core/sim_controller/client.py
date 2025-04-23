@@ -21,7 +21,7 @@ class Client(BaseMQTTClient):
             (f'{market_id}/simulation/participant_ready', 2),
             (f'{market_id}/simulation/market_ready', 2),
             (f'{market_id}/algorithm/policy_server_ready', 2),
-            ('debug/sim_controller_status', 2),
+            (f'{market_id}/debug/sim_controller_status', 2),
         ]
 
         self.dispatch = {

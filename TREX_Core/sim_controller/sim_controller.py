@@ -313,13 +313,13 @@ class Controller:
 
             if not self.status['market_online']:
                 # await self.__client.emit('is_market_online')
-                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '', qos=2)
+                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '', qos=1)
                 continue
 
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
                 self.__client.publish(f'{self.market_id}/simulation/is_participant_joined', '',
-                                      qos=2,
+                                      qos=1,
                                       user_property=[('to', '^all')])
                 continue
 
@@ -327,7 +327,7 @@ class Controller:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
-                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '', qos=2)
+                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '', qos=1)
                 continue
 
             # await self.update_sim_paths()
@@ -462,7 +462,7 @@ class Controller:
             self.__client.publish(f'{self.market_id}/simulation/start_episode',
                                   self.__episode,
                                   user_property=[('to', '^all')],
-                                  qos=2)
+                                  qos=1)
             self.status['episode_ended'] = False
 
         # Beginning new time step
@@ -481,7 +481,7 @@ class Controller:
             self.__client.publish(f'{self.market_id}/simulation/start_round',
                                   message,
                                   user_property=[('to', '^all')],
-                                  qos=2)
+                                  qos=1)
         # end of episode
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -527,7 +527,7 @@ class Controller:
                 self.__client.publish(f'{self.market_id}/simulation/end_episode',
                                       message,
                                       user_property=[('to', '^all')],
-                                      qos=2)
+                                      qos=1)
                 await self.resume_monitor()
             else:
                 # self.__generation > self.__generations:
@@ -549,7 +549,7 @@ class Controller:
                 # await self.delay(20)
                 self.__client.publish(f'{self.market_id}/simulation/end_simulation', self.market_id,
                                       user_property=[('to', '^all')],
-                                      qos=2)
+                                      qos=1)
                 await self.delay(1)
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)

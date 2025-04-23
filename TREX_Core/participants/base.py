@@ -193,7 +193,7 @@ class Participant(ABC):
         self.__client.publish(f'{self.market_id}/join_market/{self.participant_id}',
                               client_data,
                               retain=True,
-                              qos=2,
+                              qos=1,
                               user_property=[('to', '^all')])
         # print('joining market')
         # await asyncio.sleep(2)
@@ -283,7 +283,7 @@ class Participant(ABC):
         self.__client.publish(f'{self.market_id}/bid',
                               bid_entry,
                               user_property=[('to', self.market_sid)],
-                              qos=2)
+                              qos=1)
 
     # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -322,7 +322,7 @@ class Participant(ABC):
         self.__client.publish(f'{self.market_id}/ask',
                               ask_entry,
                               user_property=[('to', self.market_sid)],
-                              qos=2)
+                              qos=1)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -460,7 +460,7 @@ class Participant(ABC):
         self.__client.publish(f'{self.market_id}/simulation/end_turn',
                               self.participant_id,
                               user_property=[('to', self.market_sid)],
-                              qos=2)
+                              qos=1)
 
     async def make_observations_for_records(self, time_interval):
         generation, consumption = await self.__read_profile(time_interval)
@@ -563,7 +563,7 @@ class Participant(ABC):
         self.__client.publish(f'{self.market_id}/meter',
                               message,
                               user_property=[('to', self.market_sid)],
-                              qos=2)
+                              qos=1)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -757,7 +757,7 @@ class Participant(ABC):
             self.__client.publish(f'{self.market_id}/simulation/participant_joined',
                                   self.participant_id,
                                   user_property=[('to', self.market_sid)],
-                                  qos=2)
+                                  qos=1)
 
     @property
     def client(self):
