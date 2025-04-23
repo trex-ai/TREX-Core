@@ -103,6 +103,7 @@ class Client(BaseMQTTClient):
         await self.controller.update_turn_status(message['payload'])
 
     async def on_sim_controller_status(self, message):
+        self.controller.status['current_step'] = self.controller.current_step,
         pprint(self.controller.status)
     # print(msg_queue)
 

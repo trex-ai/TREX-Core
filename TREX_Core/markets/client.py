@@ -117,6 +117,11 @@ class Client(BaseMQTTClient):
 
     def on_round_done(self, task):
         self.market.round_in_progress = False
+        try:
+            task_result = task.result()
+        except Exception as exc:
+            # 2️⃣ log the hidden exception so you know why the round died
+            print(f"[market] step() crashed: {exc!r}")
         self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=1)
 
     async def on_start_episode(self, message):

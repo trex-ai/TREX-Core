@@ -85,7 +85,7 @@ class Market(ABC):
 
         # Condition for round completion
         self.round_in_progress = False
-        self.__round_condition = asyncio.Condition()
+        self.__round_condition = asyncio.Condition(self._write_state_lock)
 
     def __time(self):
         """Return time based on time convention
@@ -177,15 +177,15 @@ class Market(ABC):
 
     # Initialize variables for new time step
     async def __reset_status(self):
-        async with self._write_state_lock:
+        # async with self._write_state_lock:
+        async with self.__round_condition:
             self.__status['round_active'] = False
             self.__status['round_metered'] = 0
             self.__status['round_matched'] = False
             self.__status['round_settled'].clear()
             self.__status['round_settle_delivered'].clear()
 
-        # Notify any waiters after resetting status to ensure they re-check with new status
-        async with self.__round_condition:
+            # Notify any waiters after resetting status to ensure they re-check with new status
             self.__round_condition.notify_all()
 
     async def get_market_info(self):
@@ -588,14 +588,14 @@ class Market(ABC):
         commit_id = message.pop(next(iter(message)))
         # if commit_id in self.__status['round_settle_delivered']:
         #     return
-
-        if commit_id not in self.__status['round_settle_delivered']:
-            self.__status['round_settle_delivered'][commit_id] = 1
-        else:
-            self.__status['round_settle_delivered'][commit_id] += 1
+        async with self.__round_condition:
+            if commit_id not in self.__status['round_settle_delivered']:
+                self.__status['round_settle_delivered'][commit_id] = 1
+            else:
+                self.__status['round_settle_delivered'][commit_id] += 1
 
         # Notify waiting tasks that a settlement has been delivered
-        async with self.__round_condition:
+        # async with self.__round_condition:
             self.__round_condition.notify_all()
 
     async def meter_data(self, message):
@@ -628,7 +628,8 @@ class Market(ABC):
         time_delivery = tuple(message[1])
         meter = message[2]
 
-        async with self._write_state_lock:
+        # async with self._write_state_lock:
+        async with self.__round_condition:
             self.__participants[participant_id]['meter'][time_delivery] = meter
             self.__status['round_metered'] += 1
 
@@ -636,7 +637,7 @@ class Market(ABC):
 
         # print(self.__status['round_metered'], self.__status['active_participants'])
 
-        async with self.__round_condition:
+        # async with self.__round_condition:
             self.__round_condition.notify_all()
 
     async def __process_settlements(self, time_delivery, source_type):
@@ -1180,11 +1181,28 @@ class Market(ABC):
         return True
 
     # Replace the polling-based implementation with condition-based
-    async def __ensure_round_complete(self):
+    async def __ensure_round_complete(self, timeout=30):
         """Wait for all round conditions to be met"""
-        async with self.__round_condition:
-            await self.__round_condition.wait_for(self.__is_round_complete)
-            return True
+
+        # async with self.__round_condition:
+        #     await self.__round_condition.wait_for(self.__is_round_complete)
+        #     return True
+
+        try:
+            async with self.__round_condition:
+                await asyncio.wait_for(
+                    self.__round_condition.wait_for(self.__is_round_complete),
+                    timeout=timeout
+                )
+            return True  # success
+        except asyncio.TimeoutError:
+            # 🔎  dump diagnostics so you know which gate is stuck
+            print("[market] round timed-out")
+            print(self.__status)
+            print("settled =", self.__status["round_settled"])
+            print("delivered =", self.__status["round_settle_delivered"])
+            # decide: raise? force-close round? notify supervisor?
+            return False
 
     # Finish all processes and remove all unnecessary/ remaining records in preparation for a new time step, begin processes for next step
     async def step(self, timeout=60, sim_params=None):

@@ -565,3 +565,8 @@ class Controller:
         if not self.__monitor_running.is_set():
             # print("Resuming monitor - simulation paused/between episodes")
             self.__monitor_running.set()
+
+    @property
+    def current_step(self):
+        """Read-only property."""
+        return self.__current_step
