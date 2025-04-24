@@ -1,5 +1,5 @@
 {
-  "version": "5.0.0",
+  "version": "5.1.0",
   "study": {
     "name": "sim_name", // the simulation name defines the database name as well as local storage paths.
     "description": "",  // (optional) a description the simulation
@@ -7,6 +7,21 @@
     "timezone": "America/Vancouver",
     "days": 30,
     "episodes": 10
+  },
+  //  "records": {
+//    "time": {"type": "Integer", "primary": true},
+//    "participant_id": {"type": "String", "primary": true},
+//    "meter": {"type": "JSON"},
+//    "next_observations": {"type": "JSON"},
+//    "next_actions": {"type": "JSON"},
+//    "remaining_energy":{"type": "Integer"},
+//    "state_of_charge":{"type": "Float"}
+//  },
+  "database": {
+    "host": "localhost",
+//    "port": 1883,
+    "connector": "postgresql+psycopg",
+    "profiles_db": "profiles"
   },
   // training defines special parameters for certain generations.
   // currently used for some experimental agents to "warm up" at the beginning
