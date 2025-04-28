@@ -1,10 +1,8 @@
 import ast
 import asyncio
 import importlib
-# import json
 
 import databases
-import tenacity
 import os
 import signal
 from TREX_Core.participants import ledger
@@ -12,13 +10,37 @@ from TREX_Core.utils import db_utils, utils
 from cuid2 import Cuid
 
 from async_lru import alru_cache
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional
+from gmqtt import Client as MQTTClient
+from abc import ABC, abstractmethod
+
+@dataclass(frozen=True)
+class StorageContext:
+    get_info:        Callable
+    check_schedule:  Callable
+
+@dataclass(frozen=True)
+class TraderContext:
+    client:            MQTTClient
+    participant_id:    str
+    market_id:         str
+    timing:            Dict
+    ledger:            ledger.Ledger
+    extra_tx:          Dict
+    market_info:       Dict
+    read_profile:      Callable
+    get_profile_stats: Callable
+    meter:             Dict
+    storage:           Optional[StorageContext] = None
 
 
-class Participant:
+class Participant(ABC):
     """
     Participant is the interface layer between local resources and the Market
     """
-    def __init__(self, sio_client, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
+
+    def __init__(self, client, participant_id, market_id, profile_db_path, output_db_path, **kwargs):
         # Initialize participant variables
         self.server_online = False
         self.run = True
@@ -26,10 +48,7 @@ class Participant:
         self.market_connected = False
         self.participant_id = str(participant_id)
         self.sid = kwargs.get('sid', market_id)
-        self.__client = sio_client
-        self.client = sio_client
-
-
+        self.__client = client
         self.__profile = {
             'db_path': profile_db_path
         }
@@ -44,20 +63,20 @@ class Participant:
 
         # Initialize trader variables and functions
         trader_params = kwargs.get('trader')
-        trader_fns = {
-            'client': self.__client,
-            'id': self.participant_id,
-            'market_id': self.market_id,
-            'timing': self.__timing,
-            'ledger': self.__ledger,
-            'extra_transactions': self.__extra_transactions,
-            'market_info': self.__market_info,
-            'read_profile': self.__read_profile,
-            'get_profile_stats': self.__get_profile_stats,
-            'meter': self.__meter
-        }
-
+        # trader_fns = {
+        #     'client': self.__client,
+        #     'id': self.participant_id,
+        #     'market_id': self.market_id,
+        #     'timing': self.__timing,
+        #     'ledger': self.__ledger,
+        #     'extra_transactions': self.__extra_transactions,
+        #     'market_info': self.__market_info,
+        #     'read_profile': self.__read_profile,
+        #     'get_profile_stats': self.__get_profile_stats,
+        #     'meter': self.__meter
+        # }
         storage_params = kwargs.get('storage')
+        storage_ctx = None
         if storage_params is not None:
             storage_type = storage_params.pop('type', None)
             # self.storage_fns = {
@@ -66,12 +85,29 @@ class Participant:
             # }
             self.storage = importlib.import_module('TREX_Core.devices.' + storage_type).Storage(**storage_params)
             self.storage.timing = self.__timing
-            trader_fns['storage'] = {
-                'info': self.storage.get_info,
-                'check_schedule': self.storage.check_schedule
-                # 'schedule_energy': self.storage.schedule_energy
-            }
+            # trader_fns['storage'] = {
+            #     'info': self.storage.get_info,
+            #     'check_schedule': self.storage.check_schedule
+            #     # 'schedule_energy': self.storage.schedule_energy
+            # }
+            storage_ctx = StorageContext(
+                get_info=self.storage.get_info,
+                check_schedule=self.storage.check_schedule
+            )
 
+        ctx = TraderContext(
+            client=self.__client,
+            participant_id=self.participant_id,
+            market_id=self.market_id,
+            timing=self.__timing,
+            ledger=self.__ledger,
+            extra_tx=self.__extra_transactions,
+            market_info=self.__market_info,
+            read_profile=self.__read_profile,
+            get_profile_stats=self.__get_profile_stats,
+            meter=self.__meter,
+            storage=storage_ctx
+        )
         trader_type = trader_params.pop('type', None)
         # if trader_type == 'remote_agent':
         #     trader_fns['emit'] = self.__client.emit
@@ -79,7 +115,7 @@ class Participant:
             Trader = importlib.import_module('traders.' + trader_type).Trader
         except ImportError:
             Trader = importlib.import_module('TREX_Core.traders.' + trader_type).Trader
-        self.trader = Trader(trader_fns=trader_fns, **trader_params)
+        self.trader = Trader(context=ctx, **trader_params)
 
         self.__profile_params = {
             'generation_scale': kwargs.get('generation', {}).get('scale', 1),
@@ -97,7 +133,7 @@ class Participant:
 
         # if 'market_ns' in kwargs:
         #     NSMarket = importlib.import_module(kwargs['market_ns']).NSMarket
-            # self.__client.register_namespace(NSMarket(self))
+        # self.__client.register_namespace(NSMarket(self))
 
     # async def delay(self, s):
     #     await self.__client.sleep(s)
@@ -117,7 +153,7 @@ class Participant:
         """
         self.__profile['db_path'] = db_path
         self.__profile['db'] = databases.Database(db_path)
-        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params\
+        profile_name = self.__profile_params['synthetic_profile'] if 'synthetic_profile' in self.__profile_params \
             else self.participant_id
         self.__profile['name'] = profile_name
         self.__profile['db_table'] = db_utils.get_table(db_path, profile_name)
@@ -140,7 +176,7 @@ class Participant:
         await self.open_db(self.__profile['db_path'])
         # await self.get_profile_stats(self.__profile['db_path'])
 
-    @tenacity.retry(wait=tenacity.wait_fixed(3))
+    # @tenacity.retry(wait=tenacity.wait_fixed(3))
     async def join_market(self):
         """Emits event to join a Market
         """
@@ -154,12 +190,15 @@ class Participant:
             'market_id': self.market_id
         }
         # await self.__client.emit('join_market', client_data, callback=self.register_success)
-        self.__client.publish('/'.join([self.market_id, 'join_market']), client_data,
-                              user_property=('to', '^all'))
+        self.__client.publish(f'{self.market_id}/join_market/{self.participant_id}',
+                              client_data,
+                              retain=True,
+                              qos=1,
+                              user_property=[('to', '^all')])
         # print('joining market')
         # await asyncio.sleep(2)
-        if not self.market_connected:
-            raise tenacity.TryAgain
+        # if not self.market_connected:
+        #     raise tenacity.TryAgain
 
     # Continuously attempt to join server
     # async def register_success(self, success):
@@ -243,8 +282,8 @@ class Participant:
         # await self.__client.emit('bid', bid_entry)
         self.__client.publish(f'{self.market_id}/bid',
                               bid_entry,
-                              user_property=('to', self.market_sid),
-                              qos=0)
+                              user_property=[('to', self.market_sid)],
+                              qos=1)
 
     # @tenacity.retry(wait=tenacity.wait_random(0, 3))
     async def ask(self, time_delivery=None, **kwargs):
@@ -282,8 +321,8 @@ class Participant:
         }
         self.__client.publish(f'{self.market_id}/ask',
                               ask_entry,
-                              user_property=('to', self.market_sid),
-                              qos=0)
+                              user_property=[('to', self.market_sid)],
+                              qos=1)
 
     async def ask_success(self, message):
         await self.__ledger.ask_success(message)
@@ -295,10 +334,11 @@ class Participant:
         # print(message)
         commit_id = await self.__ledger.settle_success(message)
         # if commit_id == message['commit_id']:
-        self.__client.publish(f'{self.market_id}/settlement_delivered',
-                              {self.participant_id: commit_id},
-                              user_property=('to', self.market_sid),
-                              qos=0)
+        if commit_id:
+            self.__client.publish(f'{self.market_id}/settlement_delivered',
+                                  {self.participant_id: commit_id},
+                                  user_property=[('to', self.market_sid)],
+                                  qos=1)
         # return message['commit_id']
 
     async def __update_time(self, message):
@@ -373,7 +413,6 @@ class Participant:
         #     'next_settle': (self.__grid.buy_price(), self.__grid.sell_price())
         # }
 
-
     async def start_round(self, message):
 
         """Sequence of actions during each round
@@ -420,8 +459,8 @@ class Participant:
             await self.records.save(1000)
         self.__client.publish(f'{self.market_id}/simulation/end_turn',
                               self.participant_id,
-                              user_property=('to', self.market_sid),
-                              qos=0)
+                              user_property=[('to', self.market_sid)],
+                              qos=1)
 
     async def make_observations_for_records(self, time_interval):
         generation, consumption = await self.__read_profile(time_interval)
@@ -438,7 +477,6 @@ class Participant:
 
         # print(obs_dict)
         return obs_dict
-
 
     @alru_cache
     async def __read_profile(self, time_interval):
@@ -524,8 +562,8 @@ class Participant:
         message = [self.participant_id, time_interval, self.__meter]
         self.__client.publish(f'{self.market_id}/meter',
                               message,
-                              user_property=('to', self.market_sid),
-                              qos=0)
+                              user_property=[('to', self.market_sid)],
+                              qos=1)
         return True
 
     async def __allocate_energy(self, time_interval):
@@ -575,6 +613,8 @@ class Participant:
                     settled_solar += ask['quantity']
                 if ask['source'] == 'bess':
                     settled_bess += ask['quantity']
+                await asyncio.sleep(0)
+
 
         # step 2. get battery activity
         bess_charge = 0
@@ -696,7 +736,7 @@ class Participant:
         self.__timing.clear()
 
     async def kill(self):
-        #TODO: add final actions to do for trader before killing if exists
+        # TODO: add final actions to do for trader before killing if exists
         if hasattr(self.trader, 'kill'):
             await self.trader.kill()
         await asyncio.sleep(5)
@@ -716,5 +756,9 @@ class Participant:
         if self.market_connected:
             self.__client.publish(f'{self.market_id}/simulation/participant_joined',
                                   self.participant_id,
-                                  user_property=('to', self.market_sid),
-                                  qos=0)
+                                  user_property=[('to', self.market_sid)],
+                                  qos=1)
+
+    @property
+    def client(self):
+        return self.__client

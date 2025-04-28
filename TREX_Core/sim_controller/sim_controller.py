@@ -31,8 +31,8 @@ class Controller:
     The sim controller has special permission to see when participants join the market
     '''
     # Intialize client related data
-    def __init__(self, sio_client, config, **kwargs):
-        self.__client = sio_client
+    def __init__(self, client, config, **kwargs):
+        self.__client = client
         self.__config = config
 
         # Add monitor control event
@@ -110,9 +110,7 @@ class Controller:
             self.records = Records(db_string=self.__config['study']['output_database'],
                                    columns=config['records'])
 
-            # print(vars(self.records))
-            # self.records.create_table()
-        # print(hasattr(self, 'records'), getattr(self, 'records'))
+        self._write_state_lock = asyncio.Lock()
 
 
     async def delay(self, s):
@@ -148,15 +146,15 @@ class Controller:
 
     # Initialize data for participant turns
     def make_participant_tracker(self):
-        self.__turn_control['total'] = len(self.__config['participants'])
-        for participant_id in list(self.__config['participants']):
-            self.__participants[participant_id] = {
-                'online': False,
-                'turn_end': False,
-                'ready': False
-                # 'weights_loaded': False,
-                # 'weights_saved': False
-            }
+            self.__turn_control['total'] = len(self.__config['participants'])
+            for participant_id in list(self.__config['participants']):
+                self.__participants[participant_id] = {
+                    'online': False,
+                    'turn_end': False,
+                    'ready': False
+                    # 'weights_loaded': False,
+                    # 'weights_saved': False
+                }
 
     # Set intial generation data folder
     # @tenacity.retry(wait=tenacity.wait_fixed(5)+tenacity.wait_random(0, 5))
@@ -185,7 +183,7 @@ class Controller:
 
     # Register client in server
     async def register(self):
-        self.status['registered_on_server'] = True
+            self.status['registered_on_server'] = True
         # client_data = {
         #     'id': '',
         #     'market_id': self.__config['market']['id']
@@ -201,28 +199,29 @@ class Controller:
 
     # Track ending of turns
     async def update_turn_status(self, participant_id):
-        if participant_id in self.__participants:
-            self.__participants[participant_id]['turn_end'] = True
-            self.__turn_control['ended'] += 1
+        async with self._write_state_lock:
+            if participant_id in self.__participants:
+                self.__participants[participant_id]['turn_end'] = True
+                self.__turn_control['ended'] += 1
 
-        if self.__turn_control['ended'] < self.__turn_control['total']:
-            return
+            if self.__turn_control['ended'] < self.__turn_control['total']:
+                return
 
-        if self.__has_policy_clients and not self.status['policy_server_ready']:
-            return
+            if self.__has_policy_clients and not self.status['policy_server_ready']:
+                return
 
-        if self.status['market_turn_end']:
-            await self.__advance_turn()
+            if self.status['market_turn_end']:
+                await self.__advance_turn()
         # pprint(self.status)
 
     def __reset_turn_trackers(self):
-        self.status['market_turn_end'] = False
-        for participant_id in self.__participants:
-            self.__participants[participant_id]['turn_end'] = False
-        self.__turn_control['ended'] = 0
+            self.status['market_turn_end'] = False
+            for participant_id in self.__participants:
+                self.__participants[participant_id]['turn_end'] = False
+            self.__turn_control['ended'] = 0
 
-        if self.__has_policy_clients:
-            self.status['policy_server_ready'] = False
+            if self.__has_policy_clients:
+                self.status['policy_server_ready'] = False
 
     async def __advance_turn(self):
         # Once all participants have gone through their turn,
@@ -240,37 +239,39 @@ class Controller:
 
     # Update tracker when participant is active
     async def participant_status(self, participant_id, status, condition):
-        if participant_id in self.__participants:
-            last_condition = self.__participants[participant_id][status]
-            if condition == last_condition:
-                return
-            self.__participants[participant_id][status] = condition
-            if condition:
-                self.__turn_control[status] = min(self.__turn_control['total'], self.__turn_control[status] + 1)
+        async with self._write_state_lock:
+            if participant_id in self.__participants:
+                last_condition = self.__participants[participant_id][status]
+                if condition == last_condition:
+                    return
+                self.__participants[participant_id][status] = condition
+                if condition:
+                    self.__turn_control[status] = min(self.__turn_control['total'], self.__turn_control[status] + 1)
+                else:
+                    self.__turn_control[status] = max(0, self.__turn_control[status] - 1)
+            if self.__turn_control[status] < self.__turn_control['total']:
+                self.status['participants_' + status] = False
             else:
-                self.__turn_control[status] = max(0, self.__turn_control[status] - 1)
-        if self.__turn_control[status] < self.__turn_control['total']:
-            self.status['participants_' + status] = False
-        else:
-            self.status['participants_' + status] = True
+                self.status['participants_' + status] = True
 
     # Update tracker when participant is active
     async def participant_online(self, participant_id, online):
-        if not self.__participants.get(participant_id):
-            return
-        if not self.__participants[participant_id]['online'] ^ online:
-            return
-        self.__participants[participant_id]['online'] = online
-        if online:
-            self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
-        else:
-            self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
-            self.status['sim_interrupted'] = True
-            self.status['sim_started'] = False
-        if self.__turn_control['online'] < self.__turn_control['total']:
-            self.status['participants_online'] = False
-        else:
-            self.status['participants_online'] = True
+        async with self._write_state_lock:
+            if not self.__participants.get(participant_id):
+                return
+            if not self.__participants[participant_id]['online'] ^ online:
+                return
+            self.__participants[participant_id]['online'] = online
+            if online:
+                self.__turn_control['online'] = min(self.__turn_control['total'], self.__turn_control['online'] + 1)
+            else:
+                self.__turn_control['online'] = max(0, self.__turn_control['total'] - 1)
+                self.status['sim_interrupted'] = True
+                self.status['sim_started'] = False
+            if self.__turn_control['online'] < self.__turn_control['total']:
+                self.status['participants_online'] = False
+            else:
+                self.status['participants_online'] = True
 
     async def monitor(self):
         first_cycle = True
@@ -312,20 +313,21 @@ class Controller:
 
             if not self.status['market_online']:
                 # await self.__client.emit('is_market_online')
-                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '')
+                self.__client.publish(f'{self.market_id}/simulation/is_market_online', '', qos=1)
                 continue
 
             if not self.status['participants_online']:
                 # await self.__client.emit('re_register_participant')
                 self.__client.publish(f'{self.market_id}/simulation/is_participant_joined', '',
-                                      user_property=('to', '^all'))
+                                      qos=1,
+                                      user_property=[('to', '^all')])
                 continue
 
             if not self.status['market_ready']:
                 continue
 
             if self.__has_policy_clients and not self.status['policy_server_ready']:
-                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '')
+                self.__client.publish(f'{self.market_id}/simulation/is_policy_server_online', '', qos=1)
                 continue
 
             # await self.update_sim_paths()
@@ -459,13 +461,13 @@ class Controller:
 
             self.__client.publish(f'{self.market_id}/simulation/start_episode',
                                   self.__episode,
-                                  user_property=('to', '^all'),
-                                  qos=0)
+                                  user_property=[('to', '^all')],
+                                  qos=1)
             self.status['episode_ended'] = False
 
         # Beginning new time step
         if self.__current_step <= self.__end_step:
-            await self.__print_step_time(self.__end_step/10)
+            await self.__print_step_time(self.__end_step)
             self.__current_step += 1
 
             message = {
@@ -478,8 +480,8 @@ class Controller:
             # print(self.__current_step, self.__end_step)
             self.__client.publish(f'{self.market_id}/simulation/start_round',
                                   message,
-                                  user_property=('to', '^all'),
-                                  qos=0)
+                                  user_property=[('to', '^all')],
+                                  qos=1)
         # end of episode
         elif self.__current_step == self.__end_step + 1:
             self.__turn_control.update({
@@ -524,8 +526,8 @@ class Controller:
             # if self.__episode <= self.__episodes:
                 self.__client.publish(f'{self.market_id}/simulation/end_episode',
                                       message,
-                                      user_property=('to', '^all'),
-                                      qos=0)
+                                      user_property=[('to', '^all')],
+                                      qos=1)
                 await self.resume_monitor()
             else:
                 # self.__generation > self.__generations:
@@ -546,8 +548,8 @@ class Controller:
                 # await self.__client.emit('end_simulation')
                 # await self.delay(20)
                 self.__client.publish(f'{self.market_id}/simulation/end_simulation', self.market_id,
-                                      user_property=('to', '^all'),
-                                      qos=0)
+                                      user_property=[('to', '^all')],
+                                      qos=1)
                 await self.delay(1)
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)
@@ -563,3 +565,8 @@ class Controller:
         if not self.__monitor_running.is_set():
             # print("Resuming monitor - simulation paused/between episodes")
             self.__monitor_running.set()
+
+    @property
+    def current_step(self):
+        """Read-only property."""
+        return self.__current_step

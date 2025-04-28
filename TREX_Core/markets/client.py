@@ -1,208 +1,148 @@
 import asyncio
 import json
-# from asyncio import Queue
 import os
 import signal
-from cuid2 import Cuid as cuid
-from gmqtt import Client as MQTTClient
-
-# if os.name == 'posix':
-#     import uvloop
-#
-#     uvloop.install()
-
-STOP = asyncio.Event()
+from TREX_Core.mqtt.base_gmqtt import BaseMQTTClient
 
 
-class Client:
-    def __init__(self, server_address, market_configs):
-        # Initialize client-server data
-        self.server_address = server_address
+class Client(BaseMQTTClient):
+    def __init__(self, host, port, market_configs):
+        super().__init__(host, port, consumers=4)
         market_configs = market_configs
         market_configs['market_id'] = market_configs.pop('id', '')
         grid_params = market_configs.pop('grid', {})
 
-        self.client = MQTTClient(cuid(length=10).generate())
-
-        # Initialize market information
         try:
-            Market = importlib.import_module('markets.' + market_configs['type']).Market
+            market = importlib.import_module('markets.' + market_configs['type']).Market
         except ImportError:
-            Market = importlib.import_module('TREX_Core.markets.' + market_configs['type']).Market
+            market = importlib.import_module('TREX_Core.markets.' + market_configs['type']).Market
 
-        self.market = Market(client=self.client,
+        self.market = market(client=self.client,
                              **market_configs,
                              grid_params=grid_params)
 
+        market_id = self.market.market_id
+        self.SUBS = [
+            (f'{market_id}', 2),
+            (f'{market_id}/join_market/+', 2),
+            (f'{market_id}/{market_id}', 2),
+            (f'{market_id}/bid', 2),
+            (f'{market_id}/ask', 2),
+            (f'{market_id}/settlement_delivered', 2),
+            (f'{market_id}/meter', 2),
+            (f'{market_id}/simulation/start_round', 2),
+            (f'{market_id}/simulation/start_episode', 2),
+            (f'{market_id}/simulation/end_episode', 2),
+            (f'{market_id}/simulation/end_simulation', 2),
+            (f'{market_id}/simulation/is_market_online', 2),
+        ]
+
+        self.dispatch = {
+            "join_market":          self.on_participant_connected,
+            "bid":                  self.on_bid,
+            "ask":                  self.on_ask,
+            "settlement_delivered": self.on_settlement_delivered,
+            "meter":                self.on_meter_data,
+            "start_round":          self.on_start_round,
+            "start_episode":        self.on_start_episode,
+            "end_episode":          self.on_end_episode,
+            "end_simulation":       self.on_end_simulation,
+            "is_market_online":     self.on_is_market_online,
+        }
+
         self.data_recorded = False
         self.recording_complete = False
+        self.msg_queue = asyncio.Queue()
 
     def on_connect(self, client, flags, rc, properties):
-        market_id = self.market.market_id
-        print('Connected market', market_id)
-        client.subscribe("/".join([market_id]), qos=0)
-        # client.subscribe("/".join([market_id, '+']), qos=0)
-        client.subscribe("/".join([market_id, market_id]), qos=0)
-        client.subscribe("/".join([market_id, 'join_market']), qos=0)
-        client.subscribe("/".join([market_id, 'bid']), qos=0)
-        client.subscribe("/".join([market_id, 'ask']), qos=0)
-        client.subscribe("/".join([market_id, 'settlement_delivered']), qos=0)
-        client.subscribe("/".join([market_id, 'meter']), qos=0)
-
-        # client.subscribe("/".join([market_id, 'simulation', '+']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_round']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'start_episode']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_episode']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'end_simulation']), qos=0)
-        client.subscribe("/".join([market_id, 'simulation', 'is_market_online']), qos=0)
+        self.subscribe_common(client)
+        print('Connected market', self.market.market_id)
 
     def on_disconnect(self, client, packet, exc=None):
         # self.market.server_online = False
         print('market disconnected')
 
-    # def on_subscribe(self, client, mid, qos, properties):
-    #     print('SUBSCRIBED')
-
-    async def on_message(self, client, topic, payload, qos, properties):
-        # print('market RECV MSG:', topic, payload.decode(), properties)
-        message = {
-            'topic': topic,
-            'payload': payload.decode(),
-            'properties': properties
-        }
-
-        # await self.msg_queue.put(msg)
-        await self.process_message(message)
-        return 0
-
-    async def process_message(self, message):
-        # if self.market.run:
-        topic_event = message['topic'].split('/')[-1]
-        payload = message['payload']
-
-        match topic_event:
-            # market related events
-            case 'join_market':
-                await self.on_participant_connected(payload)
-            case 'bid':
-                await self.on_bid(payload)
-            case 'ask':
-                await self.on_ask(payload)
-            case 'settlement_delivered':
-                await self.on_settlement_delivered(payload)
-            case 'meter':
-                # print("METER DATA")
-                await self.on_meter_data(payload)
-            # simulation related events
-            case 'start_round':
-                await self.on_start_round(payload)
-            case 'start_episode':
-                await self.on_start_episode(payload)
-            case 'end_episode':
-                await self.on_end_episode(payload)
-            case 'end_simulation':
-                await self.on_end_simulation()
-            case 'is_market_online':
-                await self.on_is_market_online()
-
-    async def on_bid(self, bid):
-        bid = json.loads(bid)
+    async def on_bid(self, message):
+        bid = json.loads(message['payload'])
         try:
             entry_id, participant_id, participant_sid = await self.market.submit_bid(bid)
             self.client.publish(f'{self.market.market_id}/{participant_id}/bid_ack', entry_id,
-                                user_property=('to', participant_sid),
-                                qos=0)
+                                user_property=[('to', participant_sid)],
+                                qos=1)
         except TypeError:
             return
 
-    async def on_ask(self, ask):
-        ask = json.loads(ask)
+    async def on_ask(self, message):
+        ask = json.loads(message['payload'])
         try:
             entry_id, participant_id, participant_sid = await self.market.submit_ask(ask)
             self.client.publish(f'{self.market.market_id}/{participant_id}/ask_ack', entry_id,
-                                user_property=('to', participant_sid),
-                                qos=0)
+                                user_property=[('to', participant_sid)],
+                                qos=1)
         except TypeError:
             return
 
     async def on_settlement_delivered(self, message):
-        message = json.loads(message)
-        await self.market.settlement_delivered(message)
+        payload = json.loads(message['payload'])
+        await self.market.settlement_delivered(payload)
 
     async def on_meter_data(self, message):
         # print("meter data")
-        message = json.loads(message)
-        await self.market.meter_data(message)
+        payload = json.loads(message['payload'])
+        await self.market.meter_data(payload)
 
     async def on_participant_connected(self, message):
         # print(type(client_data))
-        client_data = json.loads(message)
-        market_id, market_sid, timezone = await self.market.participant_connected(client_data)
-        # async def participant_connected(self, client_data):
+        if message['payload']:
+            client_data = json.loads(message['payload'])
+            client_data['id'] = message['topic'].split('/')[-1]
+            market_id, market_sid, timezone = await self.market.participant_connected(client_data)
+            self.client.publish(f'{self.market.market_id}/{client_data['id']}/market_info',
+                                {'id': market_id,
+                                 'sid': market_sid,
+                                 'timezone': timezone, },
+                                user_property=[('to', client_data['sid'])],
+                                qos=2)
 
-        self.client.publish(f'{self.market.market_id}/{client_data['id']}/market_info',
-                            {'id': market_id,
-                             'sid': market_sid,
-                             'timezone': timezone, },
-                            user_property=('to', client_data['sid']),
-                            qos=0)
-
-    async def on_is_market_online(self):
-        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=0)
-        # await self.market.market_is_online()
+    async def on_is_market_online(self, message):
+        self.client.publish(f'{self.market.market_id}/simulation/market_online', self.market.market_id, qos=1)
 
     async def on_start_round(self, message):
-        message = json.loads(message)
-        await self.market.step(message['duration'], sim_params=message)
-        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=0)
+        if self.market.round_in_progress:
+            return
+        self.market.round_in_progress = True
+        payload = json.loads(message['payload'])
+        step_task = asyncio.create_task(self.market.step(payload['duration'], sim_params=payload))
+        step_task.add_done_callback(self.on_round_done)
+
+    def on_round_done(self, task):
+        self.market.round_in_progress = False
+        try:
+            task_result = task.result()
+        except Exception as exc:
+            # 2️⃣ log the hidden exception so you know why the round died
+            print(f"[market] step() crashed: {exc!r}")
+        self.client.publish(f'{self.market.market_id}/simulation/end_round', self.market.market_id, qos=1)
 
     async def on_start_episode(self, message):
-        # message = json.loads(message)
-        table_name = str(message) + '_' + self.market.market_id
+        table_name = f'{message['payload']}_{self.market.market_id}'
         await self.market.open_db(table_name)
 
     async def on_end_episode(self, message):
-        # await self.market.end_sim_generation()
-        # No need to call record_transactions here since ensure_transactions_complete already does it
         await self.market.ensure_transactions_complete()
-        # if not last_generation:
         await self.market.reset_market()
-        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=0)
+        self.client.publish(f'{self.market.market_id}/simulation/market_ready', self.market.market_id, qos=1)
 
-    async def on_end_simulation(self):
-        # print('end simulation')
+    async def on_end_simulation(self, message):
         self.market.run = False
-        # await self.market.end_sim_generation()
-        # No need to call record_transactions here since ensure_transactions_complete already does it
         await self.market.ensure_transactions_complete()
-        # Close the database connection after transactions are complete but before disconnecting
         await self.market.close_connection()
-        # No need for sleep - all database tasks are confirmed complete
         await self.client.disconnect()
-        # print('attempting to end')
         os.kill(os.getpid(), signal.SIGINT)
         raise SystemExit
 
-    async def run_client(self, client):
-        client.on_connect = self.on_connect
-        client.on_disconnect = self.on_disconnect
-        # client.on_subscribe = self.on_subscribe
-        client.on_message = self.on_message
-
-        # client.set_auth_credentials(token, None)
-        await client.connect(self.server_address, keepalive=60)
-        await STOP.wait()
-
     async def run(self):
-        """Function to start the client and other background tasks
-
-        Raises:
-            SystemExit: [description]
-        """
-        # for python 3.11+
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(self.run_client(self.client))
-            # tg.create_task(self.market.loop())
+        await super().run()
 
 
 if __name__ == '__main__':
@@ -214,9 +154,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=1883, help='')
     parser.add_argument('--configs')
     args = parser.parse_args()
-    # server_address = ''.join(['http://', args.host, ':', str(args.port)])
-    server_address = args.host
-    client = Client(server_address=server_address,
-                    market_configs=json.loads(args.configs))
 
+    client = Client(host=args.host,
+                    port=args.port,
+                    market_configs=json.loads(args.configs))
     asyncio.run(client.run())

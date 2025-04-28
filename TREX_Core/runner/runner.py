@@ -35,11 +35,25 @@ def get_config(config_name: str, original=False, **kwargs):
     else:
         study_name = config_name
 
+    # "database": {
+    #     "host": "localhost",
+    #     "port": 1883,
+    #     "connector": "postgresql+psycopg",
+    #     "profiles_db": "citylearn_2022"
+    # },
+    # database = config['database']
+    connector = config['database']['connector']
+    db_host = config['database']['host']
+    # db_port = config['database']['port']
+    profiles_db = config['database']['profiles_db']
+
     if credentials and ('profiles_db_location' not in config['study']):
-        config['study']['profiles_db_location'] = credentials['profiles_db_location']
+        profiles_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}/{profiles_db}'
+        config['study']['profiles_db_location'] = profiles_db_str
 
     if credentials and ('output_db_location' not in config['study']):
-        config['study']['output_db_location'] = credentials['output_db_location']
+        output_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}/{profiles_db}'
+        config['study']['output_db_location'] = output_db_str
     # engine = create_engine(db_string)
 
     # if resume:
@@ -77,7 +91,7 @@ class Runner:
         self.config_file_name = config
         self.config_original = get_config(config, original=True)
         self.config = get_config(config)
-        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("5.0.0"))
+        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("5.1.0"))
         # 'postgresql+asyncpg://'
         # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
         #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
@@ -334,7 +348,7 @@ class Runner:
         if not config['market']['id']:
             config['market']['id'] = config['market']['type']
 
-        exclude = {'version', 'study', 'server', 'records', 'participants'}
+        exclude = {'version', 'study', 'server', 'database', 'records', 'participants'}
         if isinstance(skip, str):
             skip = (skip,)
         exclude.update(skip)

@@ -1,3 +1,6 @@
+import asyncio
+
+
 class Ledger:
     """Ledger helps participants keep track of accepted bids/asks, and successsful settlements.
 
@@ -19,7 +22,7 @@ class Ledger:
         Args:
             confirmation ([type]): [description]
         """
-
+        # TODO: may need to add an async lock here
         entry = self.bids_hold.pop(entry_id, None)
         if not entry:
             return
@@ -34,7 +37,7 @@ class Ledger:
         Args:
             confirmation ([type]): [description]
         """
-
+        # TODO: may need to add an async lock here
         entry = self.asks_hold.pop(entry_id, None)
         if not entry:
             return
@@ -52,6 +55,8 @@ class Ledger:
         # print(confirmation, self.bids, self.asks)
         # todo: add validity checks, and feedback messages for invalid settlements
         # print(confirmation)
+        # TODO: may need to add an async lock here
+
 
         commit_id = confirmation[0]
         entry_id = confirmation[1]
@@ -70,6 +75,9 @@ class Ledger:
             entry_list = ['asks', self.asks]
         else:
             print(confirmation)
+
+        if commit_id in self.settled[time_delivery][entry_list[0]]:
+            return
 
         self.settled[time_delivery][entry_list[0]][commit_id] = {
             'source': source,
@@ -154,6 +162,7 @@ class Ledger:
                     # note how action is converted from plural to singular (asks -> ask, bids -> bid).
                     # This only works because bid/ask have the same character length
                     transactions.append((action[:3], quantity, price, source))
+            await asyncio.sleep(0)
         return transactions
     
     async def clear_history(self, time_interval):

@@ -3,7 +3,6 @@ import sqlalchemy
 from sqlalchemy import MetaData, Column
 import asyncio
 import databases
-import tenacity
 import datetime
 import ast
 from pprint import pprint
