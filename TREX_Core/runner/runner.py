@@ -44,15 +44,15 @@ def get_config(config_name: str, original=False, **kwargs):
     # database = config['database']
     connector = config['database']['connector']
     db_host = config['database']['host']
-    # db_port = config['database']['port']
+    db_port = config['database'].get('port', 5432)
     profiles_db = config['database']['profiles_db']
 
     if credentials and ('profiles_db_location' not in config['study']):
-        profiles_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}/{profiles_db}'
+        profiles_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}:{db_port}/{profiles_db}'
         config['study']['profiles_db_location'] = profiles_db_str
 
     if credentials and ('output_db_location' not in config['study']):
-        output_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}/{profiles_db}'
+        output_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}:{db_port}/{profiles_db}'
         config['study']['output_db_location'] = output_db_str
     # engine = create_engine(db_string)
 
