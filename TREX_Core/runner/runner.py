@@ -268,7 +268,7 @@ class Runner:
                     'learning': False,
                     'type': 'baseline_agent'
                 })
-            config.pop('policy_server', None)
+            config.pop('synchronous_policy_server', None)
 
         if simulation_type == 'training':
             config['market']['id'] = simulation_type
@@ -278,8 +278,8 @@ class Runner:
                 config['participants'][participant]['trader']['learning'] = True
                 config['participants'][participant]['trader']['study_name'] = config['study']['name']
 
-            if not has_policy_clients or 'policy_server' not in config:
-                config.pop('policy_server', None)
+            if not has_policy_clients or 'synchronous_policy_server' not in config:
+                config.pop('synchronous_policy_server', None)
 
         if simulation_type == 'validation':
             config['market']['id'] = simulation_type

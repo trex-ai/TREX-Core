@@ -1,12 +1,18 @@
 import json
 import os
-# from pathlib import Path
+# from pathlib import
+
+# this is the makefile for a synchronous policy server,
+# where the collection of experience and the learning on that experience happen in sequence and not in parallel
+# as such, only one client is needed
+
+# Fixme: the name that is used in the makefile here does not read from the config file?
 def cli(configs):
     path = __file__.split('runner')
-    script_path = os.path.join(path[0], 'pettingzoo', 'client.py')
+    script_path = os.path.join(path[0], 'appo', 'client.py')
     if not os.path.exists(script_path):
         path = os.getcwd()
-        script_path = os.path.join(path, 'clients', 'pettingzoo', 'client.py')
+        script_path = os.path.join(path, 'clients', 'appo', 'client.py')
     # print('policy server', script_path)
     if not os.path.exists(script_path):
         return None, None
