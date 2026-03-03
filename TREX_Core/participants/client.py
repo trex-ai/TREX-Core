@@ -187,6 +187,7 @@ if __name__ == '__main__':
     import socket
     import argparse
     import importlib
+    import sys
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--id', help='')
@@ -217,8 +218,11 @@ if __name__ == '__main__':
                     # load_scale=float(args.load_scale),
                     **json.loads(args.configs)
                     )
-    try:
-        import uvloop
-        uvloop.run(client.run())
-    except ImportError:
+    if sys.platform.startswith('win'):
         asyncio.run(client.run())
+    else:
+        try:
+            import uvloop
+            uvloop.run(client.run())
+        except ImportError:
+            asyncio.run(client.run())

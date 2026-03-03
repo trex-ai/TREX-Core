@@ -119,6 +119,7 @@ if __name__ == '__main__':
     # sys.exit(__main())
     import socket
     import argparse
+    import sys
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')
@@ -130,8 +131,11 @@ if __name__ == '__main__':
                     port=args.port,
                     config=json.loads(args.config))
 
-    try:
-        import uvloop
-        uvloop.run(client.run())
-    except ImportError:
+    if sys.platform.startswith('win'):
         asyncio.run(client.run())
+    else:
+        try:
+            import uvloop
+            uvloop.run(client.run())
+        except ImportError:
+            asyncio.run(client.run())

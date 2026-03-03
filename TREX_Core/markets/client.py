@@ -148,6 +148,7 @@ class Client(BaseMQTTClient):
 if __name__ == '__main__':
     import argparse
     import importlib
+    import sys
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--host', default="localhost", help='')
@@ -159,8 +160,11 @@ if __name__ == '__main__':
                     port=args.port,
                     market_configs=json.loads(args.configs))
 
-    try:
-        import uvloop
-        uvloop.run(client.run())
-    except ImportError:
+    if sys.platform.startswith('win'):
         asyncio.run(client.run())
+    else:
+        try:
+            import uvloop
+            uvloop.run(client.run())
+        except ImportError:
+            asyncio.run(client.run())

@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from pathlib import Path
 
 import commentjson
 import numpy as np
@@ -13,18 +14,55 @@ from sqlalchemy_utils import database_exists, create_database, drop_database
 from TREX_Core.utils import utils, db_utils
 
 
-def get_config(config_name: str, original=False, **kwargs):
-    if 'root_dir' in kwargs:
-        root_dir = kwargs['root_dir']
+def _iter_config_roots(root_dir: str = ""):
+    roots = []
+    if root_dir:
+        supplied_root = Path(root_dir).expanduser().resolve()
+        roots.extend((supplied_root, supplied_root / 'TREX_Core'))
     else:
-        root_dir = os.getcwd()
-    config_file = os.path.join(root_dir, 'configs', config_name+'.json')
+        env_root = os.environ.get('TREX_CORE_ROOT', '').strip()
+        if env_root:
+            env_root = Path(env_root).expanduser().resolve()
+            roots.extend((env_root, env_root / 'TREX_Core'))
+
+        cwd = Path.cwd().resolve()
+        roots.extend((cwd, cwd / 'TREX_Core'))
+        roots.append(Path(__file__).resolve().parents[1])
+
+    seen = set()
+    for root in roots:
+        root_str = str(root)
+        if root_str in seen:
+            continue
+        seen.add(root_str)
+        yield root
+
+
+def _resolve_config_file(config_name: str, root_dir: str = ""):
+    searched = []
+    for root in _iter_config_roots(root_dir):
+        config_file = root / 'configs' / f'{config_name}.json'
+        searched.append(str(config_file))
+        if config_file.is_file():
+            return str(config_file), str(root)
+
+    searched_paths = '\n'.join(searched)
+    raise FileNotFoundError(
+        f'Unable to locate config "{config_name}.json". Searched:\n{searched_paths}'
+    )
+
+
+def get_config(config_name: str, original=False, root_dir='', **kwargs):
+    if not root_dir and 'root_dir' in kwargs:
+        root_dir = kwargs['root_dir']
+    config_file, resolved_root_dir = _resolve_config_file(config_name, root_dir)
+
     config = _load_json_file(config_file)
 
     if original:
         return config
-    config['study']['root_dir'] = root_dir
-    config['study']['checkpoint_save_path'] = os.path.join(root_dir, 'checkpoint')
+    config['study']['root_dir'] = resolved_root_dir
+    config['study']['checkpoint_save_path'] = os.path.join(resolved_root_dir, 'checkpoint')
 
     # credentials_file = 'configs/_credentials.json'
     # credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
@@ -261,7 +299,7 @@ class Runner:
                                  config['participants'][participant]['trader']['learning']]
 
         policy_clients = [participant for participant in config['participants'] if
-                         config['participants'][participant]['trader']['type'] == 'policy_client']
+                         config['participants'][participant]['trader'].get('type') == 'policy_client']
         has_policy_clients = len(policy_clients) > 0
         policy_servers = [key for key in config if key.endswith("_policy_server")]
 
@@ -317,7 +355,10 @@ class Runner:
         random_check = utils.secure_random.sample(list(energy_profile_names), min(len(energy_profile_names), 5))
         interval_checks = list()
 
-        profile_db_str = db_utils.make_db_str(db_utils.get_credentials(),
+        root_dir = config['study']['root_dir']
+        print(root_dir)
+
+        profile_db_str = db_utils.make_db_str(db_utils.get_credentials(root_dir),
                                          self.config['database'],
                                          self.config['database']['profiles_db'])
 
@@ -444,7 +485,8 @@ class Runner:
             return
 
         # db_string = self.config['study']['output_database']
-        credentials = db_utils.get_credentials()
+        root_dir = self.config['study']['root_dir']
+        credentials = db_utils.get_credentials(root_dir)
         database_config = self.config['database']
         db_string = db_utils.make_db_str(credentials,
                              database_config,

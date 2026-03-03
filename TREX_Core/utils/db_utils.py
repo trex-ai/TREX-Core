@@ -7,6 +7,31 @@ from sqlalchemy.orm import sessionmaker
 import databases
 import os
 import commentjson
+from pathlib import Path
+
+
+def _iter_config_roots(root_dir: str = ""):
+    roots = []
+    if root_dir:
+        supplied_root = Path(root_dir).expanduser().resolve()
+        roots.extend((supplied_root, supplied_root / 'TREX_Core'))
+    else:
+        env_root = os.environ.get('TREX_CORE_ROOT', '').strip()
+        if env_root:
+            env_root = Path(env_root).expanduser().resolve()
+            roots.extend((env_root, env_root / 'TREX_Core'))
+
+        cwd = Path.cwd().resolve()
+        roots.extend((cwd, cwd / 'TREX_Core'))
+        roots.append(Path(__file__).resolve().parents[1])
+
+    seen = set()
+    for root in roots:
+        root_str = str(root)
+        if root_str in seen:
+            continue
+        seen.add(root_str)
+        yield root
 
 def get_credentials(root_dir:str=""):
     def _load_json_file(file_path):
@@ -14,11 +39,11 @@ def get_credentials(root_dir:str=""):
             json_file = commentjson.load(f)
         return json_file
 
-    if not root_dir:
-        root_dir = os.getcwd()
-    credentials_file = os.path.join(root_dir, 'configs', '_credentials' + '.json')
-    credentials = _load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
-    return credentials
+    for base_dir in _iter_config_roots(root_dir):
+        credentials_file = base_dir / 'configs' / '_credentials.json'
+        if credentials_file.is_file():
+            return _load_json_file(credentials_file)
+    return None
 
 def make_db_str(credentials:dict, db_config:dict, db_name:str="", table_name:str=""):
     connector = db_config['connector']
