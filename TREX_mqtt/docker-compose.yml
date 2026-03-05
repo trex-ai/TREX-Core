@@ -1,0 +1,146 @@
+name: trex-mqtt-stack
+
+services:
+  mqtt:
+    image: emqx/emqx:${EMQX_IMAGE_TAG:-5.10.3}
+    container_name: mqtt
+    hostname: mqtt
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks:
+      - trex
+    environment:
+      EMQX_NODE_NAME: emqx@mqtt
+      EMQX_DEFAULT_LOG_HANDLER: console
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_DEFAULT_PASSWORD:-change-me-on-first-boot}
+      EMQX_LISTENERS__TCP__DEFAULT__MAX_CONNECTIONS: ${EMQX_MAX_CONNECTIONS:-2048}
+      EMQX_MQTT__MAX_QOS_ALLOWED: ${EMQX_MAX_QOS_ALLOWED:-2}
+      EMQX_MQTT__RETAIN_AVAILABLE: ${EMQX_RETAIN_AVAILABLE:-true}
+      EMQX_MQTT__WILDCARD_SUBSCRIPTION: ${EMQX_WILDCARD_SUBSCRIPTION:-true}
+      EMQX_MQTT__SHARED_SUBSCRIPTION: ${EMQX_SHARED_SUBSCRIPTION:-true}
+      EMQX_MQTT__EXCLUSIVE_SUBSCRIPTION: ${EMQX_EXCLUSIVE_SUBSCRIPTION:-false}
+      EMQX_MQTT__MAX_INFLIGHT: ${EMQX_MAX_INFLIGHT:-64}
+      EMQX_MQTT__RETRY_INTERVAL: ${EMQX_RETRY_INTERVAL:-30s}
+      EMQX_MQTT__MAX_AWAITING_REL: ${EMQX_MAX_AWAITING_REL:-1000}
+      EMQX_MQTT__AWAIT_REL_TIMEOUT: ${EMQX_AWAIT_REL_TIMEOUT:-300s}
+      EMQX_MQTT__MAX_MQUEUE_LEN: ${EMQX_MAX_MQUEUE_LEN:-5000}
+      EMQX_MQTT__MQUEUE_STORE_QOS0: ${EMQX_MQTT__MQUEUE_STORE_QOS0:-true}
+    ports:
+      - "${MQTT_BIND_ADDRESS:-127.0.0.1}:${MQTT_PORT:-1883}:1883"
+      - "${EMQX_DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${EMQX_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - ./emqx/base.hocon:/opt/emqx/etc/base.hocon:ro
+      - ./data/emqx:/opt/emqx/data
+      - ./logs/emqx:/opt/emqx/log
+    healthcheck:
+      # test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18083/status >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    ulimits:
+      nofile:
+        soft: ${MQTT_NOFILE_SOFT:-65536}
+        hard: ${MQTT_NOFILE_HARD:-65536}
+    cpus: "${MQTT_CPUS:-1.0}"
+    mem_limit: ${MQTT_MEM_LIMIT:-1g}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      service: mqtt
+      environment: ${ENVIRONMENT:-local}
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v3.10.0}
+    container_name: prometheus
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      cadvisor:
+        condition: service_started
+      mqtt-volume-metrics:
+        condition: service_started
+    networks:
+      - trex
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
+      - ./data/prometheus:/prometheus
+    cpus: "${PROMETHEUS_CPUS:-0.50}"
+    mem_limit: ${PROMETHEUS_MEM_LIMIT:-512m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      service: prometheus
+      environment: ${ENVIRONMENT:-local}
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:${CADVISOR_IMAGE_TAG:-v0.56.2}
+    container_name: cadvisor
+    restart: unless-stopped
+    networks:
+      - trex
+    command:
+      - --housekeeping_interval=15s
+      - --docker_only=true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    expose:
+      - "8080"
+    cpus: "${CADVISOR_CPUS:-0.25}"
+    mem_limit: ${CADVISOR_MEM_LIMIT:-256m}
+    labels:
+      service: cadvisor
+      environment: ${ENVIRONMENT:-local}
+
+  mqtt-volume-metrics:
+    image: python:3.12-alpine
+    container_name: mqtt-volume-metrics
+    restart: unless-stopped
+    networks:
+      - trex
+    working_dir: /app
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      DATA_DIR: /data
+      LOG_DIR: /log
+      EXPORTER_PORT: "8000"
+    command: ["python", "/app/volume_metrics_exporter.py"]
+    expose:
+      - "8000"
+    volumes:
+      - ./ops/volume_metrics_exporter.py:/app/volume_metrics_exporter.py:ro
+      - ./data/emqx:/data:ro
+      - ./logs/emqx:/log:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cpus: "${VOLUME_METRICS_CPUS:-0.10}"
+    mem_limit: ${VOLUME_METRICS_MEM_LIMIT:-128m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      service: mqtt-volume-metrics
+      environment: ${ENVIRONMENT:-local}
+
+networks:
+  trex:
+    name: trex

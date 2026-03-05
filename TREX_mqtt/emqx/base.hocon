@@ -1,0 +1,41 @@
+## TREX-Core MQTT baseline for a single-node EMQX broker.
+##
+## Keep immutable node identity in environment variables rather than here.
+## Compose sets EMQX_NODE_NAME=emqx@mqtt to keep the persisted Mnesia path stable.
+
+listeners.tcp.default {
+  bind = "0.0.0.0:1883"
+}
+
+mqtt {
+  ## Preserve TREX protocol expectations.
+  max_qos_allowed = 2
+  retain_available = true
+
+  ## TREX uses wildcard subscriptions and arbitrary topic depth under market_id.
+  wildcard_subscription = true
+  shared_subscription = true
+  exclusive_subscription = false
+
+  ## Reliability-first defaults. Compose env vars can override any of these.
+  max_inflight = 64
+  retry_interval = 30s
+  max_awaiting_rel = 1000
+  await_rel_timeout = 300s
+  max_mqueue_len = 5000
+  mqueue_store_qos0 = true
+}
+
+## Optional future TLS hook:
+##
+## listeners.ssl.default {
+##   bind = "0.0.0.0:8883"
+##   max_connections = 2048
+##   ssl_options {
+##     cacertfile = "etc/certs/cacert.pem"
+##     certfile = "etc/certs/cert.pem"
+##     keyfile = "etc/certs/key.pem"
+##     verify = verify_none
+##     fail_if_no_peer_cert = false
+##   }
+## }

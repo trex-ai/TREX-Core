@@ -34,3 +34,7 @@ TREX_Core.egg-info/
 .DS_Store
 
 TREX_Core/configs/_credentials.json
+TREX_mqtt/*.env
+TREX_mqtt/data/emqx/*
+TREX_mqtt/data/prometheus/*
+TREX_mqtt/logs/*

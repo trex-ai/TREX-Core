@@ -1,0 +1,52 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: local
+    stack: trex-mqtt
+
+rule_files:
+  - /etc/prometheus/alerts/mqtt-alerts.yml
+
+scrape_configs:
+  - job_name: emqx_stats
+    metrics_path: /api/v5/prometheus/stats
+    params:
+      mode: [node]
+    static_configs:
+      - targets: ["mqtt:18083"]
+        labels:
+          service: mqtt
+          instance: mqtt
+          environment: local
+          broker_node: emqx@mqtt
+          listener: tcp_default
+
+  - job_name: emqx_auth
+    metrics_path: /api/v5/prometheus/auth
+    params:
+      mode: [node]
+    static_configs:
+      - targets: ["mqtt:18083"]
+        labels:
+          service: mqtt
+          instance: mqtt
+          environment: local
+          broker_node: emqx@mqtt
+          listener: tcp_default
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: cadvisor
+          instance: cadvisor
+          environment: local
+
+  - job_name: mqtt_volume_metrics
+    static_configs:
+      - targets: ["mqtt-volume-metrics:8000"]
+        labels:
+          service: mqtt-volume-metrics
+          instance: mqtt-volume-metrics
+          environment: local

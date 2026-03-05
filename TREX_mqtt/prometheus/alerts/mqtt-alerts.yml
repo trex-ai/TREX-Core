@@ -1,0 +1,83 @@
+groups:
+  - name: mqtt-broker
+    rules:
+      - alert: MQTTBrokerDown
+        expr: up{job="emqx_stats"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MQTT broker metrics target is down"
+          remediation: "Check docker compose ps, docker compose logs mqtt, and docker exec mqtt /opt/emqx/bin/emqx ctl status."
+
+      - alert: MQTTMetricsEndpointDown
+        expr: up{job="emqx_auth"} == 0 and on(instance) up{job="emqx_stats"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A broker metrics path is unavailable while the main stats endpoint still responds"
+          remediation: "Inspect dashboard/API health on port 18083 and verify any API auth changes did not break Prometheus scraping."
+
+      - alert: MQTTConnectionCountTooLow
+        expr: emqx_connections_count{job="emqx_stats"} < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Current MQTT connection count is below the default floor"
+          remediation: "Tune the threshold for your expected simulation size. Then inspect TREX client logs and broker client/session counters for disconnects."
+
+      - alert: MQTTReconnectStorm
+        expr: increase(emqx_client_connected{job="emqx_stats"}[5m]) > 10 and increase(emqx_client_disconnected{job="emqx_stats"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High reconnect churn detected"
+          remediation: "Check for broker restarts, Docker network instability, or clients repeatedly timing out and reconnecting."
+
+      - alert: MQTTDroppedMessagesDetected
+        expr: increase(emqx_messages_dropped{job="emqx_stats"}[5m]) > 0 or increase(emqx_delivery_dropped{job="emqx_stats"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EMQX has dropped at least one message"
+          remediation: "Inspect emqx_delivery_dropped_queue_full, bytes/messages rates, and client health immediately. TREX correctness can be affected by dropped messages."
+
+      - alert: MQTTQueueBacklogHigh
+        expr: increase(emqx_delivery_dropped_queue_full{job="emqx_stats"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Per-session message queues have reached capacity"
+          remediation: "Increase EMQX_MQTT__MAX_MQUEUE_LEN or reduce downstream lag. Use emqx ctl clients show <clientid> or emqx ctl clients stats to inspect inflight and enqueued client pressure."
+
+      - alert: MQTTPersistenceError
+        expr: trex_mqtt_data_dir_stat_error{job="mqtt_volume_metrics"} > 0 or trex_mqtt_log_dir_stat_error{job="mqtt_volume_metrics"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The storage observer cannot stat an EMQX persistence path"
+          remediation: "Verify bind mounts, host permissions, and disk health for ./data/emqx and ./logs/emqx."
+
+      - alert: MQTTBrokerDiskUsageHigh
+        expr: trex_mqtt_data_dir_bytes{job="mqtt_volume_metrics"} > 5368709120 or trex_mqtt_log_dir_bytes{job="mqtt_volume_metrics"} > 1073741824
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EMQX data or log directory is larger than the default threshold"
+          remediation: "Review retained state growth, durable session buildup, and log verbosity. Adjust thresholds for your environment if these limits are too low."
+
+      - alert: MQTTBrokerRestartingFrequently
+        expr: changes(container_start_time_seconds{name="mqtt"}[15m]) > 2 or changes(container_start_time_seconds{container_label_com_docker_compose_service="mqtt"}[15m]) > 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The MQTT broker container has restarted repeatedly"
+          remediation: "Check docker compose logs mqtt, container exit codes, memory limits, and host-level restarts."
