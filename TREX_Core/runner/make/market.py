@@ -1,9 +1,6 @@
 import json
-from pathlib import Path
 def cli(configs):
-    path = __file__.split('runner')
-    script_path = path[0] + 'markets/client.py'
-    # print(path)
+    module_path = 'TREX_Core.markets.client'
 
     if 'server' not in configs:
         return None, None
@@ -30,5 +27,4 @@ def cli(configs):
         args.append('--port=' + port)
 
     args.append('--config=' + json.dumps(market_configs))
-    # print(script_path)
-    return (script_path, args)
+    return (module_path, args)

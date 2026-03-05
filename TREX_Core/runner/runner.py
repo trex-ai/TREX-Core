@@ -356,7 +356,6 @@ class Runner:
         interval_checks = list()
 
         root_dir = config['study']['root_dir']
-        print(root_dir)
 
         profile_db_str = db_utils.make_db_str(db_utils.get_credentials(root_dir),
                                          self.config['database'],
@@ -461,7 +460,13 @@ class Runner:
         # except:
         #     subprocess.run(['venv/Scripts/python', args[0], *args[1]])
         # finally:
-        subprocess.run([sys.executable, args[0], *args[1]], **kwargs)
+        target, target_args = args
+        command = [sys.executable]
+        if os.path.sep in target or target.endswith('.py'):
+            command.append(target)
+        else:
+            command.extend(['-m', target])
+        subprocess.run([*command, *target_args], **kwargs)
 
     def run(self, launch_list, **kwargs):
         if not self.__config_version_valid:

@@ -1,8 +1,6 @@
 import json
-# from pathlib import Path
 def cli(configs, participant_id):
-    path = __file__.split('runner')
-    script_path = f'{path[0]}participants/client.py'
+    module_path = 'TREX_Core.participants.client'
 
     if 'server' not in configs:
         return None, None
@@ -49,4 +47,4 @@ def cli(configs, participant_id):
 
     args.append(f'--configs={json.dumps(participant_configs)}')
 
-    return (script_path, args)
+    return (module_path, args)

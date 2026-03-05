@@ -1,8 +1,6 @@
 import json
-# from pathlib import Path
 def cli(configs):
-    path = __file__.split('runner')
-    script_path = path[0] + 'sim_controller/client.py'
+    module_path = 'TREX_Core.sim_controller.client'
 
     if 'server' not in configs:
         return None, None
@@ -16,4 +14,4 @@ def cli(configs):
     if port:
         args.append('--port=' + port)
     args.append('--config=' + json.dumps(configs))
-    return (script_path, args)
+    return (module_path, args)
