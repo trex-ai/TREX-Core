@@ -16,7 +16,20 @@ from pathlib import Path
 host = os.environ.get("POSTGRES_HOST", "postgres")
 user = os.environ["POSTGRES_USER"]
 password = os.environ["POSTGRES_PASSWORD"]
+pgadmin_email = os.environ["PGADMIN_DEFAULT_EMAIL"]
 server_json_file = Path(os.environ.get("PGADMIN_SERVER_JSON_FILE", "/var/lib/pgadmin/servers.json"))
+
+
+def preprocess_username(username: str) -> str:
+    if len(username) == 0 or username[0].isdigit():
+        username = "pga_user_" + username
+    return username.replace("@", "_").replace("/", "slash").replace("\\", "slash")
+
+
+pgadmin_storage_dir = Path("/var/lib/pgadmin/storage") / preprocess_username(pgadmin_email)
+pgadmin_storage_dir.mkdir(parents=True, exist_ok=True)
+pgpass_file = pgadmin_storage_dir / "pgpass"
+imported_pgpass_path = "/pgpass"
 
 pgpass_line = (
     host.replace("\\", "\\\\").replace(":", "\\:")
@@ -25,8 +38,8 @@ pgpass_line = (
     + ":"
     + password.replace("\\", "\\\\").replace(":", "\\:")
 )
-Path("/tmp/pgpassfile").write_text(pgpass_line + "\n", encoding="utf-8")
-os.chmod("/tmp/pgpassfile", 0o600)
+pgpass_file.write_text(pgpass_line + "\n", encoding="utf-8")
+os.chmod(pgpass_file, 0o600)
 
 servers = {
     "Servers": {
@@ -38,7 +51,7 @@ servers = {
             "MaintenanceDB": "postgres",
             "Username": user,
             "SSLMode": "prefer",
-            "PassFile": "/tmp/pgpassfile",
+            "PassFile": imported_pgpass_path,
         }
     }
 }
