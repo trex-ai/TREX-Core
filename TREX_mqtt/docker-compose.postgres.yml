@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:${POSTGRES_IMAGE_TAG:-18.3-bookworm}
+    container_name: ${POSTGRES_CONTAINER_NAME:-trex-postgres}
+    hostname: ${POSTGRES_HOST:-postgres}
+    restart: unless-stopped
+    cpus: "${POSTGRES_CPUS:-4.0}"
+    mem_limit: ${POSTGRES_MEM_LIMIT:-4g}
+    command:
+      - postgres
+      - -c
+      - max_connections=1000
+      - -c
+      - superuser_reserved_connections=5
+      - -c
+      - reserved_connections=20
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - work_mem=1MB
+      - -c
+      - max_parallel_workers_per_gather=0
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:-}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      trex:
+        aliases:
+          - postgres
+
+  postgres-bootstrap:
+    image: postgres:${POSTGRES_IMAGE_TAG:-18.3-bookworm}
+    container_name: trex-postgres-bootstrap
+    hostname: trex-postgres-bootstrap
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_BOOTSTRAP_CONTROL_DB: ${POSTGRES_BOOTSTRAP_CONTROL_DB:-postgres}
+      POSTGRES_BOOTSTRAP_SCHEMA: ${POSTGRES_BOOTSTRAP_SCHEMA:-trex_bootstrap}
+      POSTGRES_BOOTSTRAP_INTERVAL_SECONDS: ${POSTGRES_BOOTSTRAP_INTERVAL_SECONDS:-30}
+      POSTGRES_DATABASES_DIR: /databases
+    command: ["/bin/bash", "/bootstrap/apply_databases.sh", "--loop"]
+    volumes:
+      - ./postgres/databases:/databases:ro
+      - ./postgres/bootstrap:/bootstrap:ro
+    networks:
+      - trex
+
+  pgadmin:
+    image: dpage/pgadmin4:${PGADMIN_IMAGE_TAG:-9.13}
+    container_name: trex-pgadmin
+    hostname: pgadmin
+    restart: unless-stopped
+    cpus: "${PGADMIN_CPUS:-1.0}"
+    mem_limit: ${PGADMIN_MEM_LIMIT:-512m}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/bootstrap/render_pgadmin_bootstrap.sh"]
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL is required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
+      PGADMIN_LISTEN_PORT: ${PGADMIN_LISTEN_PORT:-5050}
+      PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+      PGADMIN_DISABLE_POSTFIX: "1"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: "False"
+      PGPASS_FILE: /tmp/pgpassfile
+    ports:
+      - "${PGADMIN_BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:${PGADMIN_LISTEN_PORT:-5050}"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./postgres/bootstrap:/bootstrap:ro
+    networks:
+      - trex
+
+networks:
+  trex:
+    name: trex
+
+volumes:
+  pgadmin-data:

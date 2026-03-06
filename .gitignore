@@ -37,4 +37,6 @@ TREX_Core/configs/_credentials.json
 TREX_mqtt/*.env
 TREX_mqtt/data/emqx/*
 TREX_mqtt/data/prometheus/*
+TREX_mqtt/data/postgres/*
 TREX_mqtt/logs/*
+TREX_mqtt/postgres/databases/*
