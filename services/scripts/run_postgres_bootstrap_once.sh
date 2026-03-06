@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TREX_MQTT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$TREX_MQTT_DIR"
+SERVICES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$SERVICES_DIR"
 
 BOOTSTRAP_CONTAINER="trex-postgres-bootstrap"
 BOOTSTRAP_CMD=(/bin/bash /bootstrap/apply_databases.sh --once)

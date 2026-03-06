@@ -8,7 +8,7 @@ Because the original repository was **not mounted** in this environment, the Com
 
 Use it either:
 
-- alongside your existing `TREX_mqtt/docker-compose.yml` (preferred), or
+- alongside your existing `services/docker-compose.yml` (preferred), or
 - by itself if you only want to stand up the PostgreSQL/pgAdmin portion first.
 
 If you switch between the standalone and combined Compose invocations, stop the earlier stack first so Docker does not hit fixed `container_name` conflicts.
@@ -28,7 +28,7 @@ If you switch between the standalone and combined Compose invocations, stop the 
 - `postgres/bootstrap/render_pgadmin_bootstrap.sh`
   - generates pgAdmin `servers.json` and `.pgpass` from env at startup
 - `scripts/render_trex_configs_from_env.sh`
-  - sources `TREX_mqtt/.env` and renders TREX JSON/credential files
+  - sources `services/.env` and renders TREX JSON/credential files
 - `../TREX_Core/scripts/render_trex_db_config.py`
   - updates `database.host`, `database.port`, `database.connector`, and `database.profiles_db`
   - writes `TREX_Core/configs/_credentials.json`
@@ -37,9 +37,9 @@ If you switch between the standalone and combined Compose invocations, stop the 
 
 ## Quick start
 
-1. Review `TREX_mqtt/.env` and replace the development credentials/passwords.
+1. Review `services/.env` and replace the development credentials/passwords.
 2. Keep `TREX_DB_USERNAME` and `TREX_DB_PASSWORD` aligned with `POSTGRES_USER` and `POSTGRES_PASSWORD`.
-3. Place any preloaded profile databases under `TREX_mqtt/postgres/databases/<db-name>/`.
+3. Place any preloaded profile databases under `services/postgres/databases/<db-name>/`.
 4. Start the database stack. Preferred, alongside the existing MQTT stack:
 
    ```bash
@@ -52,9 +52,11 @@ If you switch between the standalone and combined Compose invocations, stop the 
    docker compose -f docker-compose.postgres.yml up -d
    ```
 
-5. Open pgAdmin on `http://127.0.0.1:${PGADMIN_PORT}` and sign in with `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` from `TREX_mqtt/.env`.
+5. Open pgAdmin on `http://127.0.0.1:${PGADMIN_PORT}` and sign in with `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` from `services/.env`.
 
 pgAdmin is preloaded with a server definition for `postgres:5432`, so no manual server registration is required after login.
+
+If pgAdmin shows `The server was not found` while opening a restored Query Tool tab, clear the saved browser state for `http://127.0.0.1:${PGADMIN_PORT}` or close the stale tab and reopen Query Tool from the current `TREX PostgreSQL` server node.
 
 ## Folder-driven database provisioning
 
@@ -62,7 +64,7 @@ The bootstrap controller runs continuously and rescans `postgres/databases/` eve
 
 To add a new database:
 
-1. Create a new folder under `TREX_mqtt/postgres/databases/`.
+1. Create a new folder under `services/postgres/databases/`.
 2. Put one of these inside it:
    - a single full `pg_dump` SQL file (`.sql` or `.sql.gz`) that includes `CREATE DATABASE`, or
    - database-local `.sql`, `.sql.gz`, `.dump`, or `.tar` files to be applied into a newly created database.
@@ -78,7 +80,7 @@ Existing databases are never dropped or blindly replayed by the controller.
 
 ### Host-run TREX during transition
 
-Keep these values in `TREX_mqtt/.env`:
+Keep these values in `services/.env`:
 
 ```dotenv
 TREX_DB_HOST=127.0.0.1
@@ -130,7 +132,7 @@ If a failed import leaves the target database behind, drop that database before 
 ## Filesystem layout
 
 ```text
-TREX_mqtt/
+services/
   docker-compose.postgres.yml
   .env
   data/

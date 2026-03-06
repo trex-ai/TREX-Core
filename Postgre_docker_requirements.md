@@ -16,7 +16,7 @@ This is a requirements and design-direction document. It is not the final Compos
 
 ### 1.1 Current Compose stack in the repo
 
-The only tracked Compose stack today is [`TREX_mqtt/docker-compose.yml`](TREX_mqtt/docker-compose.yml).
+The only tracked Compose stack today is [`services/docker-compose.yml`](services/docker-compose.yml).
 
 It currently defines these services:
 
@@ -30,13 +30,13 @@ It also defines:
 - one shared Docker network named `trex`
 - bind-mounted persistence for EMQX and Prometheus data
 - loopback-only host exposure by default via `127.0.0.1`
-- a single `.env` file at [`TREX_mqtt/.env`](TREX_mqtt/.env)
+- a single `.env` file at [`services/.env`](services/.env)
 
 Important current constraints:
 
 - there is no PostgreSQL container in the stack
 - there is no PostgreSQL UI container in the stack
-- there are no PostgreSQL environment variables in [`TREX_mqtt/.env`](TREX_mqtt/.env)
+- there are no PostgreSQL environment variables in [`services/.env`](services/.env)
 
 ### 1.2 Current PostgreSQL deployment
 
@@ -116,7 +116,7 @@ The target Docker design must extend the existing stack so that:
 
 1. PostgreSQL runs inside Docker instead of as host-installed software.
 2. A PostgreSQL UI is available inside the same stack.
-3. PostgreSQL credentials and PostgreSQL-related configuration live in [`TREX_mqtt/.env`](TREX_mqtt/.env).
+3. PostgreSQL credentials and PostgreSQL-related configuration live in [`services/.env`](services/.env).
 4. New databases can be added by placing files in a folder, without editing Compose for each database.
 5. The design remains compatible with the current `trex` Docker network and the repo's current loopback-first exposure style.
 
@@ -190,7 +190,7 @@ This bootstrap/import mechanism must scan a mounted folder and create or restore
 
 The PostgreSQL additions must preserve the current Compose posture:
 
-- same stack file family under `TREX_mqtt/`
+- same stack file family under `services/`
 - same `.env` file driven configuration style
 - same `trex` network
 - same loopback-only host binding by default
@@ -199,7 +199,7 @@ The PostgreSQL additions must preserve the current Compose posture:
 
 ## 7. Environment variable requirements
 
-All PostgreSQL-related configuration should move into [`TREX_mqtt/.env`](TREX_mqtt/.env).
+All PostgreSQL-related configuration should move into [`services/.env`](services/.env).
 
 That includes:
 
@@ -290,19 +290,19 @@ The design must persist:
 
 Persist PostgreSQL data under a stable path, for example:
 
-- `TREX_mqtt/data/postgres`
+- `services/data/postgres`
 
 ### 9.2 pgAdmin state
 
 Persist pgAdmin state under a stable path, for example:
 
-- `TREX_mqtt/data/pgadmin`
+- `services/data/pgadmin`
 
 ### 9.3 Database input folder
 
 Database definitions and restores should live under a mounted repo path, for example:
 
-- `TREX_mqtt/postgres/databases`
+- `services/postgres/databases`
 
 This folder is source input, not live database storage.
 
@@ -317,7 +317,7 @@ You should be able to add a database by creating a folder under a designated dir
 Recommended structure:
 
 ```text
-TREX_mqtt/postgres/
+services/postgres/
   databases/
     citylearn_2022/
       001-schema.sql
@@ -371,7 +371,7 @@ Recommended acceptable implementations:
 
 Adding a new database should look like this:
 
-1. create a new folder under `TREX_mqtt/postgres/databases/`
+1. create a new folder under `services/postgres/databases/`
 2. place SQL or dump files inside it
 3. rerun the bootstrap service, or rerun `docker compose up -d`
 4. the new database appears in PostgreSQL and pgAdmin
@@ -452,7 +452,7 @@ This lets the repo become the operational home for database imports instead of t
 The implementation should use a structure similar to:
 
 ```text
-TREX_mqtt/
+services/
   docker-compose.yml
   .env
   data/
@@ -488,8 +488,8 @@ The design is acceptable only if all of the following are true.
 
 ### 15.2 Configuration behavior
 
-- PostgreSQL credentials are defined in [`TREX_mqtt/.env`](TREX_mqtt/.env)
-- PostgreSQL host/port/image/UI settings are defined in [`TREX_mqtt/.env`](TREX_mqtt/.env)
+- PostgreSQL credentials are defined in [`services/.env`](services/.env)
+- PostgreSQL host/port/image/UI settings are defined in [`services/.env`](services/.env)
 - no per-database Compose edits are required
 
 ### 15.3 Database provisioning behavior
@@ -516,7 +516,7 @@ The eventual implementation should prefer:
 - a rerunnable `postgres-bootstrap` helper service
 - env-driven configuration
 - loopback-only host exposure
-- persisted bind mounts under `TREX_mqtt/data/`
+- persisted bind mounts under `services/data/`
 
 It should avoid:
 

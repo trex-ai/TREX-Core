@@ -369,7 +369,7 @@ This means container shutdowns and restarts need graceful termination. Hard kill
 
 There is currently no PostgreSQL container in the repo.
 
-The only Compose stack is [`TREX_mqtt/docker-compose.yml`](TREX_mqtt/docker-compose.yml), which defines:
+The only Compose stack is [`services/docker-compose.yml`](services/docker-compose.yml), which defines:
 
 - `mqtt`
 - `prometheus`
@@ -380,7 +380,7 @@ It already provides a shared Docker network named:
 
 - `trex`
 
-The existing MQTT env file [`TREX_mqtt/.env`](TREX_mqtt/.env) contains no PostgreSQL settings.
+The existing MQTT env file [`services/.env`](services/.env) contains no PostgreSQL settings.
 
 ## 10. Migration risks and constraints
 

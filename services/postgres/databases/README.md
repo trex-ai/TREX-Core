@@ -1,11 +1,11 @@
 # Folder-driven database imports
 
-Each direct child directory under `TREX_mqtt/postgres/databases/` declares one PostgreSQL database.
+Each direct child directory under `services/postgres/databases/` declares one PostgreSQL database.
 
 Examples:
 
 ```text
-TREX_mqtt/postgres/databases/
+services/postgres/databases/
   citylearn_2022/
     001-schema.sql
     010-data.sql

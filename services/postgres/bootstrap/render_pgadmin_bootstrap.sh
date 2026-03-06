@@ -8,6 +8,14 @@ set -eu
 
 mkdir -p /var/lib/pgadmin "$(dirname "$PGADMIN_SERVER_JSON_FILE")"
 
+# pgAdmin's --replace import creates a fresh server row on every startup,
+# which changes the internal server id and breaks any saved browser tabs.
+if [ -f /var/lib/pgadmin/pgadmin4.db ]; then
+  export PGADMIN_REPLACE_SERVERS_ON_STARTUP="False"
+else
+  export PGADMIN_REPLACE_SERVERS_ON_STARTUP="True"
+fi
+
 python3 - <<'PY'
 import json
 import os
