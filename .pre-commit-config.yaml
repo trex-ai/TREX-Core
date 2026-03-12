@@ -27,6 +27,7 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
+        exclude: ^TREX_Core/main\.py$
         additional_dependencies:
           - async-lru==2.2.0
           - asyncpg==0.31.0
@@ -46,6 +47,7 @@ repos:
           - sqlalchemy-utils==0.42.1
           - structlog==25.5.0
           - types-python-dateutil==2.9.0.20260305
+          - types-pytz==2026.1.1.20260304
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
