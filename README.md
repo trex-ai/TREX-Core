@@ -41,6 +41,10 @@ to get the stats of the issues:
 ```bash
 uv run ruff check . --statistics
 ```
+to get the list of specific issues:
+```bash
+uv run ruff check . --select F401
+```
 
 ## Handle detect-secrets baseline if it doesn't exist yet
 ```bash
