@@ -6,9 +6,43 @@
 Install the project dependencies into a local virtual environment from the repository root:
 
 ```bash
-uv python install 3.11
+uv python install 3.12
 uv sync
 source .venv/bin/activate
+```
+
+## Install pre-commit hooks
+```bash
+uv run pre-commit install
+```
+to run the pre-commit hooks on all files:
+```bash
+uv run pre-commit run --all-files
+```
+to run the pre-commit on specific files:
+```bash
+uv run pre-commit run --files path/to/your_file.py
+```
+If you want to run only a specific hook on that file:
+```bash
+uv run pre-commit run ruff-check --files path/to/your_file.py
+uv run pre-commit run mypy --files path/to/your_file.py
+```
+
+
+## Handle detect-secrets baseline if it doesn't exist yet
+```bash
+uv run detect-secrets scan > .secrets.baseline
+```
+
+
+## Run the test suite
+```bash
+uv run pytest
+```
+Since your pytest config has --cov-fail-under=7 and markers for integration tests that need MQTT/PostgreSQL, you can skip those initially:
+```bash
+uv run pytest -m "not integration"
 ```
 
 ## Docker Services for MQTT and PostgreSQL
