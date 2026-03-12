@@ -1,5 +1,4 @@
 {
-//sawtooth profile: "use_synthetic_profile": "test_profile_1kw_square_p2+1",
     "version": "5.0.0",
     "study": {
       "name": "mqtt_test_backport",
