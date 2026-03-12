@@ -20,19 +20,19 @@ This document provides a definitive explanation of how time flows in TREX-Core, 
 sequenceDiagram
     participant R0 as Round 0
     participant R1 as Round 1
-    participant R2 as Round 2 
+    participant R2 as Round 2
     participant R3 as Round 3
-    
+
     Note over R0: Bid Submission
     Note over R0: Settlement Creation
-    
+
     R0->>R2: Settlement for delivery in R2
-    
+
     Note over R2: Physical Delivery
     Note over R2: Delivery Confirmation
-    
+
     R2->>R3: Reward Calculation
-    
+
     Note over R3: Reward Available
 ```
 
@@ -45,7 +45,7 @@ flowchart LR
     subgraph With close_steps: 2
         R0["Round 0<br>Current Round"] --- R1["Round 1<br>Minimum: close_steps-1"] --- R2["Round 2<br>Default: next_settle"]
     end
-    
+
     style R0 fill:#f9f,stroke:#333
     style R1 fill:#bbf,stroke:#33f
     style R2 fill:#bfb,stroke:#383
@@ -85,31 +85,31 @@ flowchart TB
         SETTLE["Create Settlement<br>Financial agreement"]
         BID --> SETTLE
     end
-    
+
     subgraph "Round 1"
         WAIT["Waiting Period<br>No action for this settlement"]
     end
-    
+
     subgraph "Round 2"
         DELIVER["Physical Delivery<br>Energy transfer happens"]
         CONFIRM["Delivery Confirmation<br>Send meter data"]
         DELIVER --> CONFIRM
     end
-    
+
     subgraph "Round 3"
         REWARD["Reward Calculation<br>Based on delivery in Round 2"]
         ACCESS["Access Rewards<br>Available to agents"]
         REWARD --> ACCESS
     end
-    
+
     SETTLE --> WAIT
     WAIT --> DELIVER
     CONFIRM --> REWARD
-    
+
     classDef current fill:#f9f,stroke:#333,stroke-width:2px
     classDef action fill:#bbf,stroke:#33f,stroke-width:1px
     classDef result fill:#bfb,stroke:#383,stroke-width:1px
-    
+
     class BID,DELIVER,CONFIRM,REWARD action
     class SETTLE,ACCESS result
 ```
@@ -212,4 +212,4 @@ The time flow in TREX-Core follows a consistent pattern where:
 3. Delivery happens in the specified future round
 4. Rewards are calculated in the round after delivery
 
-This document provides definitive answers to avoid repeated analysis of these temporal relationships. 
+This document provides definitive answers to avoid repeated analysis of these temporal relationships.
