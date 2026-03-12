@@ -1,11 +1,4 @@
 
-.idea/
-
-venv/
-
-__pycache__/
-
-
 Logs/
 18P_Tests/
 Alex-recreated/
@@ -17,15 +10,6 @@ BESS_Test/
 aklsjfn/Buyer1/
 
 
-<<<<<<< Updated upstream
-=======
-*.v2
-
-
-
-_configs/_credentials.json
-
->>>>>>> Stashed changes
 
 _configs/_credentials.json
 
@@ -40,3 +24,21 @@ services/data/prometheus/*
 services/data/postgres/*
 services/logs/*
 services/postgres/databases/*
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Credentials
+**/configs/_credentials.json
