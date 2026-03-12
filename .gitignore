@@ -25,10 +25,14 @@ services/data/postgres/*
 services/logs/*
 services/postgres/databases/*
 
-# Build artifacts
-*.egg-info/
-dist/
+# Packaging / distribution
 build/
+dist/
+site/
+.eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
 
 # Environment
 .env
@@ -42,3 +46,14 @@ __pycache__/
 
 # Credentials
 **/configs/_credentials.json
+
+# Python caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+.lint-baseline
