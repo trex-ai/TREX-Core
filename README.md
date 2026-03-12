@@ -28,7 +28,19 @@ If you want to run only a specific hook on that file:
 uv run pre-commit run ruff-check --files path/to/your_file.py
 uv run pre-commit run mypy --files path/to/your_file.py
 ```
-
+## Useful Ruff commands
+To check for linting issues:
+```bash
+uv run ruff check .
+```
+To automatically fix issues:
+```bash
+uv run ruff check . --fix
+```
+to get the stats of the issues:
+```bash
+uv run ruff check . --statistics
+```
 
 ## Handle detect-secrets baseline if it doesn't exist yet
 ```bash
