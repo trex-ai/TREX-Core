@@ -171,11 +171,11 @@ class Client(BaseMQTTClient):
         """
 
         self.participant.reset()
-        if hasattr(self.participant, "storage"):
+        if self.participant.storage is not None:
             self.participant.storage.reset(soc_pct=0)
         # self.participant.trader.output_path = message['output_path']
 
-        if hasattr(self.participant, "records"):
+        if self.participant.records is not None:
             table_name = f"{message['payload']}_{self.participant.market_id}"
             await self.participant.records.open_db(table_name)
 
@@ -186,7 +186,7 @@ class Client(BaseMQTTClient):
         Args:
             message ([type]): [description]
         """
-        if hasattr(self.participant, "records"):
+        if self.participant.records is not None:
             await self.participant.records.ensure_records_complete()
 
         # # TODO: save model
@@ -213,7 +213,7 @@ class Client(BaseMQTTClient):
             qos=1,
             user_property=[("to", "^all")],
         )
-        if hasattr(self.participant, "records"):
+        if self.participant.records is not None:
             await self.participant.records.close_connection()
         await self.participant.kill()
 
