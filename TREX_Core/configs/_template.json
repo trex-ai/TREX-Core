@@ -1,35 +1,28 @@
 {
   "version": "5.2.0",
   "study": {
-    "name": "sim_name", // the simulation name defines the database name as well as local storage paths.
-    "description": "",  // (optional) a description the simulation
-    "start_datetime": "2020-11-03 0:0:0", // defines when a simulation starts
+    "name": "sim_name",
+    "description": "",
+    "start_datetime": "2020-11-03 0:0:0",
     "timezone": "America/Vancouver",
     "days": 30,
     "episodes": 10
   },
  "records": [
-//      "metadata",
       "meter",
-//      "next_observations",
       "next_actions",
       "remaining_energy",
       "state_of_charge"
   ],
   "database": {
     "host": "localhost",
-//    "port": 1883,
     "connector": "postgresql+psycopg",
     "profiles_db": "profiles"
   },
-  // training defines special parameters for certain generations.
-  // currently used for some experimental agents to "warm up" at the beginning
-  // parameters for the socketio server
   "server": {
     "host": "localhost",
     "port": 1883
   },
-  // parameters for market
   "market": {
     "id": "",
     "type": "MicroTE3B",
@@ -37,12 +30,6 @@
     "grid": {
       "price": 0.069,
       "fee_ratio": 1.1,
-      // (optional) time of use schedule can be defined in the following way
-      // first set of keys are the months
-      // second set of keys are the hours for mid-peak and peak
-      // assume that TOU is only applicable on weekdays
-      // weekends will default to base rate defined above
-      // base rate defined above is also the off-peak rate
       "tou": {
                "5,6,7,8,9,10": {
                  "7,8,9,10,17,18": 0.144,
@@ -55,65 +42,53 @@
              }
     }
   },
-  "participants": { // each participant must be defined in the following format
+  "participants": {
     "_default": {
-      // the participant name must exist in the profile DB defined above
       "type": "Residential",
       "trader": {
         "track_metrics": false,
         "type": "basic_trader",
-        // type must exist in the _agent/trader folder
         "bid_price": 0.14,
-        // (optional) default bid price.
         "ask_price": 0.07,
-        // (optional) default ask price
         "reward_function": "net_profit"
       },
       "load": {
         "scale": 1
-        // multiply the load data from the profile database to be used in simulation
       },
       "generation": {
         "scale": 1
-        // multiply the generation data from the profile database to be used in simulation
       },
       "storage": {
-        // (optional) Defines the storage system to be attached to a participant
         "type": "Bess",
-        // storage type, must exist in _devices
         "capacity": 6400,
-        // Usable capacity defined in Wh
         "power": 5000,
-        // constant charge/discharge rate defined in W
         "efficiency": 0.9,
-        // one way efficiency. round-trip efficiency is efficiency^2
         "monthly_sdr": 0
-        // monthly self-discharge rate as a fraction of usable capacity
       }
     },
-    "R4": { // the participant name must exist in the profile DB defined above
+    "R4": {
       "type": "Residential",
       "trader": {
         "track_metrics": false,
-        "type": "basic_trader",  // type must exist in the _agent/trader folder
-        "bid_price": 0.08,  // (optional) default bid price.
-        "ask_price": 0.12,  // (optional) default ask price
+        "type": "basic_trader",
+        "bid_price": 0.08,
+        "ask_price": 0.12,
         "learning": true,
         "reward_function": "net_profit",
         "use_synthetic_profile": "test_profile_1kw_constant_gl"
       },
       "load": {
-        "scale": 1  // multiply the load data from the profile database to be used in simulation
+        "scale": 1
       },
       "generation": {
-        "scale": 1 // multiply the generation data from the profile database to be used in simulation
+        "scale": 1
       },
-      "storage": {  // (optional) Defines the storage system to be attached to a participant
-        "type": "Bess", // storage type, must exist in devices
-        "capacity": 27000,  // Usable capacity defined in Wh
-        "power": 10000, // constant charge/discharge rate defined in W
-        "efficiency": 0.95, // one way efficiency. round-trip efficiency is efficiency^2
-        "monthly_sdr": 0.05 // monthly self-discharge rate as a fraction of usable capacity
+      "storage": {
+        "type": "Bess",
+        "capacity": 27000,
+        "power": 10000,
+        "efficiency": 0.95,
+        "monthly_sdr": 0.05
       }
     }
   }
