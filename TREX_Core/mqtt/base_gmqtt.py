@@ -1,16 +1,20 @@
+# base_gmqtt.py
 import asyncio
-from typing import List, Tuple, Dict, Callable, Coroutine, Any
-
-from cuid2 import Cuid
-from gmqtt import Client as MQTTClient
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Coroutine
+from typing import Any, ClassVar
 
 # STOP = asyncio.Event()           # reused by all TREX scripts
+import structlog
+from cuid2 import Cuid
+from gmqtt import Client as MQTTClient
+
+log = structlog.get_logger()
 
 
 class BaseMQTTClient(ABC):
-    SUBS: List[Tuple[str, int]] = []
-    dispatch: Dict[str, Callable[[dict], Coroutine[Any, Any, None]]] = {}
+    SUBS: ClassVar[list[tuple[str, int]]] = []
+    dispatch: ClassVar[dict[str, Callable[[dict], Coroutine[Any, Any, None]]]] = {}
 
     def __init__(self, server_address: str, port: int = 1883, consumers: int = 1):
         self.cuid = Cuid(length=10).generate()
@@ -18,26 +22,8 @@ class BaseMQTTClient(ABC):
         self.port = port
         self.consumers = consumers
         self.client = MQTTClient(self.cuid)
-
-        # orig_publish = self.client.publish
-        #
-        # def publish_with_msg_id(message_or_topic, payload=None, qos=1, retain=False, **kwargs):
-        #     user_property = kwargs.get('user_property')
-        #     if user_property is None:
-        #         user_property = kwargs['user_property'] = []
-        #     user_property.append(
-        #         ('msg_id', Cuid(length=10).generate())
-        #     )
-        #     return orig_publish(
-        #         message_or_topic,
-        #         payload,
-        #         qos,
-        #         retain
-        #         **kwargs,
-        #     )
-        # self.client.publish = publish_with_msg_id
-
-        self.msg_queue: asyncio.Queue = asyncio.Queue()
+        self.maxsize = 1000
+        self.msg_queue: asyncio.Queue = asyncio.Queue(maxsize=self.maxsize)
 
     @abstractmethod
     def on_connect(self, client, flags, rc, properties):
@@ -54,8 +40,11 @@ class BaseMQTTClient(ABC):
         """Call inside your own on_connect to subscribe everything in SUBS."""
         for topic, qos in self.SUBS:
             client.subscribe(topic, qos=qos)
+        log.debug(
+            f"client {self.cuid} successfully subscribed to {len(self.SUBS)} topics"
+        )
 
-    async def background_tasks(self) -> List[Coroutine]:
+    async def background_tasks(self) -> list[Coroutine]:
         """
         Subclass can override to return extra background coroutines
         that run alongside the MQTT loop (e.g. controller.monitor()).
@@ -65,14 +54,7 @@ class BaseMQTTClient(ABC):
     # ------------------------------------------------------------------ #
     # Internal: queue raw messages
     # ------------------------------------------------------------------ #
-    async def _enqueue(self, client, topic, payload, qos, properties):
-        # print('queueing', topic)
-        # if qos == 1:
-        #     message = await self._dedup_msg(topic, payload, properties)
-        #     # print(message)
-        #     if message is not None:
-        #         await self.msg_queue.put(message)
-        # else:
+    async def _enqueue(self, _client, topic, payload, _qos, properties):
         await self.msg_queue.put(
             {"topic": topic, "payload": payload.decode(), "properties": properties}
         )
@@ -86,12 +68,12 @@ class BaseMQTTClient(ABC):
             if handler:
                 await handler(message)
                 return
-        print("unrecognised topic:", message["topic"])
+        log.warning("unrecognised topic", topic=message["topic"])
 
     async def _message_processor(self) -> None:
         while True:
             message = await self.msg_queue.get()
-            # print('processing', message['topic'])
+            log.debug(f"processing message c.id: {self.cuid}", topic=message["topic"])
             try:
                 await self._dispatch(message)
             finally:
@@ -121,7 +103,7 @@ class BaseMQTTClient(ABC):
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self._connect_forever())
 
-            for _ in range(self.consumers):     # message queue workers
+            for _ in range(self.consumers):  # message queue workers
                 tg.create_task(self._message_processor())
 
             for coro in await self.background_tasks():
