@@ -1,171 +1,211 @@
 import asyncio
+from collections.abc import Sequence
+from typing import Literal, TypedDict, cast
+
+import structlog
+
+logger = structlog.get_logger()
+
+TimeInterval = tuple[int, int]
+Transaction = tuple[Literal["bid", "ask"], float, float, str]
+
+
+class LedgerEntry(TypedDict, total=False):
+    price: float
+    quantity: float
+    source: str
+    time_delivery: TimeInterval
+
+
+class SettlementEntry(TypedDict):
+    source: str
+    price: float
+    quantity: float
+
+
+class SettlementBucket(TypedDict):
+    bids: dict[str, SettlementEntry]
+    asks: dict[str, SettlementEntry]
 
 
 class Ledger:
-    """Ledger helps participants keep track of accepted bids/asks, and successsful settlements.
+    """Track accepted bids, asks, and successful settlements.
 
-    Contains functions that will process raw ledger data into formats more useful downstream in the data pipeline
+    The ledger also converts raw market records into formats used
+    downstream in the participant data pipeline.
     """
-    
-    def __init__(self, participant_id, **kwargs):
-        self.__participant_id = participant_id
-        self.bids_hold = {}
-        self.asks_hold = {}
-        self.bids = {}
-        self.asks = {}
-        self.settled = {}
-        self.extra = {}
 
-    async def bid_success(self, entry_id):
-        """Track bid that was accepted by the Market
+    def __init__(self, participant_id: str) -> None:
+        self.__participant_id = participant_id
+        self.bids_hold: dict[str, LedgerEntry] = {}
+        self.asks_hold: dict[str, LedgerEntry] = {}
+        self.bids: dict[TimeInterval, dict[str, LedgerEntry]] = {}
+        self.asks: dict[TimeInterval, dict[str, LedgerEntry]] = {}
+        self.settled: dict[TimeInterval, SettlementBucket] = {}
+        self.extra: dict[TimeInterval, object] = {}
+
+    async def bid_success(self, entry_id: str) -> None:
+        """Track a bid that was accepted by the market.
 
         Args:
-            confirmation ([type]): [description]
+            entry_id (str): The accepted bid identifier.
         """
         # TODO: may need to add an async lock here
         entry = self.bids_hold.pop(entry_id, None)
         if not entry:
             return
-        time_delivery = entry.pop('time_delivery')
+        time_delivery = entry["time_delivery"]
         if time_delivery not in self.bids:
             self.bids[time_delivery] = {}
-        self.bids[time_delivery][entry_id] = entry
+        self.bids[time_delivery][entry_id] = {
+            "price": entry["price"],
+            "quantity": entry["quantity"],
+        }
 
-    async def ask_success(self, entry_id):
-        """Track ask that was accepted by the Market
+    async def ask_success(self, entry_id: str) -> None:
+        """Track an ask that was accepted by the market.
 
         Args:
-            confirmation ([type]): [description]
+            entry_id (str): The accepted ask identifier.
         """
         # TODO: may need to add an async lock here
         entry = self.asks_hold.pop(entry_id, None)
         if not entry:
             return
-        time_delivery = entry.pop('time_delivery')
+        time_delivery = entry["time_delivery"]
         if time_delivery not in self.asks:
             self.asks[time_delivery] = {}
-        self.asks[time_delivery][entry_id] = entry
+        self.asks[time_delivery][entry_id] = {
+            "source": entry["source"],
+            "price": entry["price"],
+            "quantity": entry["quantity"],
+        }
 
-    async def settle_success(self, confirmation):
-        """Track successful settlement
+    async def settle_success(self, confirmation: Sequence[object]) -> str | None:
+        """Track a successful settlement.
 
         Args:
-            confirmation ([type]): [description]
+            confirmation (Sequence[object]): Settlement payload published by
+                the market.
         """
-        # print(confirmation, self.bids, self.asks)
-        # todo: add validity checks, and feedback messages for invalid settlements
-        # print(confirmation)
+        # TODO: add validity checks, and feedback messages for invalid settlements
         # TODO: may need to add an async lock here
 
-
-        commit_id = confirmation[0]
-        entry_id = confirmation[1]
-        source = confirmation[2]
-        quantity = confirmation[3]
-        time_delivery = tuple(confirmation[4])
+        commit_id = cast(str, confirmation[0])
+        entry_id = cast(str, confirmation[1])
+        source = cast(str, confirmation[2])
+        quantity = cast(float, confirmation[3])
+        time_delivery = cast(
+            TimeInterval,
+            tuple(cast(Sequence[int], confirmation[4])),
+        )
 
         if time_delivery not in self.settled:
-            self.settled[time_delivery] = {'bids': {}, 'asks': {}}
-        # if 'buyer_id' in confirmation and confirmation['buyer_id'] == self.__participant_id:
-            # make sure settled bid exists in local record as well
-        entry_list = []
+            self.settled[time_delivery] = {"bids": {}, "asks": {}}
+        # make sure settled bid exists in local record as well
+        entry_group: Literal["bids", "asks"] | None = None
+        entries: dict[TimeInterval, dict[str, LedgerEntry]] | None = None
+
         if time_delivery in self.bids and entry_id in self.bids[time_delivery]:
-            entry_list = ['bids', self.bids]
+            entry_group = "bids"
+            entries = self.bids
         elif time_delivery in self.asks and entry_id in self.asks[time_delivery]:
-            entry_list = ['asks', self.asks]
+            entry_group = "asks"
+            entries = self.asks
         else:
-            print(confirmation)
+            logger.warning("Invalid settlement confirmation", confirmation=confirmation)
+            return None
 
-        if commit_id in self.settled[time_delivery][entry_list[0]]:
-            return
+        if commit_id in self.settled[time_delivery][entry_group]:
+            return None
 
-        self.settled[time_delivery][entry_list[0]][commit_id] = {
-            'source': source,
-            'price': entry_list[1][time_delivery][entry_id]['price'],
-            'quantity': quantity
+        entry = entries[time_delivery][entry_id]
+        self.settled[time_delivery][entry_group][commit_id] = {
+            "source": source,
+            "price": entry["price"],
+            "quantity": quantity,
         }
-        # update local bid entry
-        entry_list[1][time_delivery][entry_id]['quantity'] -= quantity
-        if entry_list[1][time_delivery][entry_id]['quantity'] <= 0:
-            entry_list[1][time_delivery].pop(entry_id)
-
-        # elif 'seller_id' in confirmation and confirmation['seller_id'] == self.__participant_id:
-        #     print(confirmation)
-        # elif time_delivery in self.asks and confirmation['id'] in self.asks[time_delivery]:
-        #     self.settled[time_delivery]['asks'][confirmation['id']] = {
-        #         'source': confirmation['source'],
-        #         'price': self.asks[time_delivery][confirmation['id']]['price'],
-        #         # 'price': confirmation['price'],
-        #         'quantity': confirmation['quantity']
-        #     }
-        #     # update local ask entry
-        #     self.asks[time_delivery][confirmation['id']]['quantity'] -= confirmation['quantity']
-        #     if self.asks[time_delivery][confirmation['id']]['quantity'] <= 0:
-        #         self.asks[time_delivery].pop(confirmation['id'])
+        # update the local entry after recording the settlement
+        entry["quantity"] -= quantity
+        if entry["quantity"] <= 0:
+            entries[time_delivery].pop(entry_id)
         return commit_id
 
-    async def get_settled_info(self, time_interval, **kwargs):
-        """Summarizes ledger data for a certain time interval
+    async def get_settled_info(
+        self,
+        time_interval: TimeInterval,
+    ) -> dict[str, dict[str, float]]:
+        """Summarize settled data for a delivery interval.
 
         Args:
-            time_interval (tuple): This time interval is not arbitrary and must be one of the market rounds that occurred in the past
+            time_interval (tuple): Must be one of the market rounds that
+                already occurred.
 
         Returns:
-            [type]: [description]
+            dict[str, dict[str, float]]: Aggregated bid and ask quantities,
+                totals, and average prices.
         """
         info = {
-            'asks': {
-                'quantity': 0,
-                'total_profit': 0
-            },
-            'bids': {
-                'quantity': 0,
-                'total_cost': 0
-            }
+            "asks": {"quantity": 0.0, "total_profit": 0.0, "price": 0.0},
+            "bids": {"quantity": 0.0, "total_cost": 0.0, "price": 0.0},
         }
 
         if time_interval not in self.settled:
             return info
 
         settlements = self.settled[time_interval]
-        if 'asks' in settlements:
-            for commit_id in settlements['asks']:
-                info['asks']['quantity'] += settlements['asks'][commit_id]['quantity']
-                info['asks']['total_profit'] += settlements['asks'][commit_id]['quantity'] * settlements['asks'][commit_id]['price']
-        if 'bids' in settlements:
-            for commit_id in settlements['bids']:
-                info['bids']['quantity'] += settlements['bids'][commit_id]['quantity']
-                info['bids']['total_cost'] += settlements['bids'][commit_id]['quantity'] * settlements['bids'][commit_id]['price']
+        for settlement in settlements["asks"].values():
+            info["asks"]["quantity"] += settlement["quantity"]
+            info["asks"]["total_profit"] += settlement["quantity"] * settlement["price"]
+
+        if info["asks"]["quantity"] > 0:
+            info["asks"]["price"] = (
+                info["asks"]["total_profit"] / info["asks"]["quantity"]
+            )
+
+        for settlement in settlements["bids"].values():
+            info["bids"]["quantity"] += settlement["quantity"]
+            info["bids"]["total_cost"] += settlement["quantity"] * settlement["price"]
+
+        if info["bids"]["quantity"] > 0:
+            info["bids"]["price"] = (
+                info["bids"]["total_cost"] / info["bids"]["quantity"]
+            )
+
         return info
 
-    async def get_simplified_transactions(self, time_interval):
-        """returns a list of transactions for a time interval
-        
+    async def get_simplified_transactions(
+        self,
+        time_interval: TimeInterval,
+    ) -> list[Transaction]:
+        """Return simplified transactions for a time interval.
 
         Args:
-            time_interval (tuple): This time interval is not arbitrary and must be one of the market rounds that occurred in the past
-
-        Returns:
-            [type]: [description]
+            time_interval (tuple): Must be one of the market rounds that
+                already occurred.
         """
-        transactions = []
+        transactions: list[Transaction] = []
         if time_interval not in self.settled:
             return transactions
-        settlements = self.settled[time_interval]
-        for action in ('bids', 'asks'):
-            if action in settlements:
-                for commit_id in settlements[action]:
-                    source = settlements[action][commit_id]['source']
-                    quantity = settlements[action][commit_id]['quantity']
-                    price = settlements[action][commit_id]['price']
 
-                    # note how action is converted from plural to singular (asks -> ask, bids -> bid).
-                    # This only works because bid/ask have the same character length
-                    transactions.append((action[:3], quantity, price, source))
+        settlements = self.settled[time_interval]
+        for action in ("bids", "asks"):
+            for settlement in settlements[action].values():
+                transaction_type: Literal["bid", "ask"] = (
+                    "bid" if action == "bids" else "ask"
+                )
+                transactions.append(
+                    (
+                        transaction_type,
+                        settlement["quantity"],
+                        settlement["price"],
+                        settlement["source"],
+                    )
+                )
             await asyncio.sleep(0)
         return transactions
-    
-    async def clear_history(self, time_interval):
+
+    async def clear_history(self, time_interval: TimeInterval) -> None:
         self.bids_hold.clear()
         self.asks_hold.clear()
         self.bids.pop(time_interval, None)
@@ -173,7 +213,7 @@ class Ledger:
         self.settled.pop(time_interval, None)
         self.extra.pop(time_interval, None)
 
-    def reset(self):
+    def reset(self) -> None:
         self.bids.clear()
         self.asks.clear()
         self.settled.clear()
