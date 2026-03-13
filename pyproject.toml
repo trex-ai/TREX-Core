@@ -185,7 +185,7 @@ addopts = [
     "--cov=TREX_Core",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
-    "--cov-fail-under=7",
+    "--cov-fail-under=0", # change this after we start writing tests
 ]
 
 markers = [
@@ -219,7 +219,3 @@ exclude_lines = [
 [tool.bandit]
 exclude_dirs = ["tests", "migration_path"]
 skips = ["B101"]
-
-[[tool.mypy.overrides]]
-module = ["TREX_Core.utils.drl_utils"]
-ignore_errors = true

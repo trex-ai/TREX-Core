@@ -23,14 +23,11 @@ repos:
     hooks:
       - id: ruff-check
         args: ["--fix"]
-        exclude: ^TREX_Core/main\.py$|^TREX_Core/utils/drl_utils\.py$
       - id: ruff-format
-        exclude: ^TREX_Core/main\.py$|^TREX_Core/utils/drl_utils\.py$
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
       - id: mypy
-        exclude: ^TREX_Core/main\.py$|^TREX_Core/utils/drl_utils\.py$
         additional_dependencies:
           - async-lru==2.2.0
           - asyncpg==0.31.0
