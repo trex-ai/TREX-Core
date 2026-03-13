@@ -3,8 +3,9 @@ source_info = {
     # also used to classify the type by simply checking if 'key' exists in dict
     "solar": "non_dispatch",
     "wind": "non_dispatch",
-    "bess": "dispatch"
+    "bess": "dispatch",
 }
+
 
 async def classify(source):
     source = source.lower()

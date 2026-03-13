@@ -1,28 +1,31 @@
 # https://stackoverflow.com/questions/30778015/how-to-increase-the-max-connections-in-postgres
 
-import sqlalchemy
-from sqlalchemy import create_engine, MetaData, Column, func
-from sqlalchemy_utils import database_exists, create_database
-from sqlalchemy.orm import sessionmaker
-import databases
 import os
-import commentjson
+from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import Any
+
+import commentjson
+import databases
+import sqlalchemy
+from sqlalchemy import Column, MetaData, create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy_utils import create_database, database_exists
 
 
-def _iter_config_roots(root_dir: str = ""):
-    roots = []
+def _iter_config_roots(root_dir: str = "") -> Iterator[Path]:
+    roots: list[Path] = []
     if root_dir:
         supplied_root = Path(root_dir).expanduser().resolve()
-        roots.extend((supplied_root, supplied_root / 'TREX_Core'))
+        roots.extend((supplied_root, supplied_root / "TREX_Core"))
     else:
-        env_root = os.environ.get('TREX_CORE_ROOT', '').strip()
+        env_root = os.environ.get("TREX_CORE_ROOT", "").strip()
         if env_root:
-            env_root = Path(env_root).expanduser().resolve()
-            roots.extend((env_root, env_root / 'TREX_Core'))
+            env_root_path = Path(env_root).expanduser().resolve()
+            roots.extend((env_root_path, env_root_path / "TREX_Core"))
 
         cwd = Path.cwd().resolve()
-        roots.extend((cwd, cwd / 'TREX_Core'))
+        roots.extend((cwd, cwd / "TREX_Core"))
         roots.append(Path(__file__).resolve().parents[1])
 
     seen = set()
@@ -33,30 +36,32 @@ def _iter_config_roots(root_dir: str = ""):
         seen.add(root_str)
         yield root
 
-def get_credentials(root_dir:str=""):
-    def _load_json_file(file_path):
+
+def get_credentials(root_dir: str = "") -> Any:
+    def _load_json_file(file_path: Path) -> Any:
         with open(file_path) as f:
-            json_file = commentjson.load(f)
-        return json_file
+            return commentjson.load(f)
 
     for base_dir in _iter_config_roots(root_dir):
-        credentials_file = base_dir / 'configs' / '_credentials.json'
+        credentials_file = base_dir / "configs" / "_credentials.json"
         if credentials_file.is_file():
             return _load_json_file(credentials_file)
     return None
 
-def make_db_str(credentials:dict, db_config:dict, db_name:str="", table_name:str=""):
-    connector = db_config['connector']
-    host = db_config['host']
-    port = db_config['port']
-    db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{host}:{port}'
-    if db_name:
-        db_str += f'/{db_name}'
-    if table_name:
-        db_str += f'/{table_name}'
 
-    # print(db_str)
+def make_db_str(
+    credentials: dict, db_config: dict, db_name: str = "", table_name: str = ""
+) -> str:
+    connector = db_config["connector"]
+    host = db_config["host"]
+    port = db_config["port"]
+    db_str = f"{connector}://{credentials['username']}:{credentials['password']}@{host}:{port}"
+    if db_name:
+        db_str += f"/{db_name}"
+    if table_name:
+        db_str += f"/{table_name}"
     return db_str
+
 
 def create_db(db_string, engine=None):
     if not engine:
@@ -65,9 +70,10 @@ def create_db(db_string, engine=None):
         create_database(engine.url)
     return database_exists(engine.url)
 
+
 async def dump_data(data, db_string, table, existing_connection=None):
     """Insert multiple records into a database table efficiently.
-    
+
     Args:
         data: List of records to insert
         db_string: Database connection string
@@ -76,47 +82,40 @@ async def dump_data(data, db_string, table, existing_connection=None):
     """
     if not data:
         return  # Short-circuit for empty data
-        
+
     # Use existing connection if provided, otherwise create a new one
     if existing_connection:
-        db = existing_connection
-        close_after = False
-    else:
-        # Create a new connection
-        async with databases.Database(db_string) as db:
-            async with db.transaction():
-                query = table.insert()
-                await db.execute_many(query, data)
-            return
-            
-    # Only execute this if using an existing connection
-    async with db.transaction():
-        query = table.insert()
-        await db.execute_many(query, data)
+        async with existing_connection.transaction():
+            query = table.insert()
+            await existing_connection.execute_many(query, data)
+        return
+
+    # Create a new connection
+    async with databases.Database(db_string) as db:
+        async with db.transaction():
+            query = table.insert()
+            await db.execute_many(query, data)
+        return
+
 
 def get_table(db_string, table_name, engine=None):
     if not engine:
         engine = create_engine(db_string)
 
-    # if not sqlalchemy.inspect(engine).has_table(table_name):
-    #     return None
-    # print(db_string, table_name)
-    # print(sqlalchemy.inspect(engine).has_table(table_name))
     if not sqlalchemy.inspect(engine).has_table(table_name):
         return None
 
     metadata = MetaData()
-    table = sqlalchemy.Table(table_name, metadata, autoload_with=engine)
-    return table
+    return sqlalchemy.Table(table_name, metadata, autoload_with=engine)
+
 
 def get_table_len(db_string, table, engine=None):
     if not engine:
         engine = create_engine(db_string)
     Session = sessionmaker(bind=engine)
     with Session() as session:
-        rows = session.query(table).count()
-        return rows
-    # return engine.scalar(table.count())
+        return session.query(table).count()
+
 
 def drop_table(db_string, table_name, engine=None):
     if not engine:
@@ -125,58 +124,36 @@ def drop_table(db_string, table_name, engine=None):
     if table is not None:
         table.drop(engine)
 
-async def create_market_table(db_string, table_name=None, engine=None, **kwargs):
+
+async def create_market_table(db_string, table_name=None, engine=None):
     if not engine:
         engine = create_engine(db_string)
     if not database_exists(engine.url):
         create_db(db_string)
 
     if sqlalchemy.inspect(engine).has_table(table_name):
-        return
+        return None
 
     meta = MetaData()
-    # if table_type == 'market':
-    #     table = sqlalchemy.Table(
-    #         table_name if table_name else table_type,
-    #         meta,
-    #         Column('id', sqlalchemy.Integer, primary_key=True),
-    #         Column('quantity', sqlalchemy.Integer),
-    #         Column('seller_id', sqlalchemy.String),
-    #         Column('buyer_id', sqlalchemy.String),
-    #         Column('energy_source', sqlalchemy.String),
-    #         Column('settlement_price', sqlalchemy.Float),
-    #         Column('fee_ask', sqlalchemy.Float),
-    #         Column('fee_bid', sqlalchemy.Float),
-    #         Column('time_creation', sqlalchemy.Integer),
-    #         Column('time_purchase', sqlalchemy.Integer),
-    #         Column('time_consumption', sqlalchemy.Integer))
-    #
-    # # temporary for transition to MicroTE3
-    # elif table_type == 'market2':
     table = sqlalchemy.Table(
         table_name,
         meta,
-        Column('id', sqlalchemy.Integer, primary_key=True),
-        Column('quantity', sqlalchemy.Integer),
-        Column('seller_id', sqlalchemy.String),
-        Column('buyer_id', sqlalchemy.String),
-        Column('energy_source', sqlalchemy.String),
-        Column('settlement_price_sell', sqlalchemy.Float),
-        Column('settlement_price_buy', sqlalchemy.Float),
-        Column('fee_ask', sqlalchemy.Float),
-        Column('fee_bid', sqlalchemy.Float),
-        Column('time_creation', sqlalchemy.Integer),
-        Column('time_purchase', sqlalchemy.Integer),
-        Column('time_consumption', sqlalchemy.Integer))
-
-    # elif table_type == 'custom' and 'custom_table' in kwargs:
-    #     # must be a pre-defined sqlalchemy Table object
-    #     # TODO: add type check
-    #     table = kwargs['custom_table']
-    # else:
-    #     return False
+        Column("id", sqlalchemy.Integer, primary_key=True),
+        Column("quantity", sqlalchemy.Integer),
+        Column("seller_id", sqlalchemy.String),
+        Column("buyer_id", sqlalchemy.String),
+        Column("energy_source", sqlalchemy.String),
+        Column("settlement_price_sell", sqlalchemy.Float),
+        Column("settlement_price_buy", sqlalchemy.Float),
+        Column("fee_ask", sqlalchemy.Float),
+        Column("fee_bid", sqlalchemy.Float),
+        Column("time_creation", sqlalchemy.Integer),
+        Column("time_purchase", sqlalchemy.Integer),
+        Column("time_consumption", sqlalchemy.Integer),
+    )
     table.create(engine, checkfirst=True)
     return True
+
 
 async def create_table(db_string, table, engine=None):
     if not engine:
@@ -185,38 +162,40 @@ async def create_table(db_string, table, engine=None):
         create_db(db_string)
 
     if sqlalchemy.inspect(engine).has_table(table.name):
-        return
-
-        # must be a pre-defined sqlalchemy Table object
-        # TODO: add type check
-    # table = kwargs['custom_table']
+        return None
     table.create(engine, checkfirst=True)
     return True
+
 
 async def update_metadata(db_string, generation, update_dict):
     db = databases.Database(db_string)
     await db.connect()
-    md_table = get_table(db_string, 'metadata')
+    md_table = get_table(db_string, "metadata")
     async with db.transaction():
-        # print(db_string, generation)
-
-        md = await db.fetch_one(md_table.select(md_table.c.generation == generation, for_update=True))
+        md = await db.fetch_one(
+            md_table.select(md_table.c.generation == generation, for_update=True)
+        )
         if md is None:
             await db.disconnect()
             return False
 
-        metadata = md['data']
+        metadata = md["data"]
+
         # https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
-        import collections.abc
-        def update(d, u):
+        def update(d: dict[str, Any], u: Mapping[str, Any]) -> dict[str, Any]:
             for k, v in u.items():
-                if isinstance(v, collections.abc.Mapping):
+                if isinstance(v, Mapping):
                     d[k] = update(d.get(k, {}), v)
                 else:
                     d[k] = v
             return d
+
         metadata = update(metadata, update_dict)
 
-        await db.execute(md_table.update().where(md_table.c.generation == generation).values(data=metadata))
+        await db.execute(
+            md_table.update()
+            .where(md_table.c.generation == generation)
+            .values(data=metadata)
+        )
     await db.disconnect()
     return True
