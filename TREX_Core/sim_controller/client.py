@@ -156,12 +156,27 @@ if __name__ == "__main__":
 
     client = Client(host=args.host, port=args.port, config=json.loads(args.config))
 
-    if sys.platform.startswith("win"):
-        asyncio.run(client.run())
-    else:
-        try:
-            import uvloop
-
-            uvloop.run(client.run())
-        except ImportError:
+    try:
+        if sys.platform.startswith("win"):
             asyncio.run(client.run())
+        else:
+            try:
+                import uvloop
+
+                uvloop.run(client.run())
+            except ImportError:
+                asyncio.run(client.run())
+    except KeyboardInterrupt:
+        shutdown_reason = getattr(client.client, "_trex_shutdown_reason", None)
+        if shutdown_reason:
+            logger.info(
+                "Sim controller shutdown complete",
+                market_id=client.controller.market_id,
+                shutdown_reason=shutdown_reason,
+            )
+        else:
+            logger.warning(
+                "Sim controller interrupted",
+                market_id=client.controller.market_id,
+            )
+            raise SystemExit(130) from None

@@ -446,6 +446,12 @@ class Controller:
                     qos=1,
                 )
                 await self.delay(1)
+                self.__client._trex_shutdown_reason = "simulation_complete"
+                logger.info(
+                    "Sim controller disconnecting after simulation completion",
+                    market_id=self.market_id,
+                    episode=self.__episode,
+                )
                 await self.__client.disconnect()
                 os.kill(os.getpid(), signal.SIGINT)
 

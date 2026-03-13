@@ -173,6 +173,11 @@ class Client(BaseMQTTClient):
         self.market.run = False
         await self.market.ensure_transactions_complete()
         await self.market.close_connection()
+        self.client._trex_shutdown_reason = "simulation_complete"
+        log.info(
+            "Market disconnecting after simulation completion",
+            market_id=self.market.market_id,
+        )
         await self.client.disconnect()
         os.kill(os.getpid(), signal.SIGINT)
         raise SystemExit
@@ -195,12 +200,24 @@ if __name__ == "__main__":
         host=args.host, port=args.port, market_configs=json.loads(args.configs)
     )
 
-    if sys.platform.startswith("win"):
-        asyncio.run(client.run())
-    else:
-        try:
-            import uvloop
-
-            uvloop.run(client.run())
-        except ImportError:
+    try:
+        if sys.platform.startswith("win"):
             asyncio.run(client.run())
+        else:
+            try:
+                import uvloop
+
+                uvloop.run(client.run())
+            except ImportError:
+                asyncio.run(client.run())
+    except KeyboardInterrupt:
+        shutdown_reason = getattr(client.client, "_trex_shutdown_reason", None)
+        if shutdown_reason:
+            log.info(
+                "Market shutdown complete",
+                market_id=client.market.market_id,
+                shutdown_reason=shutdown_reason,
+            )
+        else:
+            log.warning("Market interrupted", market_id=client.market.market_id)
+            raise SystemExit(130) from None

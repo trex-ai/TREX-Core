@@ -206,6 +206,12 @@ class Client(BaseMQTTClient):
     async def on_end_simulation(self, _message):
         """Event tells the participant that it can terminate itself when ready."""
         self.participant.run = False
+        self.client._trex_shutdown_reason = "simulation_complete"
+        logger.info(
+            "Participant shutting down after simulation completion",
+            market_id=self.market_id,
+            participant_id=self.participant_id,
+        )
         self.client.publish(
             f"{self.participant.market_id}/join_market/{self.participant.participant_id}",
             "",
@@ -263,12 +269,29 @@ if __name__ == "__main__":
         # load_scale=float(args.load_scale),
         **json.loads(args.configs),
     )
-    if sys.platform.startswith("win"):
-        asyncio.run(client.run())
-    else:
-        try:
-            import uvloop
-
-            uvloop.run(client.run())
-        except ImportError:
+    try:
+        if sys.platform.startswith("win"):
             asyncio.run(client.run())
+        else:
+            try:
+                import uvloop
+
+                uvloop.run(client.run())
+            except ImportError:
+                asyncio.run(client.run())
+    except KeyboardInterrupt:
+        shutdown_reason = getattr(client.client, "_trex_shutdown_reason", None)
+        if shutdown_reason:
+            logger.info(
+                "Participant shutdown complete",
+                market_id=client.market_id,
+                participant_id=client.participant_id,
+                shutdown_reason=shutdown_reason,
+            )
+        else:
+            logger.warning(
+                "Participant interrupted",
+                market_id=client.market_id,
+                participant_id=client.participant_id,
+            )
+            raise SystemExit(130) from None
