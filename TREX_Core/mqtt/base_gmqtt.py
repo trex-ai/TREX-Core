@@ -2,7 +2,7 @@
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
-from typing import Any, ClassVar
+from typing import Any
 
 # STOP = asyncio.Event()           # reused by all TREX scripts
 import structlog
@@ -11,19 +11,22 @@ from gmqtt import Client as MQTTClient
 
 log = structlog.get_logger()
 
+MessageHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
+
 
 class BaseMQTTClient(ABC):
-    SUBS: ClassVar[list[tuple[str, int]]] = []
-    dispatch: ClassVar[dict[str, Callable[[dict], Coroutine[Any, Any, None]]]] = {}
-
     def __init__(self, server_address: str, port: int = 1883, consumers: int = 1):
         self.cuid = Cuid(length=10).generate()
         self.server_address = server_address
         self.port = port
         self.consumers = consumers
         self.client = MQTTClient(self.cuid)
+        self.SUBS: list[tuple[str, int]] = []
+        self.dispatch: dict[str, MessageHandler] = {}
         self.maxsize = 1000
-        self.msg_queue: asyncio.Queue = asyncio.Queue(maxsize=self.maxsize)
+        self.msg_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
+            maxsize=self.maxsize
+        )
 
     @abstractmethod
     def on_connect(self, client, flags, rc, properties):
@@ -42,7 +45,7 @@ class BaseMQTTClient(ABC):
             client.subscribe(topic, qos=qos)
         log.debug("subscribed", client_id=self.cuid, topic_count=len(self.SUBS))
 
-    async def background_tasks(self) -> list[Coroutine]:
+    async def background_tasks(self) -> list[Coroutine[Any, Any, Any]]:
         """
         Subclass can override to return extra background coroutines
         that run alongside the MQTT loop (e.g. controller.monitor()).
