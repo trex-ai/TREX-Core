@@ -1,514 +1,500 @@
-import itertools
+# ruff: noqa: N999
+
+"""MicroTE4 market with deterministic pro-rata handling for price ties.
+
+The market keeps standard double-auction ordering, then applies
+deterministic pro-rata allocation when multiple orders share a price
+level. This keeps matching fair and repeatable for identical inputs,
+which is useful for reinforcement-learning workloads.
+"""
+
+from typing import Any, TypedDict, cast, override
+
 from cuid2 import Cuid
-from operator import itemgetter
-from typing import override
-from TREX_Core.markets.base.DoubleAuction import Market as BaseMarket
 
-"""
-MicroTE4 Market - Deterministic Pro-Rata Double Auction
+from TREX_Core.markets.base.DoubleAuction import (
+    Market as BaseMarket,
+)
+from TREX_Core.markets.base.DoubleAuction import (
+    TimeInterval,
+    TransactionRecord,
+)
 
-This implementation extends the standard double auction with deterministic pro-rata matching 
-for price-level ties. The market mechanism is specifically designed to ensure consistent,
-fair matching results while maintaining the core properties of the double auction.
+type PriceLevel = float | int
+type OrderBook = dict[str, TransactionRecord]
+type PriceLevelGroups = dict[PriceLevel, list[TransactionRecord]]
+type SettlementResult = tuple[Any, Any, Any] | None
 
-Key Features:
-------------
-1. Standard Double Auction Behavior:
-   - Bids sorted by price (highest first)
-   - Asks sorted by price (lowest first)
-   - Highest bids matched with lowest asks
-   - Early termination when ask price > bid price
 
-2. Pro-Rata Matching for Ties:
-   - When multiple bids/asks exist at the same price level, quantities are allocated proportionally
-   - Each order receives a share based on its size relative to the total
-   - Example: If 100 units are to be matched among bids of [60, 40] units, 
-     they receive [60, 40] units respectively
+class AllocationEntry(TypedDict):
+    order: TransactionRecord
+    original: TransactionRecord
+    quantity: float
+    raw_allocation: float
+    allocation: float
+    frac_part: float
 
-3. Deterministic Allocation:
-   - Proportional allocation with rounding to nearest integer
-   - Uses multiple criteria for deterministic adjustment:
-     a. Fractional part of allocation (higher first)
-     b. Raw allocation amount
-     c. Original quantity
-   - Ensures identical inputs always produce identical outputs
 
-4. Quantity Conservation:
-   - Total matched quantity is always conserved
-   - Adjustments to rounded allocations maintain conservation
-   - Minimum allocations only applied if conservation permits
-
-5. Minimum Allocation Policy:
-   - Orders with positive raw allocation attempt to receive at least 1 unit
-   - Applied only when sufficient quantity is available
-   - Quantity conservation takes precedence
-
-Algorithm Flow:
---------------
-1. Group bids and asks by price level
-2. Process price levels in order (highest bids, lowest asks)
-3. For non-tie cases (single bid, single ask):
-   - Use standard matching with min(bid_qty, ask_qty)
-4. For tie cases (multiple bids or asks at same price):
-   - Calculate total quantities and match amount
-   - Calculate proportional allocations
-   - Apply deterministic rounding
-   - Ensure quantity conservation
-   - Apply minimum allocations where possible
-   - Create settlements with specific quantities
-5. Continue with remaining quantities in standard matching loop
-
-This design ensures fair treatment of all orders while providing deterministic behavior
-that is crucial for reinforcement learning applications. The algorithm carefully balances
-market efficiency, fairness, and computational complexity.
-"""
+type AllocationMap = dict[str, AllocationEntry]
 
 
 class Market(BaseMarket):
-    """MicroTE4 is a futures trading based market design for transactive energy as part of TREX
+    """MicroTE4 futures market with deterministic pro-rata matching.
 
-    This implementation extends the standard double auction with deterministic pro-rata matching
-    for price-level ties, which is critical for reinforcement learning applications.
-
-    The market mechanism works like standard futures contracts, where delivery time interval
-    is submitted along with the bid or ask. Bids and asks are organized by source type and
-    time slot.
-
-    When multiple bids or asks exist at the same price level, quantities are allocated
-    proportionally based on order size. This ensures fair treatment of all orders
-    and deterministic behavior for identical inputs.
-
-    Bids/asks can be accepted for any time slot starting from one step into the future to infinity.
-    The minimum close slot is determined by 'close_steps', where a close_steps of 2 is 1 step into the future.
-    The minimum close time slot is the last delivery slot that will accept bids/asks.
+    Orders are grouped by delivery interval and price. Standard
+    double-auction behavior is preserved, but tied price levels are
+    resolved with proportional allocations so identical inputs always
+    produce the same settlements.
     """
 
     def __init__(self, market_id, **kwargs):
         super().__init__(market_id, **kwargs)
 
     @override
-    async def __match(self, time_delivery):
-        """Pro-rata matching algorithm with deterministic allocation for ties.
-
-        This algorithm maintains the core behavior of matching highest bids with lowest asks,
-        but adds special handling for ties at the same price level. When multiple bids or asks
-        exist at the same price, quantities are allocated proportionally based on order size.
-
-        Parameters
-        ----------
-        time_delivery : tuple
-            Tuple containing the start and end timestamps in UNIX timestamp format
-            indicating the interval for energy to be delivered.
-        """
-        if time_delivery not in self.__open:
+    async def __match(self, time_delivery: TimeInterval) -> None:
+        """Match open orders for a delivery interval."""
+        order_books = self.__open_books_for_delivery(time_delivery)
+        if order_books is None:
             return
 
-        if {'ask', 'bid'} > self.__open[time_delivery].keys():
-            return
+        bids, asks = order_books
+        bid_price_groups = self.__group_orders_by_price(bids)
+        ask_price_groups = self.__group_orders_by_price(asks)
 
-        # Group bids and asks by price
-        # self.__open[time_delivery]['ask'][:] = \
-        #     sorted([ask for ask in self.__open[time_delivery]['ask'].values() if ask['quantity'] > 0],
-        #            key=itemgetter('price'), reverse=False)
-        # self.__open[time_delivery]['bid'][:] = \
-        #     sorted([bid for bid in self.__open[time_delivery]['bid'].values() if bid['quantity'] > 0],
-        #            key=itemgetter('price'), reverse=True)
-        #
-        bids = self.__open[time_delivery]['bid']
-        asks = self.__open[time_delivery]['ask']
-
-        # Group bids and asks by price level to detect ties
-        bid_price_groups = {}
-        for bid in bids.values():
-            if bid['price'] not in bid_price_groups:
-                bid_price_groups[bid['price']] = []
-            bid_price_groups[bid['price']].append(bid)
-
-        ask_price_groups = {}
-        for ask in asks.values():
-            if ask['price'] not in ask_price_groups:
-                ask_price_groups[ask['price']] = []
-            ask_price_groups[ask['price']].append(ask)
-
-        # Map from working copies back to original objects for settlement
-        # bid_map = {b['id']: next(original for original in self.__open[time_delivery]['bid']
-        #                          if original['id'] == b['id'])
-        #            for b in bids}
-        # ask_map = {a['id']: next(original for original in self.__open[time_delivery]['ask']
-        #                          if original['id'] == a['id'])
-        #            for a in asks}
-
-        # Process each bid price group in descending order
-        for bid_price in sorted(bid_price_groups.keys(), reverse=True):
+        for bid_price in sorted(bid_price_groups, reverse=True):
             bids_at_price = bid_price_groups[bid_price]
 
-            # Process each ask price group in ascending order
-            for ask_price in sorted(ask_price_groups.keys()):
-                # Early termination - if ask price exceeds bid price, no more matches possible
+            for ask_price in sorted(ask_price_groups):
                 if ask_price > bid_price:
                     break
 
-                asks_at_price = ask_price_groups[ask_price]
-
-                # Check for ties - if no ties, use standard matching
-                if len(bids_at_price) == 1 and len(asks_at_price) == 1:
-                    bid = bids_at_price[0]
-                    ask = asks_at_price[0]
-
-                    # Skip self-trades
-                    if bid['participant_id'] == ask['participant_id'] or bid['quantity'] <= 0 or ask['quantity'] <= 0:
-                        continue
-
-                    original_bid = bids[bid['id']]
-                    original_ask = asks[ask['id']]
-
-                    # Calculate quantity from original objects
-                    quantity = min(original_bid['quantity'], original_ask['quantity'])
-
-                    if quantity > 0:
-                        # Use the standard settle method
-                        await self.settle(original_bid, original_ask, time_delivery)
-
-                        # Update working copies
-                        bid['quantity'] = original_bid['quantity']
-                        ask['quantity'] = original_ask['quantity']
-                else:
-                    # We have ties, use pro-rata matching
-                    await self.__match_pro_rata(bids_at_price, asks_at_price, bids, asks, time_delivery)
-
-                    # Update working copies after pro-rata matching
-                    for bid in bids_at_price:
-                        original_bid = bids[bid['id']]
-                        bid['quantity'] = original_bid['quantity']
-
-                    for ask in asks_at_price:
-                        original_ask = asks[ask['id']]
-                        ask['quantity'] = original_ask['quantity']
-
-                # Remove orders with zero quantity
-                bid_price_groups[bid_price] = [b for b in bids_at_price if b['quantity'] > 0]
-                bids_at_price = bid_price_groups[bid_price]
-
-                ask_price_groups[ask_price] = [a for a in asks_at_price if a['quantity'] > 0]
-                asks_at_price = ask_price_groups[ask_price]
-
-                # If all bids at this price are fulfilled, move to next price
+                bids_at_price = await self.__process_price_pair(
+                    bid_price,
+                    ask_price,
+                    bid_price_groups,
+                    ask_price_groups,
+                    bids,
+                    asks,
+                    time_delivery,
+                )
                 if not bids_at_price:
                     break
 
-    async def __match_pro_rata(self, bids_at_price, asks_at_price, bid_map, ask_map, time_delivery):
-        """Match orders with pro-rata allocation for ties.
+    def __open_books_for_delivery(
+        self, time_delivery: TimeInterval
+    ) -> tuple[OrderBook, OrderBook] | None:
+        open_orders = self.__open.get(time_delivery)
+        if open_orders is None or {"ask", "bid"} > open_orders.keys():
+            return None
 
-        This method handles the case where multiple bids and/or asks exist at the same price level.
-        Quantities are allocated proportionally based on order size, ensuring deterministic behavior.
+        return (
+            cast(OrderBook, open_orders["bid"]),
+            cast(OrderBook, open_orders["ask"]),
+        )
 
-        Parameters
-        ----------
-        bids_at_price : list
-            List of bids at the same price level
-        asks_at_price : list
-            List of asks at the same price level
-        bid_map : dict
-            Map from working copies to original bid objects
-        ask_map : dict
-            Map from working copies to original ask objects
-        time_delivery : tuple
-            Tuple containing delivery time interval
-        """
-        # Filter out orders with zero quantities and self-trades
-        valid_bids = []
-        for bid in bids_at_price:
-            if bid['quantity'] > 0:
-                original_bid = bid_map[bid['id']]
-                if original_bid['quantity'] > 0:
-                    valid_bids.append(bid)
+    def __group_orders_by_price(self, orders: OrderBook) -> PriceLevelGroups:
+        price_groups: PriceLevelGroups = {}
+        for order in orders.values():
+            price = cast(PriceLevel, order["price"])
+            price_groups.setdefault(price, []).append(order)
+        return price_groups
 
-        valid_asks = []
-        for ask in asks_at_price:
-            if ask['quantity'] > 0:
-                original_ask = ask_map[ask['id']]
-                if original_ask['quantity'] > 0:
-                    valid_asks.append(ask)
+    async def __process_price_pair(
+        self,
+        bid_price: PriceLevel,
+        ask_price: PriceLevel,
+        bid_price_groups: PriceLevelGroups,
+        ask_price_groups: PriceLevelGroups,
+        bids: OrderBook,
+        asks: OrderBook,
+        time_delivery: TimeInterval,
+    ) -> list[TransactionRecord]:
+        bids_at_price = bid_price_groups[bid_price]
+        asks_at_price = ask_price_groups[ask_price]
 
-        if not valid_bids or not valid_asks:
+        if len(bids_at_price) == 1 and len(asks_at_price) == 1:
+            await self.__match_single_pair(
+                bids_at_price[0],
+                asks_at_price[0],
+                bids,
+                asks,
+                time_delivery,
+            )
+        else:
+            await self.__match_pro_rata(
+                bids_at_price,
+                asks_at_price,
+                bids,
+                asks,
+                time_delivery,
+            )
+            self.__sync_group_quantities(bids_at_price, bids)
+            self.__sync_group_quantities(asks_at_price, asks)
+
+        updated_bids = self.__active_orders(bids_at_price)
+        updated_asks = self.__active_orders(asks_at_price)
+        bid_price_groups[bid_price] = updated_bids
+        ask_price_groups[ask_price] = updated_asks
+        return updated_bids
+
+    async def __match_single_pair(
+        self,
+        bid: TransactionRecord,
+        ask: TransactionRecord,
+        bids: OrderBook,
+        asks: OrderBook,
+        time_delivery: TimeInterval,
+    ) -> None:
+        if (
+            bid["participant_id"] == ask["participant_id"]
+            or bid["quantity"] <= 0
+            or ask["quantity"] <= 0
+        ):
             return
 
-        # Calculate total quantities
-        total_bid_qty = sum(bid_map[bid['id']]['quantity'] for bid in valid_bids)
-        total_ask_qty = sum(ask_map[ask['id']]['quantity'] for ask in valid_asks)
-        match_qty = min(total_bid_qty, total_ask_qty)
-
-        if match_qty <= 0:
-            return
-
-        # Calculate proportional allocations for bids
-        bid_allocations = {}
-        for bid in valid_bids:
-            original_bid = bid_map[bid['id']]
-            bid_qty = original_bid['quantity']
-
-            # Calculate raw pro-rata allocation
-            raw_allocation = match_qty * (bid_qty / total_bid_qty)
-
-            # Initial allocation rounded to nearest integer
-            allocation = round(raw_allocation)
-
-            # Store data for allocation adjustments
-            bid_allocations[bid['id']] = {
-                'bid': bid,
-                'original': original_bid,
-                'quantity': bid_qty,
-                'raw_allocation': raw_allocation,
-                'allocation': allocation,
-                'frac_part': abs(raw_allocation - allocation)
-            }
-
-        # Calculate proportional allocations for asks
-        ask_allocations = {}
-        for ask in valid_asks:
-            original_ask = ask_map[ask['id']]
-            ask_qty = original_ask['quantity']
-
-            # Calculate raw pro-rata allocation
-            raw_allocation = match_qty * (ask_qty / total_ask_qty)
-
-            # Initial allocation rounded to nearest integer
-            allocation = round(raw_allocation)
-
-            # Store data for allocation adjustments
-            ask_allocations[ask['id']] = {
-                'ask': ask,
-                'original': original_ask,
-                'quantity': ask_qty,
-                'raw_allocation': raw_allocation,
-                'allocation': allocation,
-                'frac_part': abs(raw_allocation - allocation)
-            }
-
-        # Fix quantity conservation for bids
-        bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
-        if bid_total != match_qty:
-            # Sort by multiple criteria for deterministic selection
-            sorted_bids = sorted(bid_allocations.values(), key=lambda x: (
-                -x['frac_part'],  # Higher fractional part first
-                x['raw_allocation'],  # Then by raw allocation
-                x['quantity']  # Then by original quantity
-            ))
-
-            adjustment = -1 if bid_total > match_qty else 1
-            sorted_bids[0]['allocation'] += adjustment
-
-        # Fix quantity conservation for asks
-        ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
-        if ask_total != match_qty:
-            sorted_asks = sorted(ask_allocations.values(), key=lambda x: (
-                -x['frac_part'],
-                x['raw_allocation'],
-                x['quantity']
-            ))
-
-            adjustment = -1 if ask_total > match_qty else 1
-            sorted_asks[0]['allocation'] += adjustment
-
-        # Handle minimum allocations
-        # First see how many units we could allocate after standard rounding
-        bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
-        remaining_bid_qty = match_qty - bid_total
-
-        # Find bids with positive raw allocation but zero rounded allocation
-        zero_allocated_bids = [b for b in bid_allocations.values()
-                               if b['raw_allocation'] > 0 and b['allocation'] == 0]
-
-        # Sort by raw allocation (highest first) and allocate minimum of 1 where possible
-        if remaining_bid_qty > 0 and zero_allocated_bids:
-            zero_allocated_bids.sort(key=lambda x: x['raw_allocation'], reverse=True)
-            for bid_data in zero_allocated_bids:
-                if remaining_bid_qty > 0:
-                    bid_data['allocation'] = 1
-                    remaining_bid_qty -= 1
-                else:
-                    break
-
-        # Do the same for asks
-        ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
-        remaining_ask_qty = match_qty - ask_total
-
-        zero_allocated_asks = [a for a in ask_allocations.values()
-                               if a['raw_allocation'] > 0 and a['allocation'] == 0]
-
-        if remaining_ask_qty > 0 and zero_allocated_asks:
-            zero_allocated_asks.sort(key=lambda x: x['raw_allocation'], reverse=True)
-            for ask_data in zero_allocated_asks:
-                if remaining_ask_qty > 0:
-                    ask_data['allocation'] = 1
-                    remaining_ask_qty -= 1
-                else:
-                    break
-
-        # Final check for quantity conservation after minimum allocations
-        bid_total = sum(bid_data['allocation'] for bid_data in bid_allocations.values())
-        if bid_total > match_qty:
-            # If minimums caused excess, reduce from largest allocations
-            sorted_bids = sorted(bid_allocations.values(), key=lambda x: (-x['allocation'], -x['raw_allocation']))
-            excess = bid_total - match_qty
-
-            for bid_data in sorted_bids:
-                reduction = min(excess, bid_data['allocation'] - 1) if bid_data['allocation'] > 1 else 0
-                if reduction > 0:
-                    bid_data['allocation'] -= reduction
-                    excess -= reduction
-                    if excess == 0:
-                        break
-
-        ask_total = sum(ask_data['allocation'] for ask_data in ask_allocations.values())
-        if ask_total > match_qty:
-            sorted_asks = sorted(ask_allocations.values(), key=lambda x: (-x['allocation'], -x['raw_allocation']))
-            excess = ask_total - match_qty
-
-            for ask_data in sorted_asks:
-                reduction = min(excess, ask_data['allocation'] - 1) if ask_data['allocation'] > 1 else 0
-                if reduction > 0:
-                    ask_data['allocation'] -= reduction
-                    excess -= reduction
-                    if excess == 0:
-                        break
-
-        # Create settlements based on allocations
-        # For each bid-ask pair that doesn't involve self-trading
-        for bid_id, bid_data in bid_allocations.items():
-            if bid_data['allocation'] <= 0:
-                continue
-
-            original_bid = bid_data['original']
-            bid_allocation = bid_data['allocation']
-
-            for ask_id, ask_data in ask_allocations.items():
-                if ask_data['allocation'] <= 0:
-                    continue
-
-                # Skip self-trading
-                if bid_data['bid']['participant_id'] == ask_data['ask']['participant_id']:
-                    continue
-
-                original_ask = ask_data['original']
-                ask_allocation = ask_data['allocation']
-
-                # Calculate pair quantity
-                pair_qty = min(bid_allocation, ask_allocation)
-
-                if pair_qty > 0:
-                    # Create settlement with explicit quantity
-                    await self.settle(original_bid, original_ask, time_delivery, pair_qty)
-
-                    # Update remaining allocations
-                    bid_allocation -= pair_qty
-                    ask_data['allocation'] -= pair_qty
-
-                    if bid_allocation <= 0:
-                        break
-
-    @override
-    async def settle(self, bid: dict, ask: dict, time_delivery: tuple, quantity_to_settle=None):
-        """Performs settlement for bid/ask pairs found during the matching process.
-
-        If bid/ask are valid, the bid/ask quantities are adjusted, a commitment record is created, and a settlement confirmation is sent to both participants.
-
-        Parameters
-        ----------
-        bid: dict
-            bid entry to be settled. Should be a reference to the open bid
-
-        ask: dict
-            bid entry to be settled. Should be a reference to the open ask
-
-        time_delivery : tuple
-            Tuple containing the start and end timestamps in UNIX timestamp format.
-
-        quantity_to_settle : float, optional
-            If provided, uses this exact value for settlement instead of calculating min(bid['quantity'], ask['quantity'])
-            This is useful for pro-rata matching where quantities are pre-calculated.
-
-        locking: bool
-        Optinal locking mode, which locks the bid and ask until a callback is received after settlement confirmation is sent. The default value is False.
-
-        Currently, locking should be disabled in simulation mode, as waiting for callback causes some settlements to be incomplete, likely due a flaw in the implementation or a poor understanding of how callbacks affect the sequence of events to be executed in async mode.
-
-        Notes
-        -----
-        It is possible to settle directly with the grid, although this feature is currently not used by the agents and is under consideration to be deprecated.
-
-
-        """
-
-        # grid is not allowed to interact through market
-        if ask['source'] == 'grid':
-            return
-
-        # Use specified quantity if provided, otherwise calculate as min
-        quantity = quantity_to_settle if quantity_to_settle is not None else min(bid['quantity'], ask['quantity'])
-
-        # only proceed to settle if settlement quantity is positive
+        bid_id = cast(str, bid["id"])
+        ask_id = cast(str, ask["id"])
+        original_bid = bids[bid_id]
+        original_ask = asks[ask_id]
+        quantity = min(
+            cast(float, original_bid["quantity"]),
+            cast(float, original_ask["quantity"]),
+        )
         if quantity <= 0:
             return
 
-        # if locking:
-        #     # lock the bid and ask until confirmations are received
-        #     ask['lock'] = True
-        #     bid['lock'] = True
+        await self.settle(original_bid, original_ask, time_delivery)
+        bid["quantity"] = original_bid["quantity"]
+        ask["quantity"] = original_ask["quantity"]
+
+    def __sync_group_quantities(
+        self,
+        orders_at_price: list[TransactionRecord],
+        order_map: OrderBook,
+    ) -> None:
+        for order in orders_at_price:
+            order_id = cast(str, order["id"])
+            order["quantity"] = order_map[order_id]["quantity"]
+
+    def __active_orders(
+        self, orders_at_price: list[TransactionRecord]
+    ) -> list[TransactionRecord]:
+        return [order for order in orders_at_price if order["quantity"] > 0]
+
+    async def __match_pro_rata(
+        self,
+        bids_at_price: list[TransactionRecord],
+        asks_at_price: list[TransactionRecord],
+        bid_map: OrderBook,
+        ask_map: OrderBook,
+        time_delivery: TimeInterval,
+    ) -> None:
+        """Match tied price levels with deterministic pro-rata allocation."""
+        valid_bids = self.__valid_orders(bids_at_price, bid_map)
+        valid_asks = self.__valid_orders(asks_at_price, ask_map)
+        if not valid_bids or not valid_asks:
+            return
+
+        total_bid_qty = self.__total_order_quantity(valid_bids, bid_map)
+        total_ask_qty = self.__total_order_quantity(valid_asks, ask_map)
+        match_qty = min(total_bid_qty, total_ask_qty)
+        if match_qty <= 0:
+            return
+
+        bid_allocations = self.__build_allocations(
+            valid_bids,
+            bid_map,
+            match_qty,
+            total_bid_qty,
+        )
+        ask_allocations = self.__build_allocations(
+            valid_asks,
+            ask_map,
+            match_qty,
+            total_ask_qty,
+        )
+
+        self.__reconcile_allocations(bid_allocations, match_qty)
+        self.__reconcile_allocations(ask_allocations, match_qty)
+        await self.__settle_allocations(
+            bid_allocations,
+            ask_allocations,
+            time_delivery,
+        )
+
+    def __valid_orders(
+        self,
+        orders_at_price: list[TransactionRecord],
+        order_map: OrderBook,
+    ) -> list[TransactionRecord]:
+        valid_orders: list[TransactionRecord] = []
+        for order in orders_at_price:
+            if order["quantity"] <= 0:
+                continue
+
+            order_id = cast(str, order["id"])
+            original_order = order_map[order_id]
+            if original_order["quantity"] <= 0:
+                continue
+
+            valid_orders.append(order)
+
+        return valid_orders
+
+    def __total_order_quantity(
+        self,
+        orders: list[TransactionRecord],
+        order_map: OrderBook,
+    ) -> float:
+        return sum(
+            cast(float, order_map[cast(str, order["id"])]["quantity"])
+            for order in orders
+        )
+
+    def __build_allocations(
+        self,
+        orders: list[TransactionRecord],
+        order_map: OrderBook,
+        match_qty: float,
+        total_qty: float,
+    ) -> AllocationMap:
+        allocations: AllocationMap = {}
+        for order in orders:
+            order_id = cast(str, order["id"])
+            original_order = order_map[order_id]
+            order_qty = cast(float, original_order["quantity"])
+            raw_allocation = match_qty * (order_qty / total_qty)
+            allocation = float(round(raw_allocation))
+
+            allocations[order_id] = {
+                "order": order,
+                "original": original_order,
+                "quantity": order_qty,
+                "raw_allocation": raw_allocation,
+                "allocation": allocation,
+                "frac_part": abs(raw_allocation - allocation),
+            }
+
+        return allocations
+
+    def __reconcile_allocations(
+        self,
+        allocations: AllocationMap,
+        match_qty: float,
+    ) -> None:
+        self.__fix_quantity_conservation(allocations, match_qty)
+        self.__apply_minimum_allocations(allocations, match_qty)
+        self.__trim_excess_allocations(allocations, match_qty)
+
+    def __fix_quantity_conservation(
+        self,
+        allocations: AllocationMap,
+        match_qty: float,
+    ) -> None:
+        total = self.__allocation_total(allocations)
+        if total == match_qty or not allocations:
+            return
+
+        sorted_allocations = sorted(
+            allocations.values(),
+            key=self.__conservation_sort_key,
+        )
+        adjustment = -1.0 if total > match_qty else 1.0
+        sorted_allocations[0]["allocation"] += adjustment
+
+    def __apply_minimum_allocations(
+        self,
+        allocations: AllocationMap,
+        match_qty: float,
+    ) -> None:
+        remaining_qty = match_qty - self.__allocation_total(allocations)
+        if remaining_qty <= 0:
+            return
+
+        zero_allocated = [
+            allocation
+            for allocation in allocations.values()
+            if allocation["raw_allocation"] > 0 and allocation["allocation"] == 0
+        ]
+        zero_allocated.sort(
+            key=lambda allocation: allocation["raw_allocation"],
+            reverse=True,
+        )
+
+        for allocation in zero_allocated:
+            if remaining_qty <= 0:
+                break
+
+            allocation["allocation"] = 1.0
+            remaining_qty -= 1.0
+
+    def __trim_excess_allocations(
+        self,
+        allocations: AllocationMap,
+        match_qty: float,
+    ) -> None:
+        total = self.__allocation_total(allocations)
+        if total <= match_qty:
+            return
+
+        excess = total - match_qty
+        for allocation in sorted(allocations.values(), key=self.__excess_sort_key):
+            if excess <= 0:
+                break
+
+            reduction = 0.0
+            if allocation["allocation"] > 1:
+                reduction = min(excess, allocation["allocation"] - 1)
+
+            if reduction <= 0:
+                continue
+
+            allocation["allocation"] -= reduction
+            excess -= reduction
+
+    async def __settle_allocations(
+        self,
+        bid_allocations: AllocationMap,
+        ask_allocations: AllocationMap,
+        time_delivery: TimeInterval,
+    ) -> None:
+        for bid_data in bid_allocations.values():
+            bid_allocation = bid_data["allocation"]
+            if bid_allocation <= 0:
+                continue
+
+            for ask_data in ask_allocations.values():
+                if bid_allocation <= 0:
+                    break
+
+                ask_allocation = ask_data["allocation"]
+                if ask_allocation <= 0:
+                    continue
+
+                if (
+                    bid_data["order"]["participant_id"]
+                    == ask_data["order"]["participant_id"]
+                ):
+                    continue
+
+                pair_qty = min(bid_allocation, ask_allocation)
+                if pair_qty <= 0:
+                    continue
+
+                await self.settle(
+                    bid_data["original"],
+                    ask_data["original"],
+                    time_delivery,
+                    pair_qty,
+                )
+                bid_allocation -= pair_qty
+                ask_data["allocation"] -= pair_qty
+
+            bid_data["allocation"] = bid_allocation
+
+    def __allocation_total(self, allocations: AllocationMap) -> float:
+        return sum(allocation["allocation"] for allocation in allocations.values())
+
+    @staticmethod
+    def __conservation_sort_key(
+        allocation: AllocationEntry,
+    ) -> tuple[float, float, float]:
+        return (
+            -allocation["frac_part"],
+            allocation["raw_allocation"],
+            allocation["quantity"],
+        )
+
+    @staticmethod
+    def __excess_sort_key(
+        allocation: AllocationEntry,
+    ) -> tuple[float, float]:
+        return (-allocation["allocation"], -allocation["raw_allocation"])
+
+    @override
+    async def settle(
+        self,
+        bid: TransactionRecord,
+        ask: TransactionRecord,
+        time_delivery: TimeInterval,
+        quantity_to_settle: float | None = None,
+    ) -> SettlementResult:
+        """Perform settlement for a matched bid and ask.
+
+        When settlement succeeds, order quantities are updated, a
+        commitment record is stored, and both participants receive a
+        settlement notification.
+
+        Parameters
+        ----------
+        bid : TransactionRecord
+            Open bid to be settled.
+        ask : TransactionRecord
+            Open ask to be settled.
+        time_delivery : TimeInterval
+            Delivery interval in UNIX timestamp format.
+        quantity_to_settle : float, optional
+            Explicit quantity to settle. When omitted, the method uses
+            `min(bid["quantity"], ask["quantity"])`.
+        """
+        if ask["source"] == "grid":
+            return None
+
+        quantity = quantity_to_settle
+        if quantity is None:
+            quantity = min(
+                cast(float, bid["quantity"]),
+                cast(float, ask["quantity"]),
+            )
+
+        if quantity <= 0:
+            return None
 
         commit_id = Cuid().generate(6)
-        settlement_time = self.__timing['current_round'][1]
-        settlement_price_sell = ask['price']
-        settlement_price_buy = bid['price']
+        settlement_time = self.__timing["current_round"][1]
+        settlement_price_sell = ask["price"]
+        settlement_price_buy = bid["price"]
         record = {
-            'quantity': quantity,
-            'seller_id': ask['participant_id'],
-            'buyer_id': bid['participant_id'],
-            'energy_source': ask['source'],
-            'settlement_price_sell': settlement_price_sell,
-            'settlement_price_buy': settlement_price_buy,
-            'time_purchase': settlement_time
+            "quantity": quantity,
+            "seller_id": ask["participant_id"],
+            "buyer_id": bid["participant_id"],
+            "energy_source": ask["source"],
+            "settlement_price_sell": settlement_price_sell,
+            "settlement_price_buy": settlement_price_buy,
+            "time_purchase": settlement_time,
         }
 
-        # Record successful settlements
         if time_delivery not in self.__settled:
             self.__settled[time_delivery] = {}
 
         self.__settled[time_delivery][commit_id] = {
-            'time_settlement': settlement_time,
-            'source': ask['source'],
-            'record': record,
-            'ask': ask,
-            'seller_id': ask['participant_id'],
-            'bid': bid,
-            'buyer_id': bid['participant_id'],
+            "time_settlement": settlement_time,
+            "source": ask["source"],
+            "record": record,
+            "ask": ask,
+            "seller_id": ask["participant_id"],
+            "bid": bid,
+            "buyer_id": bid["participant_id"],
         }
 
-        # if buyer == 'grid' or seller == 'grid':
-        # if buy_price is not None and sell_price is not None:
-        #     return
-        buyer_message = [
-            commit_id,
-            bid['id'],
-            ask['source'],
-            quantity,
-            time_delivery
-        ]
+        settled_record = self.__settled[time_delivery][commit_id]["record"]
+        buyer_message = [commit_id, bid["id"], ask["source"], quantity, time_delivery]
+        seller_message = [commit_id, ask["id"], ask["source"], quantity, time_delivery]
 
-        seller_message = [
-            commit_id,
-            ask['id'],
-            ask['source'],
-            quantity,
-            time_delivery
-        ]
-        self.__client.publish(f'{self.market_id}/{bid['participant_id']}/settled', buyer_message,
-                              user_property=[('to', self.__participants[bid['participant_id']]['sid'])],
-                              qos=2)
-        self.__client.publish(f'{self.market_id}/{ask['participant_id']}/settled', seller_message,
-                              user_property=[('to', self.__participants[ask['participant_id']]['sid'])],
-                              qos=2)
-        bid['quantity'] = max(0, bid['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-        ask['quantity'] = max(0, ask['quantity'] - self.__settled[time_delivery][commit_id]['record']['quantity'])
-        self.__status['round_settled'].append(commit_id)
+        self.__client.publish(
+            f"{self.market_id}/{bid['participant_id']}/settled",
+            buyer_message,
+            user_property=[("to", self.__participants[bid["participant_id"]]["sid"])],
+            qos=2,
+        )
+        self.__client.publish(
+            f"{self.market_id}/{ask['participant_id']}/settled",
+            seller_message,
+            user_property=[("to", self.__participants[ask["participant_id"]]["sid"])],
+            qos=2,
+        )
+
+        bid["quantity"] = max(0, bid["quantity"] - settled_record["quantity"])
+        ask["quantity"] = max(0, ask["quantity"] - settled_record["quantity"])
+        self.__status["round_settled"].append(commit_id)
         return quantity, settlement_price_buy, settlement_price_sell
