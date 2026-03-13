@@ -1,6 +1,6 @@
 import json
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from collections.abc import Iterable, Iterator, Sequence
@@ -435,7 +435,7 @@ class Runner:
         else:
             command.extend(["-m", target])
         check = kwargs.pop("check", False)
-        subprocess.run(  # noqa: S603
+        subprocess.run(  # noqa: S603  # nosec B603
             [*command, *target_args],
             check=check,
             **kwargs,

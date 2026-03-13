@@ -107,12 +107,12 @@ def resolve_credentials() -> dict[str, str]:
     username = first_env("TREX_DB_USERNAME", "POSTGRES_USER")
     password = first_env("TREX_DB_PASSWORD", "POSTGRES_PASSWORD")
 
-    if username is None or username == "":
+    if not username:
         raise SystemExit(
             "Missing TREX database username."
             " Set TREX_DB_USERNAME or POSTGRES_USER in the environment."
         )
-    if password is None or password == "":
+    if not password:
         raise SystemExit(
             "Missing TREX database password."
             " Set TREX_DB_PASSWORD or POSTGRES_PASSWORD in the environment."
