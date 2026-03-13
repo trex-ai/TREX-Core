@@ -4,10 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+import structlog
+
+log = structlog.get_logger()
 
 
 def first_env(*names: str) -> str | None:
@@ -21,18 +24,21 @@ def first_env(*names: str) -> str | None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Render TREX database config JSON files and _credentials.json from environment variables."
+            "Render TREX database config JSON files and _credentials.json"
+            " from environment variables."
         )
     )
     parser.add_argument(
         "--config",
         action="append",
         required=True,
-        help="Path to a TREX config JSON file to update in place. May be provided multiple times.",
+        help="Path to a TREX config JSON file to update in place."
+        " May be provided multiple times.",
     )
     parser.add_argument(
         "--credentials",
-        help="Path to TREX_Core/configs/_credentials.json. Defaults to a sibling of the first config file.",
+        help="Path to TREX_Core/configs/_credentials.json."
+        " Defaults to a sibling of the first config file.",
     )
     return parser.parse_args()
 
@@ -74,7 +80,8 @@ def resolve_db_settings(existing_db: dict[str, Any]) -> dict[str, Any]:
 
     if host in (None, ""):
         raise SystemExit(
-            "Missing TREX database host. Set TREX_DB_HOST in the environment or keep a host value in the JSON file."
+            "Missing TREX database host. Set TREX_DB_HOST in the environment"
+            " or keep a host value in the JSON file."
         )
 
     try:
@@ -84,7 +91,8 @@ def resolve_db_settings(existing_db: dict[str, Any]) -> dict[str, Any]:
 
     if profiles_db in (None, ""):
         raise SystemExit(
-            "Missing TREX profiles database. Set TREX_PROFILES_DB in the environment or keep database.profiles_db in the JSON file."
+            "Missing TREX profiles database. Set TREX_PROFILES_DB in the environment"
+            " or keep database.profiles_db in the JSON file."
         )
 
     return {
@@ -99,13 +107,15 @@ def resolve_credentials() -> dict[str, str]:
     username = first_env("TREX_DB_USERNAME", "POSTGRES_USER")
     password = first_env("TREX_DB_PASSWORD", "POSTGRES_PASSWORD")
 
-    if username in (None, ""):
+    if username is None or username == "":
         raise SystemExit(
-            "Missing TREX database username. Set TREX_DB_USERNAME or POSTGRES_USER in the environment."
+            "Missing TREX database username."
+            " Set TREX_DB_USERNAME or POSTGRES_USER in the environment."
         )
-    if password in (None, ""):
+    if password is None or password == "":
         raise SystemExit(
-            "Missing TREX database password. Set TREX_DB_PASSWORD or POSTGRES_PASSWORD in the environment."
+            "Missing TREX database password."
+            " Set TREX_DB_PASSWORD or POSTGRES_PASSWORD in the environment."
         )
 
     return {"username": username, "password": password}
@@ -114,7 +124,9 @@ def resolve_credentials() -> dict[str, str]:
 def update_config(config_path: Path, db_settings: dict[str, Any]) -> None:
     payload = read_json(config_path)
     if not isinstance(payload, dict):
-        raise SystemExit(f"Expected top-level object in {config_path}, got {type(payload).__name__}")
+        raise SystemExit(
+            f"Expected top-level object in {config_path}, got {type(payload).__name__}"
+        )
 
     database_block = payload.setdefault("database", {})
     if not isinstance(database_block, dict):
@@ -130,7 +142,9 @@ def main() -> int:
     credentials_path = resolve_credentials_path(config_paths[0], args.credentials)
 
     first_payload = read_json(config_paths[0])
-    existing_db = first_payload.get("database", {}) if isinstance(first_payload, dict) else {}
+    existing_db = (
+        first_payload.get("database", {}) if isinstance(first_payload, dict) else {}
+    )
     if existing_db is None:
         existing_db = {}
     if not isinstance(existing_db, dict):
@@ -141,10 +155,10 @@ def main() -> int:
 
     for config_path in config_paths:
         update_config(config_path, db_settings)
-        print(f"Updated database block in {config_path}", file=sys.stderr)
+        log.info(f"Updated database block in {config_path}")
 
     atomic_write_json(credentials_path, credentials)
-    print(f"Wrote credentials to {credentials_path}", file=sys.stderr)
+    log.info(f"Wrote credentials to {credentials_path}")
     return 0
 
 

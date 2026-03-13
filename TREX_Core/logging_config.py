@@ -11,6 +11,7 @@ def setup_logging(log_level: int = logging.INFO, json_output: bool = False) -> N
 
     # Shared processors used by both structlog and stdlib
     shared_processors: list[Processor] = [
+        structlog.stdlib.filter_by_level,
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
@@ -36,7 +37,7 @@ def setup_logging(log_level: int = logging.INFO, json_output: bool = False) -> N
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
-
+    handler.setLevel(log_level)
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
