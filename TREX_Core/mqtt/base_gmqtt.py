@@ -40,9 +40,7 @@ class BaseMQTTClient(ABC):
         """Call inside your own on_connect to subscribe everything in SUBS."""
         for topic, qos in self.SUBS:
             client.subscribe(topic, qos=qos)
-        log.debug(
-            f"client {self.cuid} successfully subscribed to {len(self.SUBS)} topics"
-        )
+        log.debug("subscribed", client_id=self.cuid, topic_count=len(self.SUBS))
 
     async def background_tasks(self) -> list[Coroutine]:
         """
@@ -73,7 +71,7 @@ class BaseMQTTClient(ABC):
     async def _message_processor(self) -> None:
         while True:
             message = await self.msg_queue.get()
-            log.debug(f"processing message c.id: {self.cuid}", topic=message["topic"])
+            log.debug("processing_message", client_id=self.cuid, topic=message["topic"])
             try:
                 await self._dispatch(message)
             finally:
