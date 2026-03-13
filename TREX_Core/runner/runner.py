@@ -1,35 +1,49 @@
 import json
 import os
+import subprocess
 import sys
+import time
+from collections.abc import Iterable, Iterator, Sequence
+from importlib import import_module
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
+from typing import Any
 
 import commentjson
 import numpy as np
 import sqlalchemy
+import structlog
 from packaging import version
-from sqlalchemy import create_engine, MetaData, Column, insert, select
+from sqlalchemy import Column, MetaData, create_engine, insert, select
 from sqlalchemy.orm import Session
-from sqlalchemy_utils import database_exists, create_database, drop_database
+from sqlalchemy_utils import create_database, database_exists, drop_database
 
-from TREX_Core.utils import utils, db_utils
+from TREX_Core.runner.make import participant, sim_controller
+from TREX_Core.utils import db_utils, utils
+
+logger = structlog.get_logger()
+
+ConfigDict = dict[str, Any]
+LaunchCommand = tuple[str, list[str]]
+OptionalLaunchCommand = tuple[str | None, list[str] | None]
 
 
-def _iter_config_roots(root_dir: str = ""):
-    roots = []
+def _iter_config_roots(root_dir: str = "") -> Iterator[Path]:
+    roots: list[Path] = []
     if root_dir:
         supplied_root = Path(root_dir).expanduser().resolve()
-        roots.extend((supplied_root, supplied_root / 'TREX_Core'))
+        roots.extend((supplied_root, supplied_root / "TREX_Core"))
     else:
-        env_root = os.environ.get('TREX_CORE_ROOT', '').strip()
+        env_root = os.environ.get("TREX_CORE_ROOT", "").strip()
         if env_root:
-            env_root = Path(env_root).expanduser().resolve()
-            roots.extend((env_root, env_root / 'TREX_Core'))
+            env_root_path = Path(env_root).expanduser().resolve()
+            roots.extend((env_root_path, env_root_path / "TREX_Core"))
 
         cwd = Path.cwd().resolve()
-        roots.extend((cwd, cwd / 'TREX_Core'))
+        roots.extend((cwd, cwd / "TREX_Core"))
         roots.append(Path(__file__).resolve().parents[1])
 
-    seen = set()
+    seen: set[str] = set()
     for root in roots:
         root_str = str(root)
         if root_str in seen:
@@ -38,179 +52,97 @@ def _iter_config_roots(root_dir: str = ""):
         yield root
 
 
-def _resolve_config_file(config_name: str, root_dir: str = ""):
-    searched = []
+def _resolve_config_file(config_name: str, root_dir: str = "") -> tuple[str, str]:
+    searched: list[str] = []
     for root in _iter_config_roots(root_dir):
-        config_file = root / 'configs' / f'{config_name}.json'
+        config_file = root / "configs" / f"{config_name}.json"
         searched.append(str(config_file))
         if config_file.is_file():
             return str(config_file), str(root)
 
-    searched_paths = '\n'.join(searched)
+    searched_paths = "\n".join(searched)
     raise FileNotFoundError(
         f'Unable to locate config "{config_name}.json". Searched:\n{searched_paths}'
     )
 
 
-def get_config(config_name: str, original=False, root_dir='', **kwargs):
-    if not root_dir and 'root_dir' in kwargs:
-        root_dir = kwargs['root_dir']
+def get_config(
+    config_name: str,
+    original: bool = False,
+    root_dir: str = "",
+    **kwargs: Any,
+) -> ConfigDict:
+    if not root_dir:
+        root_dir = str(kwargs.get("root_dir", ""))
     config_file, resolved_root_dir = _resolve_config_file(config_name, root_dir)
 
     config = _load_json_file(config_file)
+    if not isinstance(config, dict):
+        raise TypeError(f"Config {config_name!r} must deserialize to a dictionary")
 
     if original:
         return config
-    config['study']['root_dir'] = resolved_root_dir
-    config['study']['checkpoint_save_path'] = os.path.join(resolved_root_dir, 'checkpoint')
+    config["study"]["root_dir"] = resolved_root_dir
+    config["study"]["checkpoint_save_path"] = os.path.join(
+        resolved_root_dir, "checkpoint"
+    )
 
-    # credentials_file = 'configs/_credentials.json'
-    # credentials_file = os.path.join(root_dir, 'configs', '_credentials'+'.json')
-    # credentials = _load_json_file(credentials_file) if os.path.isfile(credentials_file) else None
-
-    if 'name' in config['study'] and config['study']['name']:
-        study_name = config['study']['name'].replace(' ', '_')
+    if "name" in config["study"] and config["study"]["name"]:
+        study_name = config["study"]["name"].replace(" ", "_")
     else:
         study_name = config_name
 
-    # "database": {
-    #     "host": "localhost",
-    #     "port": 1883,
-    #     "connector": "postgresql+psycopg",
-    #     "profiles_db": "citylearn_2022"
-    # },
-    # database = config['database']
-    # connector = config['database']['connector']
-    # db_host = config['database']['host']
-    # db_port = config['database'].get('port', 5432)
-    # profiles_db = config['database']['profiles_db']
-
-    # if credentials and ('profiles_db_location' not in config['study']):
-    #     profiles_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}:{db_port}/{profiles_db}'
-    #     config['study']['profiles_db_location'] = profiles_db_str
-    #
-    # if credentials and ('output_db_location' not in config['study']):
-    #     output_db_str = f'{connector}://{credentials['username']}:{credentials['password']}@{db_host}:{db_port}'
-    #     config['study']['output_db_location'] = output_db_str
-    # engine = create_engine(db_string)
-
-    # if resume:
-    #     if 'db_string' in kwargs:
-    #         db_string = kwargs['db_string']
-    #     # look for existing db in db. if one exists, return it
-    #     if database_exists(db_string):
-    #         if sqlalchemy.inspect(engine).has_table('configs'):
-    #             db = dataset.connect(db_string)
-    #             configs_table = db['configs']
-    #             configs = configs_table.find_one(id=0)['data']
-    #             configs['study']['resume'] = resume
-    #             return configs
-    #
-    # # if not resume
-    config['study']['name'] = study_name
-    # db_string = config['study']['output_db_location'] + '/' + study_name
-    # if 'output_database' not in config['study'] or not config['study']['output_database']:
-    #     config['study']['output_database'] = db_string
-    config['database']['output_db'] = study_name
+    config["study"]["name"] = study_name
+    config["database"]["output_db"] = study_name
 
     return config
 
-def _load_json_file(file_path):
-    with open(file_path) as f:
-        json_file = commentjson.load(f)
-    return json_file
+
+def _load_json_file(file_path: str | Path) -> Any:
+    with open(file_path, encoding="utf-8") as file_handle:
+        return commentjson.load(file_handle)
 
 
 class Runner:
-    def __init__(self, config, resume=False, **kwargs):
-        self.purge_db = kwargs['purge'] if 'purge' in kwargs else False
+    def __init__(self, config: str, resume: bool = False, **kwargs: Any) -> None:
+        self.resume = resume
+        self.purge_db = bool(kwargs.get("purge", False))
         self.config_file_name = config
         self.config_original = get_config(config, original=True)
         self.config = get_config(config)
-        self.__config_version_valid = bool(version.parse(self.config['version']) >= version.parse("5.1.0"))
-        # 'postgresql+asyncpg://'
-        # if 'training' in self.configs and 'hyperparameters' in self.configs['training']:
-        #     self.hyperparameters_permutations = self.__find_hyperparameters_permutations()
-
-        # self.__create_sim_metadata(self.configs)
-
-        # if not resume:
-        #     r = tenacity.Retrying(
-        #         wait=tenacity.wait_fixed(1))
-        #     r.call(self.__make_sim_path)
+        self.__config_version_valid = bool(
+            version.parse(self.config["version"]) >= version.parse("5.1.0")
+        )
 
     # Give starting time for simulation
-    def __get_start_time(self, episode):
-        import pytz
-        from dateutil.parser import parse as timeparse
-        #  TODO: NEED TO CHECK ALL DATABASES TO ENSURE THAT THE TIME RANGE ARE GOOD
-        start_datetime = self.config['study']['start_datetime']
-        start_timezone = self.config['study']['timezone']
-
-        # If start_datetime is a single time, set that as start time
-        if isinstance(start_datetime, str):
-            start_time = pytz.timezone(start_timezone).localize(timeparse(start_datetime))
-            return int(start_time.timestamp())
-
-        # If start_datetime is formatted as a time step with beginning and end, choose either of these as a start time
-        # If sequential is set then the startime will
-        # if isinstance(start_datetime, (list, tuple)):
-        #     if len(start_datetime) == 2:
-        #         start_time_s = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[0])).timestamp())
-        #         start_time_e = int(pytz.timezone(start_timezone).localize(timeparse(start_datetime[1])).timestamp())
-        #         # This is the sequential startime code
-        #         if 'start_datetime_sequence' in self.configs['study']:
-        #             if self.configs['study']['start_datetime_sequence'] == 'sequential':
-        #                 interval = int((start_time_e - start_time_s) / self.configs['study']['generations'] / 60) * 60
-        #                 start_time = range(start_time_s, start_time_e, interval)[generation]
-        #                 return start_time
-        #         start_time = random.choice(range(start_time_s, start_time_e, 60))
-        #         return start_time
-        #     else:
-        #         if 'start_datetime_sequence' in self.configs['study']:
-        #             if self.configs['study']['start_datetime_sequence'] == 'sequential':
-        #                 multiplier = math.ceil(self.configs['study']['generations'] / len(start_datetime))
-        #                 start_time_readable = start_datetime * multiplier[generation]
-        #                 start_time = pytz.timezone(start_timezone).localize(timeparse(start_time_readable))
-        #                 return start_time
-        #         start_time = pytz.timezone(start_timezone).localize(timeparse(random.choice(start_datetime)))
-        #         return int(start_time.timestamp())
+    def __get_start_time(self) -> int:
+        start_datetime = self.config["study"]["start_datetime"]
+        start_timezone = self.config["study"]["timezone"]
+        if not isinstance(start_datetime, str):
+            raise TypeError("study.start_datetime must be a string")
+        return utils.timestr_to_timestamp(start_datetime, str(start_timezone))
 
     def __create_sim_metadata(self, config):
-        # if not config:
-        #     config = self.configs
-        # make sim directories and shared settings files
-        # sim_path = self.configs['study']['sim_root'] + '_simulations/' + config['study']['name'] + '/'
-        # if not os.path.exists(sim_path):
-        #     os.mkdir(sim_path)
-        db_string = config['study']['output_database']
-
-        db_utils.make_db_str()
+        db_string = config["study"]["output_database"]
 
         engine = create_engine(db_string)
-        if not sqlalchemy.inspect(engine).has_table('metadata'):
+        if not sqlalchemy.inspect(engine).has_table("metadata"):
             self.__create_metadata_table(db_string)
 
-        table = db_utils.get_table(db_string, 'metadata', engine)
-        data = list()
+        table = db_utils.get_table(db_string, "metadata", engine)
+        data = []
 
-        # db = dataset.connect(config['study']['output_database'])
-        # metadata_table = db['metadata']
-        for episode in range(config['study']['episodes']):
-            start_time = self.__get_start_time(episode)
-            data.append({
-                'start_timestamp': start_time,
-                'end_timestamp': int(start_time + self.config['study']['days'] * 1440)
-            })
-            # check if metadata is in table
-            # if not, then add to table
-            # if not metadata_table.find_one(generation=generation):
-            #     start_time = self.__get_start_time(generation)
-            #     metadata = {
-            #         'start_timestamp': start_time,
-            #         'end_timestamp': int(start_time + self.configs['study']['days'] * 1440)
-            #     }
-            #         metadata_table.insert(dict(generation=generation, data=metadata))
+        for _episode in range(config["study"]["episodes"]):
+            start_time = self.__get_start_time()
+            data.append(
+                {
+                    "start_timestamp": start_time,
+                    "end_timestamp": int(
+                        start_time + self.config["study"]["days"] * 1440
+                    ),
+                }
+            )
+
         with Session(engine) as session:
             session.execute(insert(table), data)
             session.commit()
@@ -221,14 +153,10 @@ class Runner:
             db_utils.create_db(db_string=db_string, engine=engine)
             self.__create_configs_table(db_string)
 
-            table = db_utils.get_table(db_string, 'configs', engine)
+            table = db_utils.get_table(db_string, "configs", engine)
             with Session(engine) as session:
-                # session.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
-                session.execute(insert(table), ({'id': 0, 'data': config}))
+                session.execute(insert(table), ({"id": 0, "data": config}))
                 session.commit()
-            # db = dataset.connect(db_string)
-            # configs_table = db['configs']
-            # configs_table.insert({'id': 0, 'data': config})
 
     def __create_table(self, db_string, table):
         engine = create_engine(db_string)
@@ -238,128 +166,116 @@ class Runner:
 
     def __create_configs_table(self, db_string):
         table = sqlalchemy.Table(
-            'configs',
+            "configs",
             MetaData(),
-            Column('id', sqlalchemy.Integer, primary_key=True),
-            Column('data', sqlalchemy.JSON)
+            Column("id", sqlalchemy.Integer, primary_key=True),
+            Column("data", sqlalchemy.JSON),
         )
         self.__create_table(db_string, table)
 
     def __create_metadata_table(self, db_string):
         table = sqlalchemy.Table(
-            'metadata',
+            "metadata",
             MetaData(),
-            Column('episode', sqlalchemy.Integer, primary_key=True),
-            Column('data', sqlalchemy.JSON)
+            Column("episode", sqlalchemy.Integer, primary_key=True),
+            Column("data", sqlalchemy.JSON),
         )
         self.__create_table(db_string, table)
 
-    def modify_config(self, simulation_type, **kwargs):
-        # if not self.__config_version_valid:
-        #     return []
+    def __ensure_server_defaults(self, config: ConfigDict) -> None:
+        server_config = config.get("server")
+        if not isinstance(server_config, dict):
+            server_config = {}
+            config["server"] = server_config
+        if not server_config.get("host"):
+            server_config["host"] = "localhost"
+        if not server_config.get("port"):
+            server_config["port"] = 42069
 
-        config = json.loads(json.dumps(self.config))
+    def __merge_default_participant_configs(self, config: ConfigDict) -> None:
+        participants = config["participants"]
+        default_participant_configs = participants.pop("_default", {})
+        for participant_id, participant_config in participants.items():
+            participants[participant_id] = (
+                default_participant_configs | participant_config
+            )
 
-        if 'server' not in self.config or 'host' not in self.config['server'] or not self.config['server']['host']:
-            # config['server']['host'] = socket.gethostbyname(socket.getfqdn())
-            config['server']['host'] = "localhost"
+    def __get_learning_participants(self, config: ConfigDict) -> list[str]:
+        return [
+            participant_id
+            for participant_id, participant_config in config["participants"].items()
+            if participant_config["trader"].get("learning")
+        ]
 
-        if 'server' not in self.config or 'port' not in self.config['server'] or not self.config['server']['port']:
-            config['server']['port'] = 42069
+    def __get_policy_server_names(self, config: ConfigDict) -> list[str]:
+        return [key for key in config if key.endswith("_policy_server")]
 
-        # iterate ports until an available one is found, starting from the default or the preferred port
-        # while True:
-        #     if utils.port_is_open(config['server']['host'], config['server']['port']):
-        #         config['server']['port'] += 1
-        #     else:
-        #         break
+    def __drop_policy_servers(
+        self, config: ConfigDict, policy_servers: Sequence[str]
+    ) -> None:
+        for server_name in policy_servers:
+            config.pop(server_name, None)
 
-        # config['server']['port'] = default_port + seq
-        # seq = kwargs['seq'] if 'seq' in kwargs else 0
-        # config['server']['port'] += seq
-        config['study']['type'] = simulation_type
-        # print(simulation_type, seq, config['server']['port'])
+    def __configure_baseline(
+        self,
+        config: ConfigDict,
+        simulation_type: str,
+        policy_servers: Sequence[str],
+    ) -> None:
+        config["study"]["episodes"] = 1
+        config["market"]["id"] = simulation_type
+        config["market"]["save_transactions"] = True
+        for participant_config in config["participants"].values():
+            trader = participant_config["trader"]
+            trader.update({"learning": False, "type": "baseline_agent"})
+            if "actions" in trader:
+                trader["actions"].pop("replay", None)
+        self.__drop_policy_servers(config, policy_servers)
 
-        # if resume is False, then drop all tables relevant to the study type
-        # if not config['study']['resume']:
-        #     study_name = config['study']['name']
-        #     db_string = config['study']['output_db_location'] + '/' + study_name
-        #     db = dataset.connect(db_string)
-        #     tables = [table for table in db.tables if simulation_type + '_' in table]
-        #     for table in tables:
-        #         db[table].drop()
+    def __configure_training(
+        self,
+        config: ConfigDict,
+        simulation_type: str,
+        learning_participants: Sequence[str],
+        has_policy_clients: bool,
+        policy_servers: Sequence[str],
+    ) -> None:
+        config["market"]["id"] = simulation_type
+        config["market"]["save_transactions"] = True
+        for participant_id in learning_participants:
+            trader = config["participants"][participant_id]["trader"]
+            trader["learning"] = True
+            trader["study_name"] = config["study"]["name"]
+        if not has_policy_clients:
+            self.__drop_policy_servers(config, policy_servers)
 
-        default_participant_configs = config['participants'].pop('_default', {})
+    def __configure_replay(self, config: ConfigDict, simulation_type: str) -> None:
+        config["market"]["id"] = simulation_type
+        config["market"]["save_transactions"] = False
+        for participant_config in config["participants"].values():
+            participant_config["trader"]["learning"] = False
 
-        for participant in config['participants']:
-            config['participants'][participant] = default_participant_configs | config['participants'][participant]
+    def __get_energy_profile_names(self, config: ConfigDict) -> set[str]:
+        energy_profile_names: set[str] = set()
+        for participant_id, participant_config in config["participants"].items():
+            trader = participant_config["trader"]
+            profile_name = trader.get("use_synthetic_profile", participant_id)
+            energy_profile_names.add(str(profile_name))
+        return energy_profile_names
 
-        learning_participants = [participant for participant in config['participants'] if
-                                 'learning' in config['participants'][participant]['trader'] and
-                                 config['participants'][participant]['trader']['learning']]
+    def __get_profile_time_step_size(self, config: ConfigDict, start_time: int) -> int:
+        energy_profile_names = self.__get_energy_profile_names(config)
+        random_check = utils.secure_random.sample(
+            list(energy_profile_names), min(len(energy_profile_names), 5)
+        )
+        interval_checks: list[int] = []
 
-        policy_clients = [participant for participant in config['participants'] if
-                         config['participants'][participant]['trader'].get('type') == 'policy_client']
-        has_policy_clients = len(policy_clients) > 0
-        policy_servers = [key for key in config if key.endswith("_policy_server")]
-
-        if simulation_type == 'baseline':
-            # if isinstance(config['study']['start_datetime'], str):
-            config['study']['episodes'] = 1
-            config['market']['id'] = simulation_type
-            config['market']['save_transactions'] = True
-            for participant in config['participants']:
-                config['participants'][participant]['trader'].update({
-                    'learning': False,
-                    'type': 'baseline_agent'
-                })
-                if 'actions' in config['participants'][participant]['trader']:
-                    config['participants'][participant]['trader']['actions'].pop('replay', None)
-            for server in policy_servers:
-                config.pop(server, None)
-
-        if simulation_type == 'training':
-            config['market']['id'] = simulation_type
-            config['market']['save_transactions'] = True
-
-            for participant in learning_participants:
-                config['participants'][participant]['trader']['learning'] = True
-                config['participants'][participant]['trader']['study_name'] = config['study']['name']
-
-            if not has_policy_clients:
-                for server in policy_servers:
-                    config.pop(server, None)
-                # or 'synchronous_policy_server' not in config:
-                # config.pop('synchronous_policy_server', None)
-
-        if simulation_type == 'replay':
-            config['market']['id'] = simulation_type
-            config['market']['save_transactions'] = False
-
-            for participant in config['participants']:
-                trader = config['participants'][participant]['trader']
-                trader['learning'] = False
-
-        start_datetime = config['study']['start_datetime']
-        timezone = config['study']['timezone']
-        start_time = utils.timestr_to_timestamp(start_datetime, timezone)
-
-        # rudimentary check for profile time intervals
-        energy_profile_names = set()
-        for participant in config['participants']:
-            if 'use_synthetic_profile' in config['participants'][participant]['trader']:
-                energy_profile_names.add(config['participants'][participant]['trader']['use_synthetic_profile'])
-            else:
-                energy_profile_names.add(participant)
-        # energy_profile_names = set(energy_profile_names)
-        random_check = utils.secure_random.sample(list(energy_profile_names), min(len(energy_profile_names), 5))
-        interval_checks = list()
-
-        root_dir = config['study']['root_dir']
-
-        profile_db_str = db_utils.make_db_str(db_utils.get_credentials(root_dir),
-                                         self.config['database'],
-                                         self.config['database']['profiles_db'])
+        root_dir = config["study"]["root_dir"]
+        profile_db_str = db_utils.make_db_str(
+            db_utils.get_credentials(root_dir),
+            self.config["database"],
+            self.config["database"]["profiles_db"],
+        )
 
         engine = create_engine(profile_db_str)
         with Session(engine) as session:
@@ -370,161 +286,204 @@ class Runner:
                 out_array = np.array(out)
                 unique_intervals = np.unique((out_array - np.roll(out_array, 1))[1:])
                 if unique_intervals.size > 1:
-                    raise ValueError(f'Profile {profile_name} time intervals are not consistent')
-                interval_checks.append(unique_intervals[0])
+                    raise ValueError(
+                        f"Profile {profile_name} time intervals are not consistent"
+                    )
+                interval_checks.append(int(unique_intervals[0]))
+
         profile_set_interval_check = np.unique(interval_checks)
         if profile_set_interval_check.size > 1:
-            raise ValueError(f'Profile set time intervals are not consistent')
-        config["study"]["time_step_size"] = int(profile_set_interval_check[0])
-        # print(config["study"]["time_step_size"])
+            raise ValueError("Profile set time intervals are not consistent")
+        return int(profile_set_interval_check[0])
 
-        # time_step_s = config['study']['time_step_size']
+    def __update_study_timing(
+        self, config: ConfigDict, start_time: int, time_step_size: int
+    ) -> None:
+        config["study"]["time_step_size"] = time_step_size
         day_steps = int(1440 / (config["study"]["time_step_size"] / 60))
-        episodes = config['study']['episodes']
-        episode_steps = int(config['study']['days'] * day_steps)
+        episodes = config["study"]["episodes"]
+        episode_steps = int(config["study"]["days"] * day_steps)
         total_steps = episodes * episode_steps
         end_time = start_time + episode_steps
-        # print(day_steps, episodes, episode_steps, total_steps)
-
-        config['study'].update(dict(
+        logger.debug(
+            "Config modified",
             start_time=start_time,
             end_time=end_time,
             episodes=episodes,
             episode_steps=episode_steps,
             total_steps=total_steps,
-        ))
+        )
+        config["study"].update(
+            {
+                "start_time": start_time,
+                "end_time": end_time,
+                "episodes": episodes,
+                "episode_steps": episode_steps,
+                "total_steps": total_steps,
+            }
+        )
 
+    def modify_config(self, simulation_type: str, **_kwargs: Any) -> ConfigDict:
+        config: ConfigDict = json.loads(json.dumps(self.config))
+        self.__ensure_server_defaults(config)
+        config["study"]["type"] = simulation_type
+        self.__merge_default_participant_configs(config)
+
+        learning_participants = self.__get_learning_participants(config)
+        has_policy_clients = any(
+            participant_config["trader"].get("type") == "policy_client"
+            for participant_config in config["participants"].values()
+        )
+        policy_servers = self.__get_policy_server_names(config)
+
+        if simulation_type == "baseline":
+            self.__configure_baseline(config, simulation_type, policy_servers)
+        elif simulation_type == "training":
+            self.__configure_training(
+                config,
+                simulation_type,
+                learning_participants,
+                has_policy_clients,
+                policy_servers,
+            )
+        elif simulation_type == "replay":
+            self.__configure_replay(config, simulation_type)
+
+        start_datetime = config["study"]["start_datetime"]
+        timezone = config["study"]["timezone"]
+        start_time = utils.timestr_to_timestamp(start_datetime, timezone)
+        time_step_size = self.__get_profile_time_step_size(config, start_time)
+        self.__update_study_timing(config, start_time, time_step_size)
         return config
 
-    def make_launch_list(self, config=None, skip: tuple = ()):
-        from importlib import import_module
-        import TREX_Core.runner.make.sim_controller as sim_controller
-        import TREX_Core.runner.make.participant as participant
+    def __append_launch_command(
+        self,
+        launch_list: list[LaunchCommand],
+        command: OptionalLaunchCommand,
+    ) -> None:
+        target, target_args = command
+        if target is None or target_args is None:
+            return
+        launch_list.append((target, target_args))
 
+    def make_launch_list(
+        self,
+        config: ConfigDict | None = None,
+        skip: str | tuple[str, ...] = (),
+    ) -> list[LaunchCommand]:
         if config is None:
             config = self.config
 
-        #TODO: add the for loop for the parallel thing
-        parallel = config['study'].get('parallel', 1)
-        launch_list = []
+        parallel = config["study"].get("parallel", 1)
+        launch_list: list[LaunchCommand] = []
+        base_market_id = config["market"].get("id") or config["market"]["type"]
+        skip_items = (skip,) if isinstance(skip, str) else skip
 
         for idx in range(parallel):
-            if not config['market']['id']:
-                config['market']['id'] = config['market']['type']
+            config["market"]["id"] = (
+                f"{base_market_id}/{idx}" if parallel > 1 else base_market_id
+            )
 
-            if parallel > 1:
-                config['market']['id'] = f'{config['market']['id']}/{idx}'
-
-            exclude = {'version', 'study', 'server', 'database', 'records', 'participants', '_default'}
-
-            if isinstance(skip, str):
-                skip = (skip,)
-            exclude.update(skip)
-            # print(config)
+            exclude = {
+                "version",
+                "study",
+                "server",
+                "database",
+                "records",
+                "participants",
+                "_default",
+            }
+            exclude.update(skip_items)
 
             dynamic = [k for k in config if k not in exclude]
-            # print(dynamic)
             for module_n in dynamic:
-                # print(module_n, exclude)
                 if module_n in exclude:
                     continue
 
-                p_copies = config[module_n].get('parallel_copies')
-                if p_copies and p_copies > idx+1:
+                p_copies = config[module_n].get("parallel_copies")
+                if p_copies and p_copies > idx + 1:
                     continue
 
                 try:
-                    module = import_module('TREX_Core.runner.make.' + module_n)
-                    launch_list.append(module.cli(config))
+                    module = import_module("TREX_Core.runner.make." + module_n)
+                    self.__append_launch_command(launch_list, module.cli(config))
                 except ImportError:
-                    # print(module_n, 'not found')
-                    module = import_module('runner.make.' + module_n)
-                    launch_list.append(module.cli(config))
-            if 'sim_controller' not in exclude:
-                launch_list.append(sim_controller.cli(config))
+                    logger.warning("Module not found for launch", module=module_n)
+                    module = import_module("runner.make." + module_n)
+                    self.__append_launch_command(launch_list, module.cli(config))
+            if "sim_controller" not in exclude:
+                self.__append_launch_command(launch_list, sim_controller.cli(config))
 
-            for p_id in config['participants']:
+            for p_id in config["participants"]:
                 if p_id not in exclude:
-                    launch_list.append(participant.cli(config, p_id))
+                    self.__append_launch_command(
+                        launch_list, participant.cli(config, p_id)
+                    )
 
-        # print(launch_list)
+        logger.info("Launch list created with len %d", len(launch_list))
+        # logger.debug("Launch list", launch_list=launch_list)
         return launch_list
 
-    def run_subprocess(self, args: list, delay=0, **kwargs):
-        import subprocess
-        import time
-
+    def run_subprocess(
+        self, args: LaunchCommand, delay: float = 0, **kwargs: Any
+    ) -> None:
         time.sleep(delay)
-        # try:
-        #     subprocess.run(['venv/bin/python', args[0], *args[1]])
-        # except:
-        #     subprocess.run(['venv/Scripts/python', args[0], *args[1]])
-        # finally:
         target, target_args = args
         command = [sys.executable]
-        if os.path.sep in target or target.endswith('.py'):
+        if os.path.sep in target or target.endswith(".py"):
             command.append(target)
         else:
-            command.extend(['-m', target])
-        subprocess.run([*command, *target_args], **kwargs)
+            command.extend(["-m", target])
+        check = kwargs.pop("check", False)
+        subprocess.run(  # noqa: S603
+            [*command, *target_args],
+            check=check,
+            **kwargs,
+        )
 
-    def run(self, launch_list, **kwargs):
+    def __get_pool_size(self, requested_size: int | None, launch_count: int) -> int:
+        pool_size = requested_size if requested_size is not None else launch_count
+        return max(pool_size, cpu_count() - 5)
+
+    def run(self, launch_list: Sequence[LaunchCommand], **kwargs: Any) -> None:
         if not self.__config_version_valid:
-            print('CONFIG NOT COMPATIBLE')
+            logger.error("CONFIG NOT COMPATIBLE")
             return
         if len(launch_list) == 1:
-            print(launch_list)
+            logger.info("Running single launch", launch=launch_list[0])
             self.run_subprocess(launch_list[0])
         else:
-            from multiprocessing import Pool, cpu_count
-            pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
-            pool_size = max(pool_size, cpu_count() - 5)
-            # get the number of cpus available
+            pool_size = self.__get_pool_size(kwargs.get("pool_size"), len(launch_list))
             pool = Pool(pool_size)
             pool.map(self.run_subprocess, launch_list)
             pool.close()
 
-    def run_simulations(self, simulations, **kwargs):
+    def run_simulations(self, simulations: Iterable[str], **kwargs: Any) -> None:
         if not self.__config_version_valid:
-            print('CONFIG NOT COMPATIBLE')
+            logger.error("CONFIG NOT COMPATIBLE")
             return
 
-        # db_string = self.config['study']['output_database']
-        root_dir = self.config['study']['root_dir']
+        root_dir = self.config["study"]["root_dir"]
         credentials = db_utils.get_credentials(root_dir)
-        database_config = self.config['database']
-        db_string = db_utils.make_db_str(credentials,
-                             database_config,
-                             self.config['study']['name'])
+        database_config = self.config["database"]
+        db_string = db_utils.make_db_str(
+            credentials, database_config, self.config["study"]["name"]
+        )
 
         if self.purge_db and database_exists(db_string):
             drop_database(db_string)
-        # config_file = 'configs/' + self.config_file_name + '.json'
-        # configs = _load_json_file(config_file)
         self.__create_sim_db(db_string, self.config_original)
 
-        # import multiprocessing
-        from multiprocessing import Pool, cpu_count
-        # from ray.util.multiprocessing import Pool
-
-        # db_purged = False
         simulations_list = []
-        launch_list = []
+        launch_list: list[LaunchCommand] = []
 
         for simulation in simulations:
-            simulations_list.append({'simulation_type': simulation})
+            simulations_list.append({"simulation_type": simulation})
 
         for sim_param in simulations_list:
             config = self.modify_config(**sim_param)
             launch_list.extend(self.make_launch_list(config, **kwargs))
-            # seq += 1
-
-        # from pprint import pprint
-        # print(seq)
-        # from pprint import pprint
-        # pprint(launch_list)
-        pool_size = kwargs['pool_size'] if 'pool_size' in kwargs else len(launch_list)
-        pool_size = max(pool_size, cpu_count() - 5)
+        pool_size = self.__get_pool_size(kwargs.get("pool_size"), len(launch_list))
         pool = Pool(pool_size)
         pool.map(self.run_subprocess, launch_list)
         pool.close()
