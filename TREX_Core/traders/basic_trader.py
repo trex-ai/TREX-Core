@@ -1,178 +1,251 @@
-# from _clients.participants.participants import Residential
+from TREX_Core import utils
 
-import asyncio
-# import serialize
-import TREX_Core.utils as utils
 
 class Trader:
+    CHARGE_HOURS_ALLOWED = frozenset(range(8, 17))
+
     def __init__(self, **kwargs):
-        # Some util stuffies
-        self.participant = kwargs['context']
-
-        # Initialize the agent learning parameters for the agent (your choice)
-        self.bid_price = kwargs['bid_price'] if 'bid_price' in kwargs else None
-        self.ask_price = kwargs['ask_price'] if 'ask_price' in kwargs else None
+        self.participant = kwargs["context"]
+        self.bid_price = kwargs.get("bid_price")
+        self.ask_price = kwargs.get("ask_price")
         self.action_scenario_history = {}
-    # Core Functions, learn and act, called from outside
 
-    async def act(self, **kwargs):
+    async def act(self, **_kwargs):
         actions = {}
-        last_settle = self.participant.timing['last_settle']
-        next_settle = self.participant.timing['next_settle']
-        timezone = self.participant.timing['timezone']
+        last_settle = self.participant.timing["last_settle"]
+        next_settle = self.participant.timing["next_settle"]
+        timezone = self.participant.timing["timezone"]
         next_settle_end = utils.timestamp_to_local(next_settle[1], timezone)
-        charge_hours_allowed = (8, 9, 10, 11, 12, 13, 14, 15, 16)
 
         generation, load = await self.participant.read_profile(next_settle)
         residual_load = load - generation
         residual_gen = -residual_load
 
-        if self.participant.storage is not None:
-            # print('e-1.1')
-            storage_schedule = await self.participant.storage.check_schedule(next_settle)
-            max_charge = storage_schedule[next_settle]['energy_potential'][1]
-            max_discharge = storage_schedule[next_settle]['energy_potential'][0]
+        storage_limits = await self._get_storage_limits(next_settle)
+        if storage_limits is not None:
+            actions.update(await self._get_last_settle_bess_action(last_settle))
 
-            # adjust battery actions from last settle
-
-            if last_settle in self.action_scenario_history:
-                last_settle_info = await self.participant.ledger.get_settled_info(last_settle)
-                # s1: charge settled max(0, bids - residual load)
-                # s2: discharge residual load + settled asks
-                # s3: change settled bids + residual gen
-                # s4: discharge max(0, settled asks - residual gen)
-
-                if self.action_scenario_history[last_settle]['scenario'] == 1:
-                    ls_bids = last_settle_info['bids']['quantity']
-                    ls_residual_load = self.action_scenario_history[last_settle]['residual_load']
-                    ls_max_charge = self.action_scenario_history[last_settle]['max_charge']
-                    actions['bess'] = {
-                        str(last_settle): min(ls_max_charge, max(0, ls_bids - ls_residual_load))
-                    }
-                elif self.action_scenario_history[last_settle]['scenario'] == 2:
-                    ls_asks = last_settle_info['asks']['quantity']
-                    ls_residual_load = self.action_scenario_history[last_settle]['residual_load']
-                    ls_max_discharge = self.action_scenario_history[last_settle]['max_discharge']
-                    actions['bess'] = {
-                        str(last_settle): -min(abs(ls_max_discharge), (ls_residual_load + ls_asks))
-                    }
-                elif self.action_scenario_history[last_settle]['scenario'] == 3:
-                    ls_bids = last_settle_info['bids']['quantity']
-                    ls_residual_gen = self.action_scenario_history[last_settle]['residual_gen']
-                    ls_max_charge = self.action_scenario_history[last_settle]['max_charge']
-                    actions['bess'] = {
-                        str(last_settle): min(ls_max_charge, ls_bids + ls_residual_gen)
-                    }
-                elif self.action_scenario_history[last_settle]['scenario'] == 4:
-                    ls_asks = last_settle_info['asks']['quantity']
-                    ls_residual_gen = self.action_scenario_history[last_settle]['residual_gen']
-                    ls_max_discharge = self.action_scenario_history[last_settle]['max_discharge']
-                    actions['bess'] = {
-                        str(last_settle): -min(abs(ls_max_discharge), max(0, ls_asks - ls_residual_gen))
-                    }
-                # clean up history buffer
-                stale_round = self.participant.timing['stale_round']
-                self.action_scenario_history.pop(stale_round, None)
-
-        # if battery not full, and allowed to charge, add max charge potential to bid quantity
-        if residual_load > 0:
-            if self.participant.storage is not None:
-                if next_settle_end.hour in charge_hours_allowed:
-                    actions['bids'] = {
-                        str(next_settle): {
-                            'quantity': residual_load + max_charge,
-                            'price': self.bid_price
-                        }
-                    }
-                    self.action_scenario_history[next_settle] = {
-                        'scenario': 1,
-                        'residual_load': residual_load,
-                        'residual_gen': residual_gen,
-                        'max_charge': max_charge,
-                        'max_discharge': max_discharge
-                    }
-                else:
-                    actions['asks'] = {
-                        'bess': {
-                            str(next_settle): {
-                                'quantity': max(0, max_discharge - residual_load),
-                                'price': self.ask_price
-                            }
-                        }
-                    }
-                    self.action_scenario_history[next_settle] = {
-                        'scenario': 2,
-                        'residual_load': residual_load,
-                        'residual_gen': residual_gen,
-                        'max_charge': max_charge,
-                        'max_discharge': max_discharge
-                    }
-            else:
-                # if were lacking energy, try to get difference from market
-                actions['bids'] = {
-                    str(next_settle): {
-                        'quantity': residual_load,
-                        'price': self.bid_price
-                    }
-                }
-
-        # if we have too much, cram as much as possible into battery
-        elif residual_gen > 0:
-            if self.participant.storage is not None:
-                if next_settle_end.hour in charge_hours_allowed:
-                    actions['bids'] = {
-                        str(next_settle): {
-                            'quantity': max(0, max_charge - residual_gen),
-                            'price': self.bid_price
-                        }
-                    }
-                    self.action_scenario_history[next_settle] = {
-                        'scenario': 3,
-                        'residual_load': residual_load,
-                        'residual_gen': residual_gen,
-                        'max_charge': max_charge,
-                        'max_discharge': max_discharge
-                    }
-                else:
-                    actions['asks'] = {
-                        'solar': {
-                            str(next_settle): {
-                                'quantity': residual_gen,
-                                'price': self.ask_price
-                            }
-                        },
-                        'bess': {
-                            str(next_settle): {
-                                'quantity': max_discharge,
-                                'price': self.ask_price
-                            }
-                        }
-                    }
-                    self.action_scenario_history[next_settle] = {
-                        'scenario': 4,
-                        'residual_load': residual_load,
-                        'residual_gen': residual_gen,
-                        'max_charge': max_charge,
-                        'max_discharge': max_discharge
-                    }
-            else:
-                # if were lacking energy, try to get difference from market
-                actions['asks'] = {
-                    'solar': {
-                        str(next_settle): {
-                            'quantity': residual_gen,
-                            'price': self.ask_price
-                        }
-                    }
-                }
-
+        actions.update(
+            self._build_market_actions(
+                next_settle,
+                residual_load,
+                residual_gen,
+                storage_limits,
+                next_settle_end.hour in self.CHARGE_HOURS_ALLOWED,
+            )
+        )
 
         return actions
 
-    async def step(self):
-        next_actions = await self.act()
-        return next_actions
+    async def _get_storage_limits(self, next_settle):
+        if self.participant.storage is None:
+            return None
 
-    async def reset(self, **kwargs):
+        storage_schedule = await self.participant.storage.check_schedule(next_settle)
+        energy_potential = storage_schedule[next_settle]["energy_potential"]
+        return {
+            "max_charge": energy_potential[1],
+            "max_discharge": energy_potential[0],
+        }
+
+    async def _get_last_settle_bess_action(self, last_settle):
+        scenario_state = self.action_scenario_history.get(last_settle)
+        if scenario_state is None:
+            return {}
+
+        last_settle_info = await self.participant.ledger.get_settled_info(last_settle)
+        actions = self._build_settled_bess_action(
+            last_settle, last_settle_info, scenario_state
+        )
+        stale_round = self.participant.timing["stale_round"]
+        self.action_scenario_history.pop(stale_round, None)
+        return actions
+
+    def _build_settled_bess_action(self, last_settle, settled_info, scenario_state):
+        scenario_handlers = {
+            1: self._scenario_one_bess_quantity,
+            2: self._scenario_two_bess_quantity,
+            3: self._scenario_three_bess_quantity,
+            4: self._scenario_four_bess_quantity,
+        }
+        handler = scenario_handlers.get(scenario_state["scenario"])
+        if handler is None:
+            return {}
+        return {"bess": {str(last_settle): handler(settled_info, scenario_state)}}
+
+    def _scenario_one_bess_quantity(self, settled_info, scenario_state):
+        settled_bids = settled_info["bids"]["quantity"]
+        return min(
+            scenario_state["max_charge"],
+            max(0, settled_bids - scenario_state["residual_load"]),
+        )
+
+    def _scenario_two_bess_quantity(self, settled_info, scenario_state):
+        settled_asks = settled_info["asks"]["quantity"]
+        return -min(
+            abs(scenario_state["max_discharge"]),
+            scenario_state["residual_load"] + settled_asks,
+        )
+
+    def _scenario_three_bess_quantity(self, settled_info, scenario_state):
+        settled_bids = settled_info["bids"]["quantity"]
+        return min(
+            scenario_state["max_charge"],
+            settled_bids + scenario_state["residual_gen"],
+        )
+
+    def _scenario_four_bess_quantity(self, settled_info, scenario_state):
+        settled_asks = settled_info["asks"]["quantity"]
+        return -min(
+            abs(scenario_state["max_discharge"]),
+            max(0, settled_asks - scenario_state["residual_gen"]),
+        )
+
+    def _build_market_actions(
+        self,
+        next_settle,
+        residual_load,
+        residual_gen,
+        storage_limits,
+        charge_allowed,
+    ):
+        if residual_load > 0:
+            return self._build_load_actions(
+                next_settle,
+                residual_load,
+                residual_gen,
+                storage_limits,
+                charge_allowed,
+            )
+        if residual_gen > 0:
+            return self._build_generation_actions(
+                next_settle,
+                residual_load,
+                residual_gen,
+                storage_limits,
+                charge_allowed,
+            )
+        return {}
+
+    def _build_load_actions(
+        self,
+        next_settle,
+        residual_load,
+        residual_gen,
+        storage_limits,
+        charge_allowed,
+    ):
+        if storage_limits is None:
+            return {
+                "bids": {
+                    str(next_settle): {
+                        "quantity": residual_load,
+                        "price": self.bid_price,
+                    }
+                }
+            }
+
+        if charge_allowed:
+            self._record_scenario(
+                next_settle, 1, residual_load, residual_gen, storage_limits
+            )
+            return {
+                "bids": {
+                    str(next_settle): {
+                        "quantity": residual_load + storage_limits["max_charge"],
+                        "price": self.bid_price,
+                    }
+                }
+            }
+
+        self._record_scenario(
+            next_settle, 2, residual_load, residual_gen, storage_limits
+        )
+        return {
+            "asks": {
+                "bess": {
+                    str(next_settle): {
+                        "quantity": max(
+                            0,
+                            storage_limits["max_discharge"] - residual_load,
+                        ),
+                        "price": self.ask_price,
+                    }
+                }
+            }
+        }
+
+    def _build_generation_actions(
+        self,
+        next_settle,
+        residual_load,
+        residual_gen,
+        storage_limits,
+        charge_allowed,
+    ):
+        if storage_limits is None:
+            return {
+                "asks": {
+                    "solar": {
+                        str(next_settle): {
+                            "quantity": residual_gen,
+                            "price": self.ask_price,
+                        }
+                    }
+                }
+            }
+
+        if charge_allowed:
+            self._record_scenario(
+                next_settle, 3, residual_load, residual_gen, storage_limits
+            )
+            return {
+                "bids": {
+                    str(next_settle): {
+                        "quantity": max(0, storage_limits["max_charge"] - residual_gen),
+                        "price": self.bid_price,
+                    }
+                }
+            }
+
+        self._record_scenario(
+            next_settle, 4, residual_load, residual_gen, storage_limits
+        )
+        return {
+            "asks": {
+                "solar": {
+                    str(next_settle): {
+                        "quantity": residual_gen,
+                        "price": self.ask_price,
+                    }
+                },
+                "bess": {
+                    str(next_settle): {
+                        "quantity": storage_limits["max_discharge"],
+                        "price": self.ask_price,
+                    }
+                },
+            }
+        }
+
+    def _record_scenario(
+        self,
+        next_settle,
+        scenario,
+        residual_load,
+        residual_gen,
+        storage_limits,
+    ):
+        self.action_scenario_history[next_settle] = {
+            "scenario": scenario,
+            "residual_load": residual_load,
+            "residual_gen": residual_gen,
+            **storage_limits,
+        }
+
+    async def step(self):
+        return await self.act()
+
+    async def reset(self, **_kwargs):
         self.action_scenario_history.clear()
         return True
