@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev,test]"
       - name: Mypy
-        run: mypy TREX_Core/
+        run: mypy src/TREX_Core/
 
   test:
     runs-on: ubuntu-latest
@@ -73,4 +73,4 @@ jobs:
       - name: pip-audit
         run: pip-audit
       - name: Bandit
-        run: bandit -q -r TREX_Core
+        run: bandit -q -r src/TREX_Core

@@ -17,7 +17,7 @@ TREX_Core.egg-info/
 
 .DS_Store
 
-TREX_Core/configs/_credentials.json
+src/TREX_Core/configs/_credentials.json
 services/*.env
 services/data/emqx/*
 services/data/prometheus/*

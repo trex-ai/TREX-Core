@@ -5,8 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SERVICES_DIR/.." && pwd)"
 ENV_FILE="${TREX_ENV_FILE:-$SERVICES_DIR/.env}"
-RENDER_SCRIPT="$REPO_ROOT/TREX_Core/scripts/render_trex_db_config.py"
-DEFAULT_CREDENTIALS_PATH="$REPO_ROOT/TREX_Core/configs/_credentials.json"
+RENDER_SCRIPT="$REPO_ROOT/src/TREX_Core/scripts/render_trex_db_config.py"
+DEFAULT_CREDENTIALS_PATH="$REPO_ROOT/src/TREX_Core/configs/_credentials.json"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Env file not found: $ENV_FILE" >&2

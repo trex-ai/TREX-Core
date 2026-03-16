@@ -17,15 +17,33 @@ def _iter_config_roots(root_dir: str = "") -> Iterator[Path]:
     roots: list[Path] = []
     if root_dir:
         supplied_root = Path(root_dir).expanduser().resolve()
-        roots.extend((supplied_root, supplied_root / "TREX_Core"))
+        roots.extend(
+            (
+                supplied_root,
+                supplied_root / "src" / "TREX_Core",
+                supplied_root / "TREX_Core",
+            )
+        )
     else:
         env_root = os.environ.get("TREX_CORE_ROOT", "").strip()
         if env_root:
             env_root_path = Path(env_root).expanduser().resolve()
-            roots.extend((env_root_path, env_root_path / "TREX_Core"))
+            roots.extend(
+                (
+                    env_root_path,
+                    env_root_path / "src" / "TREX_Core",
+                    env_root_path / "TREX_Core",
+                )
+            )
 
         cwd = Path.cwd().resolve()
-        roots.extend((cwd, cwd / "TREX_Core"))
+        roots.extend(
+            (
+                cwd,
+                cwd / "src" / "TREX_Core",
+                cwd / "TREX_Core",
+            )
+        )
         roots.append(Path(__file__).resolve().parents[1])
 
     seen = set()

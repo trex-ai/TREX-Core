@@ -29,10 +29,10 @@ If you switch between the standalone and combined Compose invocations, stop the 
   - generates pgAdmin `servers.json` and `.pgpass` from env at startup
 - `scripts/render_trex_configs_from_env.sh`
   - sources `services/.env` and renders TREX JSON/credential files
-- `../TREX_Core/scripts/render_trex_db_config.py`
+- `../src/TREX_Core/scripts/render_trex_db_config.py`
   - updates `database.host`, `database.port`, `database.connector`, and `database.profiles_db`
-  - writes `TREX_Core/configs/_credentials.json`
-- `../TREX_Core/scripts/entrypoint_with_db_env.sh`
+  - writes `src/TREX_Core/configs/_credentials.json`
+- `../src/TREX_Core/scripts/entrypoint_with_db_env.sh`
   - future container-entrypoint wrapper for TREX
 
 ## Quick start
@@ -97,13 +97,13 @@ TREX_DB_PASSWORD=${POSTGRES_PASSWORD}
 Then render TREX's config and credentials files from the shared `.env` source of truth:
 
 ```bash
-./scripts/render_trex_configs_from_env.sh ../TREX_Core/configs/citylearn_test.json
+./scripts/render_trex_configs_from_env.sh ../src/TREX_Core/configs/citylearn_test.json
 ```
 
 That updates:
 
 - the `database` block inside the JSON config file
-- `TREX_Core/configs/_credentials.json`
+- `src/TREX_Core/configs/_credentials.json`
 
 ### Future containerized TREX
 
@@ -114,7 +114,7 @@ TREX_DB_HOST=postgres
 TREX_DB_PORT=5432
 ```
 
-Then use `TREX_Core/scripts/entrypoint_with_db_env.sh` as the TREX container entrypoint wrapper so the same env values continue to generate the JSON files TREX already expects.
+Then use `src/TREX_Core/scripts/entrypoint_with_db_env.sh` as the TREX container entrypoint wrapper so the same env values continue to generate the JSON files TREX already expects.
 
 ## Idempotency model
 
