@@ -420,7 +420,7 @@ class Runner:
                         launch_list, participant.cli(config, p_id)
                     )
 
-        logger.info("Launch list created with len %d", len(launch_list))
+        logger.info("Launch list created", launch_count=len(launch_list))
         # logger.debug("Launch list", launch_list=launch_list)
         return launch_list
 

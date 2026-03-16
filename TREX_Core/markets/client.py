@@ -190,6 +190,10 @@ if __name__ == "__main__":
     import argparse
     import sys
 
+    from TREX_Core.logging_config import setup_logging
+
+    setup_logging(json_output=False)
+
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--host", default="localhost", help="")
     parser.add_argument("--port", default=1883, help="")

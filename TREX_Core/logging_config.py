@@ -9,15 +9,21 @@ from structlog.typing import Processor
 def setup_logging(log_level: int = logging.INFO, json_output: bool = False) -> None:
     """Call this once at application startup."""
 
-    # Shared processors used by both structlog and stdlib
+    # Processors shared by structlog and foreign stdlib loggers.
+    # `filter_by_level` is intentionally excluded here because `ProcessorFormatter`
+    # may invoke `foreign_pre_chain` without a bound logger for non-structlog
+    # records from third-party libraries.
     shared_processors: list[Processor] = [
-        structlog.stdlib.filter_by_level,
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+    ]
+    structlog_processors: list[Processor] = [
+        structlog.stdlib.filter_by_level,
+        *shared_processors,
     ]
 
     # Choose the final renderer
@@ -46,7 +52,7 @@ def setup_logging(log_level: int = logging.INFO, json_output: bool = False) -> N
     # Configure structlog itself
     structlog.configure(
         processors=[
-            *shared_processors,
+            *structlog_processors,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
